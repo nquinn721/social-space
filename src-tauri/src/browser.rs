@@ -1,0 +1,91 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use tauri::{
+    webview::{NewWindowFeatures, NewWindowResponse},
+    AppHandle, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
+
+static NEXT_WINDOW: AtomicU64 = AtomicU64::new(1);
+const OAUTH_CALLBACK_PORT: u16 = 49173;
+
+fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
+    if url.as_str() == "about:blank" {
+        return true;
+    }
+    if oauth_callback
+        && url.scheme() == "http"
+        && url.host_str() == Some("127.0.0.1")
+        && url.port() == Some(OAUTH_CALLBACK_PORT)
+        && url.path() == "/callback"
+    {
+        return true;
+    }
+    if url.scheme() != "https" || !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+    match url.host() {
+        Some(url::Host::Domain(host)) => {
+            let host = host.trim_end_matches('.');
+            host.contains('.') && !host.ends_with(".localhost") && !host.ends_with(".local")
+        }
+        _ => false,
+    }
+}
+
+fn make_window(
+    app: &AppHandle,
+    url: url::Url,
+    oauth_callback: bool,
+    features: Option<NewWindowFeatures>,
+) -> Result<WebviewWindow, String> {
+    let label = format!("site-{}", NEXT_WINDOW.fetch_add(1, Ordering::Relaxed));
+    let popup_app = app.clone();
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
+        .title("Socialspace · Website")
+        .inner_size(1100.0, 800.0)
+        .on_navigation(move |url| allowed_navigation(url, oauth_callback))
+        .on_new_window(move |url, features| {
+            if !allowed_navigation(&url, oauth_callback) {
+                return NewWindowResponse::Deny;
+            }
+            let blank = "about:blank".parse().expect("valid blank URL");
+            match make_window(&popup_app, blank, oauth_callback, Some(features)) {
+                Ok(window) => NewWindowResponse::Create { window },
+                Err(_) => NewWindowResponse::Deny,
+            }
+        });
+    let builder = if let Some(features) = features {
+        builder.window_features(features)
+    } else {
+        builder
+    };
+    builder
+        .build()
+        .map_err(|_| "Could not open the website inside the app.".into())
+}
+
+pub fn open_remote(app: &AppHandle, address: &str, oauth_callback: bool) -> Result<(), String> {
+    let url: url::Url = address.parse().map_err(|_| "Invalid website address.")?;
+    if !allowed_navigation(&url, oauth_callback) || url.scheme() != "https" {
+        return Err("The website address is not allowed.".into());
+    }
+    make_window(app, url, oauth_callback, None).map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn navigation_rejects_local_resources_and_limits_oauth_callback() {
+        let allowed = |value: &str, oauth| allowed_navigation(&value.parse().unwrap(), oauth);
+        assert!(allowed("https://www.youtube.com/", false));
+        assert!(allowed("about:blank", false));
+        assert!(!allowed("http://tauri.localhost/", false));
+        assert!(!allowed("https://tauri.localhost/", false));
+        assert!(!allowed("file:///C:/secret", false));
+        assert!(!allowed("https://127.0.0.1/", false));
+        assert!(!allowed("http://127.0.0.1:49173/callback?code=x", false));
+        assert!(allowed("http://127.0.0.1:49173/callback?code=x", true));
+        assert!(!allowed("http://127.0.0.1:49173/other", true));
+    }
+}

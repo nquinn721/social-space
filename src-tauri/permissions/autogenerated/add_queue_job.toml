@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-queue-job"
+description = "Enables the add_queue_job command without any pre-configured scope."
+commands.allow = ["add_queue_job"]
+
+[[permission]]
+identifier = "deny-add-queue-job"
+description = "Denies the add_queue_job command without any pre-configured scope."
+commands.deny = ["add_queue_job"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-choose-video-file"
+description = "Enables the choose_video_file command without any pre-configured scope."
+commands.allow = ["choose_video_file"]
+
+[[permission]]
+identifier = "deny-choose-video-file"
+description = "Denies the choose_video_file command without any pre-configured scope."
+commands.deny = ["choose_video_file"]

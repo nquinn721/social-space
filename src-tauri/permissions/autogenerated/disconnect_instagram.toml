@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disconnect-instagram"
+description = "Enables the disconnect_instagram command without any pre-configured scope."
+commands.allow = ["disconnect_instagram"]
+
+[[permission]]
+identifier = "deny-disconnect-instagram"
+description = "Denies the disconnect_instagram command without any pre-configured scope."
+commands.deny = ["disconnect_instagram"]

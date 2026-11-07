@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-kling-developer"
+description = "Enables the open_kling_developer command without any pre-configured scope."
+commands.allow = ["open_kling_developer"]
+
+[[permission]]
+identifier = "deny-open-kling-developer"
+description = "Denies the open_kling_developer command without any pre-configured scope."
+commands.deny = ["open_kling_developer"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-post-to-x"
+description = "Enables the post_to_x command without any pre-configured scope."
+commands.allow = ["post_to_x"]
+
+[[permission]]
+identifier = "deny-post-to-x"
+description = "Denies the post_to_x command without any pre-configured scope."
+commands.deny = ["post_to_x"]
