@@ -1,14 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AppWindow, ImagePlus, Sparkles, UserRound, X as Close } from 'lucide-react';
+import { AppWindow, ImagePlus, Sparkles, UserPlus, UserRound, X as Close } from 'lucide-react';
 import AccountCredentials from './AccountCredentials';
 import { BIO_LIMITS, createAccount, getPlatform, PLATFORMS, type Account, type Platform } from './model';
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
 
-type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void> };
+type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void };
 
 /** Side panel to add an account or see and edit one, with its sign-in details on top. */
-export default function AccountDrawer({ account, busy, onClose, onSave, onRemove }: Props) {
+export default function AccountDrawer({ account, busy, onClose, onSave, onRemove, onSignUp }: Props) {
   const [platform, setPlatform] = useState<Platform>(account?.platform ?? 'instagram');
   const [label, setLabel] = useState(account?.label ?? '');
   const [handle, setHandle] = useState(account?.handle ?? '');
@@ -66,7 +66,8 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
         {account && <div className="drawer-section">
           <AccountCredentials account={account}/>
           <div className="drawer-actions">
-            <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> Open {getPlatform(account.platform).name}</button>
+            {account.status === 'planned' && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}><UserPlus size={14}/> Sign up on {getPlatform(account.platform).name}</button>}
+            <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> {account.status === 'planned' ? 'Sign in' : 'Open'} {getPlatform(account.platform).name}</button>
             <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillProfile()}><Sparkles size={14}/> Fill profile on {getPlatform(account.platform).name}</button>
           </div>
           {note && <p className="success-message" role="status">{note}</p>}
