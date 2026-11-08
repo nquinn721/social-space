@@ -35,3 +35,5 @@ export function findCode(text: string): string | null {
 export async function chooseImageFile(): Promise<string | null> { desktopOnly(); return invoke('choose_image_file'); }
 export async function loadImagePreview(path: string): Promise<string> { desktopOnly(); return invoke('load_image_preview', { path }); }
 export async function setAccountPassword(accountId: string, password: string): Promise<void> { desktopOnly(); return invoke('set_account_password', { accountId, password }); }
+/** Gives all these accounts one shared password (reusing one already saved, or a new strong one). */
+export async function ensureSharedPassword(accountIds: string[]): Promise<void> { desktopOnly(); return invoke('ensure_shared_password', { accountIds }); }

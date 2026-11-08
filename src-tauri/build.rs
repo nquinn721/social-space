@@ -37,6 +37,7 @@ fn main() {
         "ensure_account_password",
         "has_account_password",
         "set_account_password",
+        "ensure_shared_password",
         "reveal_account_password",
         "delete_account_password",
     ];

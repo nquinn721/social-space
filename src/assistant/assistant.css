@@ -72,3 +72,14 @@
 .credential-row input{flex:1;background:#121216;border:1px solid #3b3942;border-radius:7px;color:#f4f2f7;padding:8px 10px;font-size:12px}
 .credential-row .outline-button{min-height:32px}
 .credentials .success-message,.credentials .error-message{font-size:11px;margin-top:6px}
+.platform-picks{border:0;padding:0;margin:4px 0 0;display:flex;flex-wrap:wrap;gap:8px 16px}
+.platform-picks legend{font-size:11px;font-weight:700;color:#d6d3dc;margin-bottom:8px;padding:0}
+.platform-picks label{display:flex!important;align-items:center;gap:6px;margin:0!important;font-weight:400!important;font-size:12px!important}
+.platform-picks input{width:auto!important}
+.idea-row{display:flex;gap:8px}
+.idea-row .outline-button{min-height:0}
+.social-progress{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0!important;margin:0 0 12px!important}
+.social-progress li{font-size:11px;padding:4px 10px;border-radius:999px;background:#25242b;color:#8c8a94}
+.social-progress li.current{background:#3a2d52;color:#f3ecff}
+.social-progress li.created{background:#1f2b26;color:#9fd9bf}
+.wizard-now{font-size:15px;margin-bottom:10px}

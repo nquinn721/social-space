@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import * as profile from './profileService';
 import * as email from './emailService';
+import * as suggest from './assistant/suggest';
 import type { Account } from './model';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
-  openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), ensureAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
+  openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
+vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(), listEmails: vi.fn(), readEmail: vi.fn() }));
 
 beforeEach(() => {
@@ -21,39 +23,65 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('create account wizard', () => {
-  it('saves the account, makes a password, opens sign-up, fills it, and fills the emailed code', async () => {
+  it('creates the same account on every social in turn with one shared password', async () => {
     const saved: Account[] = [];
     const onSave = vi.fn(async (account: Account) => { saved.push(account); });
     const user = userEvent.setup();
     render(<CreateAccountWizard onSave={onSave} onClose={vi.fn()}/>);
+    for (const name of ['Instagram', 'TikTok', 'YouTube', 'X']) expect(screen.getByLabelText(name)).toBeChecked();
     expect(screen.getByLabelText('Sign-up email')).toHaveValue(DEFAULT_SIGNUP_EMAIL);
+    expect(screen.getByText('0/80 (TikTok limit)')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('YouTube'));
     await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
     await user.type(screen.getByLabelText('Username you want optional'), '@softwings');
-    await user.click(screen.getByRole('button', { name: /Open Instagram sign-up/ }));
+    await user.type(screen.getByLabelText(/Profile description/), 'Wings for little dreamers.');
+    await user.click(screen.getByRole('button', { name: /Start with 3 socials/ }));
 
-    expect(await screen.findByText(/sign-up window is open/)).toBeInTheDocument();
-    const account = saved[0];
-    expect(account).toMatchObject({ platform: 'instagram', label: 'Soft Wings', handle: 'softwings', signupEmail: DEFAULT_SIGNUP_EMAIL, status: 'planned' });
-    expect(profile.ensureAccountPassword).toHaveBeenCalledWith(account.id);
-    expect(profile.openPlatformWindow).toHaveBeenCalledWith('instagram', 'create');
-    expect(profile.fillSiteForm).toHaveBeenCalledWith('site-4', expect.objectContaining({ email: DEFAULT_SIGNUP_EMAIL, username: 'softwings' }), { accountId: account.id, includePassword: true, keepFilling: true });
+    expect(await screen.findByText('Now: Instagram (1 of 3)')).toBeInTheDocument();
+    expect(saved.map((item) => item.platform)).toEqual(['instagram', 'tiktok', 'x']);
+    expect(saved.every((item) => item.handle === 'softwings' && item.bio === 'Wings for little dreamers.' && item.signupEmail === DEFAULT_SIGNUP_EMAIL)).toBe(true);
+    expect(profile.ensureSharedPassword).toHaveBeenCalledWith(saved.map((item) => item.id));
+    expect(profile.openPlatformWindow).toHaveBeenLastCalledWith('instagram', 'create');
+    expect(profile.fillSiteForm).toHaveBeenLastCalledWith('site-4', expect.objectContaining({ username: 'softwings' }), { accountId: saved[0].id, includePassword: true, keepFilling: true });
 
     await user.click(await screen.findByRole('button', { name: /482913 is your Instagram code/ }));
-    expect(await screen.findByText('482913', { selector: 'strong' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Fill on page' }));
+    await user.click(await screen.findByRole('button', { name: 'Fill on page' }));
     expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' });
 
-    await user.click(screen.getByRole('button', { name: 'My account is created' }));
-    expect(saved.at(-1)).toMatchObject({ id: account.id, status: 'active' });
-    expect(await screen.findByRole('button', { name: /Open profile settings and fill/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Instagram account is created, next' }));
+    expect(await screen.findByText('Now: TikTok (2 of 3)')).toBeInTheDocument();
+    expect(profile.openPlatformWindow).toHaveBeenLastCalledWith('tiktok', 'create');
+    await user.click(screen.getByRole('button', { name: /Skip TikTok/ }));
+    await user.click(await screen.findByRole('button', { name: 'X account is created' }));
+
+    expect(await screen.findByText(/Created on Instagram, X\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fill Instagram profile/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Fill TikTok profile/ })).not.toBeInTheDocument();
+    const statuses = Object.fromEntries(saved.map((item) => [item.platform, item.status]));
+    expect(statuses).toEqual({ instagram: 'active', tiktok: 'planned', x: 'active' });
   });
 
-  it('keeps the bio within the platform limit', async () => {
+  it('suggests a name and description from an idea', async () => {
+    vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.' });
     const user = userEvent.setup();
-    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()} initialPlatform="tiktok"/>);
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText(/Your idea/), 'butterfly jewelry for kids');
+    await user.click(screen.getByRole('button', { name: /Suggest/ }));
+    expect(await screen.findByText(/Suggested by your local model/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Account name')).toHaveValue('Flutter Finds');
+    expect(screen.getByLabelText('Username you want optional')).toHaveValue('flutterfinds');
+    expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
+    expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X']);
+  });
+
+  it('keeps one description within the tightest chosen limit', async () => {
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()} initialPlatforms={['youtube']}/>);
+    expect(screen.getByLabelText('Instagram')).not.toBeChecked();
     await user.type(screen.getByLabelText('Account name'), 'Clips');
+    await user.click(screen.getByLabelText('TikTok'));
     await user.type(screen.getByLabelText(/Profile description/), 'a'.repeat(81));
-    expect(screen.getByRole('button', { name: /Open TikTok sign-up/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Start with 2 socials/ })).toBeDisabled();
   });
 });
 

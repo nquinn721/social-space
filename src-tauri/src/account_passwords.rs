@@ -90,6 +90,32 @@ pub fn ensure_account_password(account_id: String) -> Result<(), String> {
     }
 }
 
+/// Gives every listed account the same password: an existing one from the
+/// list if any account already has one, otherwise a newly generated one.
+#[tauri::command]
+pub fn ensure_shared_password(account_ids: Vec<String>) -> Result<(), String> {
+    if account_ids.is_empty() || account_ids.len() > 50 {
+        return Err("Choose between 1 and 50 accounts.".into());
+    }
+    let mut shared = None;
+    let mut missing = Vec::new();
+    for id in &account_ids {
+        match read(id)? {
+            Some(value) if shared.is_none() => shared = Some(value),
+            Some(_) => {}
+            None => missing.push(id),
+        }
+    }
+    let password = match shared {
+        Some(value) => value,
+        None => generate_password()?,
+    };
+    for id in missing {
+        set_account_password(id.clone(), password.clone())?;
+    }
+    Ok(())
+}
+
 /// Saves a password the user typed, for accounts made outside the wizard.
 #[tauri::command]
 pub fn set_account_password(account_id: String, password: String) -> Result<(), String> {
