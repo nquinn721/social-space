@@ -30,9 +30,9 @@ describe('account credentials', () => {
     vi.mocked(profile.hasAccountPassword).mockResolvedValue(false);
     const user = userEvent.setup();
     render(<AccountCredentials account={account}/>);
-    await user.type(await screen.findByLabelText('Save a password'), 'typed-by-me');
+    await user.type(await screen.findByLabelText('Save a password'), sample);
     await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(profile.setAccountPassword).toHaveBeenCalledWith('a1', 'typed-by-me');
+    expect(profile.setAccountPassword).toHaveBeenCalledWith('a1', sample);
     expect(await screen.findByRole('button', { name: 'Show password' })).toBeInTheDocument();
   });
 });
