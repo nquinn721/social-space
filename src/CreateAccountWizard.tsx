@@ -36,8 +36,8 @@ function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: s
  * The social list comes from PLATFORMS, so a newly supported social is included automatically.
  * It only fills forms: Nate presses every button and solves any captcha himself.
  */
-export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill }) {
-  const [step, setStep] = useState<Step>('details');
+export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill, resume }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill; resume?: Account[] }) {
+  const [step, setStep] = useState<Step>(resume?.length ? 'signup' : 'details');
   const [chosen, setChosen] = useState<Platform[]>(initialPlatforms ?? PLATFORMS.map((platform) => platform.id));
   const [idea, setIdea] = useState('');
   const [label, setLabel] = useState(prefill?.label ?? '');
@@ -50,7 +50,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [birthday, setBirthday] = useState(prefill?.birthday ?? '');
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>(resume ?? []);
   const [current, setCurrent] = useState(0);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [windowId, setWindowId] = useState('');
@@ -101,6 +101,11 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     return () => { observer?.disconnect(); window.removeEventListener('resize', place); };
   }, [windowId]);
   useEffect(() => () => { void closeEmbeddedPage().catch(() => undefined); }, []);
+  // Saved accounts that are not created yet go straight to their first sign-up page.
+  useEffect(() => {
+    if (!resume?.length) return;
+    void run(async () => { await ensureSharedPassword(resume.map((item) => item.id)); openSignup(resume[0]); });
+  }, []);
 
   async function run(action: () => Promise<void>) {
     if (busy) return;

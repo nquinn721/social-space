@@ -25,7 +25,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   { label: 'Content', items: [{ id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
 ];
 const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Accounts', inbox: 'Inbox', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', settings: 'Settings' };
-type Wizard = { platforms: Platform[]; prefill?: WizardPrefill };
+type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
   const [view, setView] = useState<View>('overview');
@@ -87,6 +87,8 @@ function App() {
   const addAccount = () => { setEditingAccount(null); setShowAccount(true); };
   const editAccount = (account: Account) => { setEditingAccount(account); setShowAccount(true); };
   const createAccounts = (platforms?: Platform[], prefill?: WizardPrefill) => setWizard({ platforms: platforms ?? PLATFORMS.map((item) => item.id), prefill });
+  /** Goes straight to the sign-up pages of accounts that are saved but not created yet. */
+  const signUp = (accounts: Account[]) => { setShowAccount(false); setEditingAccount(null); setWizard({ platforms: accounts.map((item) => item.platform), resume: accounts }); };
   function navigate(next: View, section?: string) {
     setView(next);
     if (section) window.setTimeout(() => document.getElementById(section)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
@@ -117,7 +119,7 @@ function App() {
         <UpdateBanner/>
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onOpen={launch}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onOpen={launch}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
         {view === 'queue' && <><PageHeader eyebrow="Your content, lined up" title="Video queue" description="Plan videos for your channels in one place."/><VideoQueue workspace={workspace}/></>}
@@ -129,8 +131,8 @@ function App() {
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
-    {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
-    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount}/>}
+    {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
+    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])}/>}
   </div>;
 }
 export default App;

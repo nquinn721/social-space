@@ -114,6 +114,15 @@ describe('verification code detection', () => {
     expect(saved[0].birthday).toBe('1998-04-12');
   });
 
+  it('goes straight to the sign-up page of a planned account', async () => {
+    const planned: Account = { id: 'p1', platform: 'instagram', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL };
+    render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
+    expect(screen.getByText('Now: Instagram (1 of 1)')).toBeInTheDocument();
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('instagram', 'create', expect.anything()));
+    expect(profile.ensureSharedPassword).toHaveBeenCalledWith(['p1']);
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenLastCalledWith('site-embed-4', expect.objectContaining({ username: 'massagelisa', email: DEFAULT_SIGNUP_EMAIL }), { accountId: 'p1', includePassword: true, keepFilling: true }));
+  });
+
   it('fills a code straight from the inbox list', async () => {
     const user = userEvent.setup();
     render(<CreateAccountWizard initialPlatforms={['instagram']} onSave={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()}/>);
