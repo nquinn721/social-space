@@ -253,6 +253,7 @@ pub fn run() {
             autofill::load_image_preview,
             account_passwords::ensure_account_password,
             account_passwords::has_account_password,
+            account_passwords::set_account_password,
             account_passwords::reveal_account_password,
             account_passwords::delete_account_password
         ])

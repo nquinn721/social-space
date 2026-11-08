@@ -399,6 +399,12 @@
           "markdownDescription": "Enables the save_workspace command without any pre-configured scope."
         },
         {
+          "description": "Enables the set_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-account-password",
+          "markdownDescription": "Enables the set_account_password command without any pre-configured scope."
+        },
+        {
           "description": "Enables the x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-x-connection",
@@ -625,6 +631,12 @@
           "type": "string",
           "const": "deny-save-workspace",
           "markdownDescription": "Denies the save_workspace command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-account-password",
+          "markdownDescription": "Denies the set_account_password command without any pre-configured scope."
         },
         {
           "description": "Denies the x_connection command without any pre-configured scope.",

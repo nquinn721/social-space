@@ -90,6 +90,23 @@ pub fn ensure_account_password(account_id: String) -> Result<(), String> {
     }
 }
 
+/// Saves a password the user typed, for accounts made outside the wizard.
+#[tauri::command]
+pub fn set_account_password(account_id: String, password: String) -> Result<(), String> {
+    if password.is_empty() || password.len() > 500 || password.chars().any(char::is_control) {
+        return Err("Enter a valid password.".into());
+    }
+    #[cfg(windows)]
+    return entry(&account_id)?
+        .set_password(&password)
+        .map_err(|_| "Could not save the password to Windows Credential Manager.".into());
+    #[cfg(not(windows))]
+    {
+        valid_id(&account_id)?;
+        Err("Saved account passwords are supported on Windows only.".into())
+    }
+}
+
 #[tauri::command]
 pub fn has_account_password(account_id: String) -> Result<bool, String> {
     Ok(read(&account_id)?.is_some())

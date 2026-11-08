@@ -36,6 +36,7 @@ fn main() {
         "load_image_preview",
         "ensure_account_password",
         "has_account_password",
+        "set_account_password",
         "reveal_account_password",
         "delete_account_password",
     ];
