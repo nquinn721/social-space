@@ -213,6 +213,12 @@
           "markdownDescription": "Enables the connect_email command without any pre-configured scope."
         },
         {
+          "description": "Enables the connect_gmail_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-gmail-session",
+          "markdownDescription": "Enables the connect_gmail_session command without any pre-configured scope."
+        },
+        {
           "description": "Enables the connect_instagram command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect-instagram",
@@ -351,6 +357,18 @@
           "markdownDescription": "Enables the ollama_models command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_gmail_message command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-gmail-message",
+          "markdownDescription": "Enables the open_gmail_message command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_gmail_sign_in command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-gmail-sign-in",
+          "markdownDescription": "Enables the open_gmail_sign_in command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-kling",
@@ -463,6 +481,12 @@
           "type": "string",
           "const": "deny-connect-email",
           "markdownDescription": "Denies the connect_email command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the connect_gmail_session command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-gmail-session",
+          "markdownDescription": "Denies the connect_gmail_session command without any pre-configured scope."
         },
         {
           "description": "Denies the connect_instagram command without any pre-configured scope.",
@@ -601,6 +625,18 @@
           "type": "string",
           "const": "deny-ollama-models",
           "markdownDescription": "Denies the ollama_models command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_gmail_message command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-gmail-message",
+          "markdownDescription": "Denies the open_gmail_message command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_gmail_sign_in command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-gmail-sign-in",
+          "markdownDescription": "Denies the open_gmail_sign_in command without any pre-configured scope."
         },
         {
           "description": "Denies the open_kling command without any pre-configured scope.",

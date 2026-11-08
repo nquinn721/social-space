@@ -6,6 +6,7 @@ mod account_passwords;
 mod autofill;
 mod browser;
 mod email;
+mod gmail_session;
 mod instagram;
 mod kling;
 mod ollama;
@@ -249,6 +250,9 @@ pub fn run() {
             email::disconnect_email,
             email::list_emails,
             email::read_email,
+            gmail_session::open_gmail_sign_in,
+            gmail_session::connect_gmail_session,
+            gmail_session::open_gmail_message,
             autofill::fill_site_form,
             autofill::choose_image_file,
             autofill::load_image_preview,

@@ -13,7 +13,7 @@
     "allow-connect-instagram", "allow-instagram-connection", "allow-disconnect-instagram", "allow-publish-instagram-reel",
     "allow-list-queue", "allow-add-queue-job", "allow-complete-queue-job", "allow-delete-queue-job", "allow-choose-video-file",
     "allow-ollama-models", "allow-ollama-chat",
-    "allow-email-connection", "allow-connect-email", "allow-disconnect-email", "allow-list-emails", "allow-read-email",
+    "allow-email-connection", "allow-connect-email", "allow-disconnect-email", "allow-list-emails", "allow-read-email", "allow-open-gmail-sign-in", "allow-connect-gmail-session", "allow-open-gmail-message",
     "allow-fill-site-form", "allow-choose-image-file", "allow-load-image-preview",
     "allow-ensure-account-password", "allow-has-account-password", "allow-set-account-password", "allow-ensure-shared-password", "allow-reveal-account-password", "allow-delete-account-password",
     "allow-check-for-update", "allow-install-update"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, Copy, Inbox, Mail, RefreshCw } from 'lucide-react';
-import { emailConnection, listEmails, readEmail, type EmailConnection, type EmailMessage, type EmailSummary } from './emailService';
+import { AppWindow, ArrowLeft, Check, Copy, Inbox, Mail, RefreshCw } from 'lucide-react';
+import { emailConnection, listEmails, openGmailMessage, readEmail, type EmailConnection, type EmailMessage, type EmailSummary } from './emailService';
 import { findCode } from './profileService';
 import { errorText } from './ui';
 
@@ -64,10 +64,11 @@ export default function InboxList({ limit = 10, compact = false, onCode, autoRef
       {onCode && <button type="button" className="outline-button" onClick={() => onCode(code)}>Fill on page</button>}
     </div>}
     <pre>{open.body}</pre>
+    {connection?.kind === 'gmail' && <button type="button" className="ghost-button small-button" onClick={() => void openGmailMessage(open.uid).catch((reason) => setError(errorText(reason, 'Could not open Gmail.')))}><AppWindow size={14}/> Open in Gmail</button>}
   </div>;
 
   const list = <ul className="inbox-list">
-    {!emails.length && !busy && <li className="inbox-none">No emails yet. New mail shows up here after the site sends it.</li>}
+    {!emails.length && !busy && <li className="inbox-none">{connection?.kind === 'gmail' ? 'No unread email. New mail shows up here after the site sends it.' : 'No emails yet. New mail shows up here after the site sends it.'}</li>}
     {emails.map((email) => {
       const subjectCode = findCode(email.subject);
       return <li key={email.uid} className={`${email.unread ? 'unread' : ''} ${open?.uid === email.uid ? 'selected' : ''}`}>
