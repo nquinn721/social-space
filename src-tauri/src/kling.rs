@@ -25,15 +25,10 @@ impl Drop for GenerateGuard<'_> {
     }
 }
 
-const API_BASE: &str = "https://api-singapore.klingai.com";
+pub(crate) const API_BASE: &str = "https://api-singapore.klingai.com";
 const CREATE_PATH: &str = "/text-to-video/kling-3.0-turbo";
 const MAX_PROMPT_CHARS: usize = 3_072;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
-
-#[cfg(windows)]
-const KEY_SERVICE: &str = "com.socialmanager.desktop.kling";
-#[cfg(windows)]
-const KEY_ACCOUNT: &str = "api-key";
 
 #[derive(Serialize)]
 struct CreateVideo<'a> {
@@ -170,70 +165,27 @@ async fn decode_response<T: serde::de::DeserializeOwned>(
         .ok_or_else(|| "Kling returned no task data.".into())
 }
 
-#[cfg(windows)]
-fn key_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEY_SERVICE, KEY_ACCOUNT)
-        .map_err(|_| "Windows Credential Manager is unavailable.".into())
-}
-
-#[cfg(windows)]
-fn read_key() -> Result<Option<String>, String> {
-    match key_entry()?.get_password() {
-        Ok(key) => Ok(Some(key)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => Err("Could not read the Kling key from Windows Credential Manager.".into()),
-    }
-}
-
-#[cfg(not(windows))]
-fn read_key() -> Result<Option<String>, String> {
-    Err("Kling credentials are currently supported on Windows only.".into())
-}
-
-fn required_key() -> Result<String, String> {
-    read_key()?.ok_or_else(|| "Add a Kling API key before generating a video.".into())
-}
-
-#[tauri::command]
-pub fn kling_key_status() -> Result<bool, String> {
-    Ok(read_key()?.is_some())
-}
-
-#[tauri::command]
-pub fn save_kling_key(key: String) -> Result<(), String> {
-    let key = key.trim();
-    if key.is_empty() || key.len() > 2_000 || key.chars().any(char::is_control) {
-        return Err("Enter a valid Kling API key.".into());
-    }
-    #[cfg(windows)]
-    return key_entry()?
-        .set_password(key)
-        .map_err(|_| "Could not save the key in Windows Credential Manager.".into());
-    #[cfg(not(windows))]
-    Err("Kling credentials are currently supported on Windows only.".into())
-}
-
-#[tauri::command]
-pub fn remove_kling_key() -> Result<(), String> {
-    #[cfg(windows)]
-    return match key_entry()?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(_) => Err("Could not remove the key from Windows Credential Manager.".into()),
-    };
-    #[cfg(not(windows))]
-    Err("Kling credentials are currently supported on Windows only.".into())
+fn source_key(
+    app: &tauri::AppHandle,
+    sources: &crate::video_sources::SourcesLock,
+    source_id: &str,
+) -> Result<String, String> {
+    crate::video_sources::source_key(app, sources, source_id, crate::video_sources::VideoProvider::Kling)
 }
 
 #[tauri::command]
 pub async fn generate_kling_video(
+    app: tauri::AppHandle,
     lock: tauri::State<'_, GenerateLock>,
+    sources: tauri::State<'_, crate::video_sources::SourcesLock>,
+    source_id: String,
     prompt: String,
     aspect_ratio: String,
     duration: u8,
 ) -> Result<KlingTask, String> {
     let _guard = GenerateGuard::acquire(&lock)?;
     validate_prompt(&prompt, &aspect_ratio, duration)?;
-    let key = required_key()?;
+    let key = source_key(&app, &sources, &source_id)?;
     let body = CreateVideo {
         prompt: prompt.trim(),
         settings: VideoSettings {
@@ -250,9 +202,8 @@ pub async fn generate_kling_video(
     Ok(task.into())
 }
 
-async fn fetch_task(task_id: &str) -> Result<KlingTask, String> {
+async fn fetch_task(key: String, task_id: &str) -> Result<KlingTask, String> {
     validate_task_id(task_id)?;
-    let key = required_key()?;
     let response = api_client()?
         .get(format!("{API_BASE}/tasks"))
         .bearer_auth(key)
@@ -269,13 +220,25 @@ async fn fetch_task(task_id: &str) -> Result<KlingTask, String> {
 }
 
 #[tauri::command]
-pub async fn get_kling_video(task_id: String) -> Result<KlingTask, String> {
-    fetch_task(&task_id).await
+pub async fn get_kling_video(
+    app: tauri::AppHandle,
+    sources: tauri::State<'_, crate::video_sources::SourcesLock>,
+    source_id: String,
+    task_id: String,
+) -> Result<KlingTask, String> {
+    let key = source_key(&app, &sources, &source_id)?;
+    fetch_task(key, &task_id).await
 }
 
 #[tauri::command]
-pub async fn open_kling_video(app: tauri::AppHandle, task_id: String) -> Result<(), String> {
-    let task = fetch_task(&task_id).await?;
+pub async fn open_kling_video(
+    app: tauri::AppHandle,
+    sources: tauri::State<'_, crate::video_sources::SourcesLock>,
+    source_id: String,
+    task_id: String,
+) -> Result<(), String> {
+    let key = source_key(&app, &sources, &source_id)?;
+    let task = fetch_task(key, &task_id).await?;
     let url = task
         .video_url
         .ok_or("No video is available for this task yet.")?;

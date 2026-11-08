@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { openKling, openPlatformAction } from './service';
-import { openKlingDeveloper, openKlingVideo } from './klingService';
+import { openKlingVideo } from './klingService';
+import { openProviderKeys } from './videoSourcesService';
 import type { Platform, PlatformAction } from './model';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
@@ -24,8 +25,8 @@ describe('desktop-only external actions', () => {
   it('rejects Kling website, developer, and generated-video actions in the browser', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     await expect(openKling()).rejects.toThrow('Open the desktop app to view Kling.');
-    await expect(openKlingDeveloper()).rejects.toThrow('Open the desktop app to use Kling API.');
-    await expect(openKlingVideo('task-1')).rejects.toThrow('Open the desktop app to use Kling API.');
+    await expect(openProviderKeys('kling')).rejects.toThrow('Open the desktop app to manage video sources.');
+    await expect(openKlingVideo('source-1', 'task-1')).rejects.toThrow('Open the desktop app to use Kling API.');
     expect(open).not.toHaveBeenCalled();
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -33,11 +34,11 @@ describe('desktop-only external actions', () => {
     vi.mocked(isTauri).mockReturnValue(true);
     await openPlatformAction('youtube', 'post');
     await openKling();
-    await openKlingDeveloper();
-    await openKlingVideo('task-1');
+    await openProviderKeys('kling');
+    await openKlingVideo('source-1', 'task-1');
     expect(invoke).toHaveBeenNthCalledWith(1, 'open_platform_action', { platform: 'youtube', action: 'post' });
     expect(invoke).toHaveBeenNthCalledWith(2, 'open_kling');
-    expect(invoke).toHaveBeenNthCalledWith(3, 'open_kling_developer');
-    expect(invoke).toHaveBeenNthCalledWith(4, 'open_kling_video', { taskId: 'task-1' });
+    expect(invoke).toHaveBeenNthCalledWith(3, 'open_video_provider_keys', { provider: 'kling' });
+    expect(invoke).toHaveBeenNthCalledWith(4, 'open_kling_video', { sourceId: 'source-1', taskId: 'task-1' });
   });
 });

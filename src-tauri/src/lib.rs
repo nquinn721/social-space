@@ -12,6 +12,7 @@ mod kling;
 mod ollama;
 mod queue;
 mod updater;
+mod video_sources;
 mod x_integration;
 
 const WORKSPACE_FILE: &str = "workspace.json";
@@ -207,26 +208,24 @@ async fn open_kling(app: tauri::AppHandle) -> Result<(), String> {
     browser::open_remote(&app, "https://klingai.com/", false)
 }
 
-#[tauri::command]
-async fn open_kling_developer(app: tauri::AppHandle) -> Result<(), String> {
-    browser::open_remote(&app, "https://kling.ai/dev/api-key", false)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(StorageLock::default())
         .manage(kling::GenerateLock::default())
+        .manage(video_sources::SourcesLock::default())
         .setup(|app| { queue::start_scheduler(app.handle().clone()); Ok(()) })
         .invoke_handler(tauri::generate_handler![
             load_workspace,
             save_workspace,
             open_platform_action,
             open_kling,
-            open_kling_developer,
-            kling::kling_key_status,
-            kling::save_kling_key,
-            kling::remove_kling_key,
+            video_sources::list_video_sources,
+            video_sources::add_video_source,
+            video_sources::check_video_source,
+            video_sources::rename_video_source,
+            video_sources::remove_video_source,
+            video_sources::open_video_provider_keys,
             kling::generate_kling_video,
             kling::get_kling_video,
             kling::open_kling_video,

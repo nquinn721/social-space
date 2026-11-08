@@ -5,6 +5,7 @@ export { formFieldsFor };
 import { listQueue } from '../queueService';
 import { postToX } from '../xService';
 import { generateKlingVideo } from '../klingService';
+import { listVideoSources } from '../videoSourcesService';
 import type { ToolSpec } from './ollamaClient';
 
 export type ConfirmRequest = { title: string; detail: string };
@@ -45,7 +46,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   { type: 'function', function: { name: 'read_email', description: 'Read one email by uid.', parameters: { type: 'object', properties: { uid: { type: 'number' } }, required: ['uid'] } } },
   { type: 'function', function: { name: 'list_video_queue', description: 'List scheduled and finished items in the video queue.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'post_to_x', description: 'Publish a post to the connected X account (asks the user first).', parameters: { type: 'object', properties: { text: str('Post text, up to 280 characters') }, required: ['text'] } } },
-  { type: 'function', function: { name: 'generate_kling_video', description: 'Start a Kling AI video generation (paid; asks the user first).', parameters: { type: 'object', properties: { prompt: str('Video prompt'), aspectRatio: { type: 'string', enum: ['16:9', '9:16', '1:1'] }, duration: { type: 'number', enum: [5, 10] } }, required: ['prompt'] } } },
+  { type: 'function', function: { name: 'generate_kling_video', description: 'Start a Kling AI video generation (paid; asks the user first).', parameters: { type: 'object', properties: { prompt: str('Video prompt'), source: str('Name of the Kling video source to use; omit for the first verified one'), aspectRatio: { type: 'string', enum: ['16:9', '9:16', '1:1'] }, duration: { type: 'number', enum: [5, 10] } }, required: ['prompt'] } } },
   { type: 'function', function: { name: 'go_to_page', description: 'Show a page of the app.', parameters: { type: 'object', properties: { page: { type: 'string', enum: VIEWS } }, required: ['page'] } } },
 ];
 
@@ -128,8 +129,12 @@ export async function runTool(name: string, args: Record<string, unknown>, ctx: 
       if (!prompt) throw new Error('The prompt is empty.');
       const aspectRatio = typeof args.aspectRatio === 'string' ? args.aspectRatio : '9:16';
       const duration = args.duration === 10 ? 10 : 5;
-      if (!await ctx.confirm({ title: `Generate a ${duration}s Kling video (${aspectRatio})?`, detail: `This uses paid Kling credits.\n\n${prompt}` })) return { started: false, note: 'The user declined.' };
-      return { started: true, task: await generateKlingVideo(prompt, aspectRatio, duration) };
+      const wanted = (text(args.source) ?? '').toLowerCase();
+      const kling = (await listVideoSources()).filter((item) => item.provider === 'kling' && item.status !== 'rejected');
+      const source = wanted ? kling.find((item) => item.name.toLowerCase() === wanted) : kling.find((item) => item.status === 'verified') ?? kling[0];
+      if (!source) throw new Error(wanted ? `No Kling video source named ${args.source}.` : 'No Kling video source is set up. Add one under Video sources.');
+      if (!await ctx.confirm({ title: `Generate a ${duration}s Kling video (${aspectRatio})?`, detail: `This uses paid Kling credits from ${source.name}.\n\n${prompt}` })) return { started: false, note: 'The user declined.' };
+      return { started: true, source: source.name, task: await generateKlingVideo(source.id, prompt, aspectRatio, duration) };
     }
     case 'go_to_page': {
       if (!VIEWS.includes(args.page as View)) throw new Error('Unknown page.');

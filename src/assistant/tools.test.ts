@@ -4,12 +4,15 @@ import type { Account, Workspace } from '../model';
 import * as profile from '../profileService';
 import * as x from '../xService';
 import * as email from '../emailService';
+import * as kling from '../klingService';
+import * as sources from '../videoSourcesService';
 
 vi.mock('../profileService', async (original) => ({ ...(await original<typeof import('../profileService')>()), openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn(), ensureAccountPassword: vi.fn() }));
 vi.mock('../xService', () => ({ postToX: vi.fn() }));
 vi.mock('../emailService', () => ({ listEmails: vi.fn(), readEmail: vi.fn() }));
 vi.mock('../queueService', () => ({ listQueue: vi.fn() }));
 vi.mock('../klingService', () => ({ generateKlingVideo: vi.fn() }));
+vi.mock('../videoSourcesService', () => ({ listVideoSources: vi.fn() }));
 
 const account: Account = { id: 'a1', platform: 'instagram', label: 'Studio', handle: 'studio', status: 'planned', notes: '', bio: 'Hello', signupEmail: 'me@example.com', imagePath: 'C:\\pics\\me.png' };
 function context(workspace: Workspace, approve = true) {
@@ -28,6 +31,22 @@ const workspace = (): Workspace => ({ businessName: 'Example LLC', accounts: [ac
 beforeEach(() => vi.resetAllMocks());
 
 describe('assistant tools', () => {
+  it('generates Kling video with the named source, or the first verified one', async () => {
+    vi.mocked(sources.listVideoSources).mockResolvedValue([
+      { id: 'bad', name: 'Old', provider: 'kling', status: 'rejected', checkedAt: 1, creditsRemaining: null, detail: null },
+      { id: 'new', name: 'Fresh', provider: 'kling', status: 'unchecked', checkedAt: null, creditsRemaining: null, detail: null },
+      { id: 'main', name: 'Main', provider: 'kling', status: 'verified', checkedAt: 1, creditsRemaining: 10, detail: null },
+    ]);
+    vi.mocked(kling.generateKlingVideo).mockResolvedValue({ id: 't1', status: 'submitted', message: null, videoUrl: null });
+    const ctx = context(workspace());
+    expect(await runTool('generate_kling_video', { prompt: 'A city' }, ctx)).toMatchObject({ started: true, source: 'Main' });
+    expect(kling.generateKlingVideo).toHaveBeenLastCalledWith('main', 'A city', '9:16', 5);
+    await runTool('generate_kling_video', { prompt: 'A city', source: 'fresh' }, ctx);
+    expect(kling.generateKlingVideo).toHaveBeenLastCalledWith('new', 'A city', '9:16', 5);
+    await expect(runTool('generate_kling_video', { prompt: 'A city', source: 'Old' }, ctx)).rejects.toThrow('No Kling video source named Old');
+  });
+
+
   it('declares every tool it can run, and none for passwords or submitting', () => {
     const names = TOOL_SPECS.map((tool) => tool.function.name);
     expect(names).toContain('fill_platform_form');
