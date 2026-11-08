@@ -3,7 +3,7 @@
 //! The app is built and installed from a git clone on this machine, so the build
 //! records which commit it came from and which folder it was built in. Checking
 //! for an update fetches `origin/main` in that folder. Installing runs entirely in the
-//! background with no console windows: pull, `npm install`, `tauri build`, then a hidden
+//! background with no console windows: fetch and check out origin/main (detached), `npm install`, `tauri build`, then a hidden
 //! helper installs the new build silently once the app exits and starts it again. The
 //! UI polls `update_progress`, and the restarted app reads `take_update_result`.
 
@@ -73,6 +73,19 @@ fn needs_update(installed: &str, latest: &str, main_is_in_build: bool) -> bool {
     installed != latest && !main_is_in_build
 }
 
+/// The updater moves its source folder to origin/main, so it must not be a checkout someone
+/// is working in on another branch. `main` or a detached checkout (the dedicated app folder) is fine.
+fn other_branch_reason(branch: &str) -> Option<String> {
+    let branch = branch.trim();
+    if branch.is_empty() || branch == BRANCH {
+        None
+    } else {
+        Some(format!(
+            "The source folder {SOURCE_DIR} is on branch {branch}, not {BRANCH}. Updating would move it off that branch, so it was skipped."
+        ))
+    }
+}
+
 /// Tracked files with local edits would make `git pull` unsafe, so they block an install.
 fn local_changes_reason(porcelain: &str) -> Option<String> {
     let changed: Vec<&str> = porcelain
@@ -107,7 +120,9 @@ fn check(dir: &Path) -> Result<UpdateStatus, String> {
         Vec::new()
     };
     let blocked_reason = if update_available {
-        local_changes_reason(&git(dir, &["status", "--porcelain", "--untracked-files=no"])?)
+        let branch = git(dir, &["branch", "--show-current"])?;
+        other_branch_reason(&branch)
+            .or(local_changes_reason(&git(dir, &["status", "--porcelain", "--untracked-files=no"])?))
     } else {
         None
     };
@@ -268,8 +283,9 @@ fn run_update(app: &AppHandle, dir: &Path) -> Result<(), String> {
     let started = SystemTime::now();
 
     begin_step(1, "Getting the latest changes");
-    git(dir, &["checkout", BRANCH])?;
-    run_logged(dir, "git", &["pull", "--ff-only", "origin", BRANCH], &log)?;
+    run_logged(dir, "git", &["fetch", "origin", BRANCH], &log)?;
+    // Detached, so it works in a worktree even while `main` is checked out somewhere else.
+    run_logged(dir, "git", &["checkout", "--detach", &format!("origin/{BRANCH}")], &log)?;
     let new_commit = git(dir, &["rev-parse", "HEAD"])?;
 
     begin_step(2, "Installing dependencies");
@@ -383,6 +399,13 @@ mod tests {
         assert!(!needs_update("aaa", "aaa", true));
         assert!(!needs_update("feature", "main", true));
         assert!(needs_update("unknown", "bbb", false));
+    }
+
+    #[test]
+    fn work_on_another_branch_blocks_the_install() {
+        assert_eq!(other_branch_reason(""), None);
+        assert_eq!(other_branch_reason("main\n"), None);
+        assert!(other_branch_reason("brand-hierarchy").unwrap().contains("on branch brand-hierarchy"));
     }
 
     #[test]
