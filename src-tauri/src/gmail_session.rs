@@ -225,7 +225,8 @@ pub fn cached(uid: u32) -> Option<FeedEntry> {
 /// Opens Google's own sign-up page in an app window so a brand can get a new Gmail.
 /// Returns the window id so the form can be pre-filled; the user presses every button.
 #[tauri::command]
-pub fn open_gmail_signup(app: AppHandle) -> Result<String, String> {
+// Async on purpose: a synchronous command that builds a window freezes WebView2 on Windows and leaves it blank.
+pub async fn open_gmail_signup(app: AppHandle) -> Result<String, String> {
     crate::browser::open_remote_window(&app, SIGN_UP_URL, false)
 }
 
