@@ -6,11 +6,13 @@ import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard
 import * as profile from './profileService';
 import * as email from './emailService';
 import * as suggest from './assistant/suggest';
+import * as imageAi from './imageAiService';
 import type { Account } from './model';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
   openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
 vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
+vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), imageAiStatus: vi.fn(), startImageAi: vi.fn(), generateProfileImage: vi.fn() }));
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(), listEmails: vi.fn(), readEmail: vi.fn() }));
 
 beforeEach(() => {
@@ -62,7 +64,10 @@ describe('create account wizard', () => {
   });
 
   it('suggests a name and description from an idea', async () => {
-    vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.' });
+    vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.', imagePrompt: 'pastel butterfly logo mark', imageStyle: 'logo' });
+    vi.mocked(imageAi.imageAiStatus).mockResolvedValue({ running: true, looks: ['fast', 'detailed'], canStart: true });
+    vi.mocked(imageAi.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\profile-1.png', seed: 1, preview: 'data:image/png;base64,1' });
+    vi.mocked(profile.loadImagePreview).mockResolvedValue('data:image/png;base64,1');
     const user = userEvent.setup();
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText(/Your idea/), 'butterfly jewelry for kids');
@@ -72,6 +77,9 @@ describe('create account wizard', () => {
     expect(screen.getByLabelText('Username you want optional')).toHaveValue('flutterfinds');
     expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
     expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X']);
+    // The matching picture is made straight away and becomes the account's image.
+    expect(await screen.findByText('profile-1.png')).toBeInTheDocument();
+    expect(vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt).toBe('minimal modern logo mark, pastel butterfly logo mark, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon');
   });
 
   it('keeps one description within the tightest chosen limit', async () => {

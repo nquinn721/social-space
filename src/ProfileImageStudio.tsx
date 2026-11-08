@@ -18,10 +18,13 @@ type Result = GeneratedImage & { prompt: string };
  * then regenerate for a new take or refine the current one with a change.
  * Portraits are always of a fictional person.
  */
-export default function ProfileImageStudio({ suggestion = '', disabled = false, onUse, onClose }: { suggestion?: string; disabled?: boolean; onUse: (path: string) => void; onClose: () => void }) {
+/** A picture idea to make straight away, e.g. from the assistant's suggestion. A new key starts a new one. */
+export type AutoImage = { description: string; style: ImageStyle; key: number };
+
+export default function ProfileImageStudio({ suggestion = '', auto, disabled = false, onUse, onAutoUse, onClose }: { suggestion?: string; auto?: AutoImage; disabled?: boolean; onUse: (path: string) => void; onAutoUse?: (path: string) => void; onClose: () => void }) {
   const [status, setStatus] = useState<ImageAiStatus | null>(null);
-  const [description, setDescription] = useState(suggestion);
-  const [style, setStyle] = useState<ImageStyle>('photo');
+  const [description, setDescription] = useState(auto?.description ?? suggestion);
+  const [style, setStyle] = useState<ImageStyle>(auto?.style ?? 'photo');
   const [look, setLook] = useState<Look>('detailed');
   const [refinement, setRefinement] = useState('');
   const [amount, setAmount] = useState<RefineAmount>('medium');
@@ -45,7 +48,23 @@ export default function ProfileImageStudio({ suggestion = '', disabled = false, 
     setStatus(found);
     if (found.looks.length && !found.looks.includes(look)) setLook(found.looks[0]);
   });
-  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); void check(); }, []);
+  // With an auto idea: start ComfyUI if needed, then make the picture without waiting for a click.
+  const makeAuto = (idea: AutoImage) => run('Getting ComfyUI ready…', async () => {
+    setDescription(idea.description); setStyle(idea.style);
+    let found = await imageAiStatus();
+    if (!found.running && found.canStart) { setWorking('Starting ComfyUI, this takes about a minute…'); await startImageAi(); found = await imageAiStatus(); }
+    setStatus(found);
+    const chosen = found.looks.includes(look) ? look : found.looks[0];
+    if (!chosen) return;
+    setLook(chosen);
+    setWorking(chosen === 'detailed' ? 'Generating with Qwen-Image, about 1 to 2 minutes…' : 'Generating…');
+    const { prompt, negative } = buildPrompt(idea.description, idea.style);
+    const image = await generateProfileImage({ prompt, negative, look: chosen });
+    keep(image, prompt);
+    onAutoUse?.(image.path);
+  });
+  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); if (!auto?.description) void check(); }, []);
+  useEffect(() => { if (auto?.description) void makeAuto(auto); }, [auto?.key]);
   const start = () => run('Starting ComfyUI, this takes about a minute…', async () => { await startImageAi(); setStatus(await imageAiStatus()); });
 
   function keep(image: GeneratedImage, prompt: string) {

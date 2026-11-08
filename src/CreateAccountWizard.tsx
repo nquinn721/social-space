@@ -4,7 +4,7 @@ import { suggestProfile } from './assistant/suggest';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
 import { chooseImageFile, ensureSharedPassword, fillSiteForm, formFieldsFor, openPlatformWindow, revealAccountPassword } from './profileService';
 import InboxList from './InboxList';
-import ProfileImageStudio from './ProfileImageStudio';
+import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
@@ -21,11 +21,12 @@ export function sharedBioLimit(platforms: Platform[]) {
   return limits.reduce((tightest, item) => item.limit < tightest.limit ? item : tightest, limits[0] ?? { platform: 'youtube' as Platform, limit: BIO_LIMITS.youtube });
 }
 
-function ImagePicker({ path, preview, busy, onPick, onGenerated, suggestion }: { path: string; preview: string; busy: boolean; onPick: () => void; onGenerated: (path: string) => void; suggestion: string }) {
-  const [studio, setStudio] = useState(false);
+function ImagePicker({ path, preview, busy, onPick, onGenerated, suggestion, auto }: { path: string; preview: string; busy: boolean; onPick: () => void; onGenerated: (path: string) => void; suggestion: string; auto?: AutoImage }) {
+  const [studio, setStudio] = useState(Boolean(auto));
+  useEffect(() => { if (auto) setStudio(true); }, [auto?.key]);
   return <>
     <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button generate-button" disabled={busy} aria-expanded={studio} onClick={() => setStudio((open) => !open)}><Wand2 size={13}/> Generate</button><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>
-    {studio && <ProfileImageStudio suggestion={suggestion} disabled={busy} onClose={() => setStudio(false)} onUse={(generated) => { onGenerated(generated); setStudio(false); }}/>}
+    {studio && <ProfileImageStudio key={auto?.key} suggestion={suggestion} auto={auto} onAutoUse={onGenerated} disabled={busy} onClose={() => setStudio(false)} onUse={(generated) => { onGenerated(generated); setStudio(false); }}/>}
   </>;
 }
 
@@ -45,6 +46,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [website, setWebsite] = useState(prefill?.website ?? '');
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
+  const [autoImage, setAutoImage] = useState<AutoImage>();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [current, setCurrent] = useState(0);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
@@ -76,7 +78,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const suggest = () => run(async () => {
     const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
     setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
-    setNote('Suggested by your local model. Edit anything you like.');
+    setAutoImage({ description: suggestion.imagePrompt || `${suggestion.name}, ${idea.trim()}`, style: suggestion.imageStyle, key: Date.now() });
+    setNote('Suggested by your local model, and a matching profile picture is on its way. Edit anything you like.');
   });
   function toggle(platform: Platform) { setChosen((list) => list.includes(platform) ? list.filter((item) => item !== platform) : [...list, platform]); }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
@@ -172,7 +175,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
               </div>
               <label>Profile image <span>optional, you can add it later</span></label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()} auto={autoImage}/>
               {feedback}
             </div>
             <aside className="preview-card" aria-label="Profile preview">
