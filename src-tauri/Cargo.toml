@@ -23,6 +23,10 @@ sha2 = "0.10"
 getrandom = "0.3"
 url = "2"
 rfd = "0.15"
+imap = { version = "2.4", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "1"
+mailparse = "0.15"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

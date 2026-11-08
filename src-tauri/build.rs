@@ -24,6 +24,16 @@ fn main() {
         "complete_queue_job",
         "delete_queue_job",
         "choose_video_file",
+        "ollama_models",
+        "ollama_chat",
+        "email_connection",
+        "connect_email",
+        "disconnect_email",
+        "list_emails",
+        "read_email",
+        "fill_site_form",
+        "choose_image_file",
+        "load_image_preview",
     ];
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(commands));

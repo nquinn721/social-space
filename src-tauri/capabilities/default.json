@@ -11,6 +11,9 @@
     "allow-get-kling-video", "allow-open-kling-video", "allow-connect-x",
     "allow-x-connection", "allow-disconnect-x", "allow-post-to-x",
     "allow-connect-instagram", "allow-instagram-connection", "allow-disconnect-instagram", "allow-publish-instagram-reel",
-    "allow-list-queue", "allow-add-queue-job", "allow-complete-queue-job", "allow-delete-queue-job", "allow-choose-video-file"
+    "allow-list-queue", "allow-add-queue-job", "allow-complete-queue-job", "allow-delete-queue-job", "allow-choose-video-file",
+    "allow-ollama-models", "allow-ollama-chat",
+    "allow-email-connection", "allow-connect-email", "allow-disconnect-email", "allow-list-emails", "allow-read-email",
+    "allow-fill-site-form", "allow-choose-image-file", "allow-load-image-preview"
   ]
 }

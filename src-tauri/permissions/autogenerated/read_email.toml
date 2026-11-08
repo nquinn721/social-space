@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-read-email"
+description = "Enables the read_email command without any pre-configured scope."
+commands.allow = ["read_email"]
+
+[[permission]]
+identifier = "deny-read-email"
+description = "Denies the read_email command without any pre-configured scope."
+commands.deny = ["read_email"]

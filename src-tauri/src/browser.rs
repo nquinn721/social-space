@@ -65,11 +65,16 @@ fn make_window(
 }
 
 pub fn open_remote(app: &AppHandle, address: &str, oauth_callback: bool) -> Result<(), String> {
+    open_remote_window(app, address, oauth_callback).map(|_| ())
+}
+
+/// Opens a site window and returns its label so the assistant can pre-fill it later.
+pub fn open_remote_window(app: &AppHandle, address: &str, oauth_callback: bool) -> Result<String, String> {
     let url: url::Url = address.parse().map_err(|_| "Invalid website address.")?;
     if !allowed_navigation(&url, oauth_callback) || url.scheme() != "https" {
         return Err("The website address is not allowed.".into());
     }
-    make_window(app, url, oauth_callback, None).map(|_| ())
+    make_window(app, url, oauth_callback, None).map(|window| window.label().to_owned())
 }
 
 #[cfg(test)]

@@ -1,7 +1,12 @@
 import type { Channel } from './channelModel';
 export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
+export type View = 'overview' | 'accounts' | 'channels' | 'queue' | 'publishing' | 'creative' | 'settings';
+export const VIEWS: View[] = ['overview', 'accounts', 'channels', 'queue', 'publishing', 'creative', 'settings'];
 export type PlatformAction = 'create' | 'manage' | 'post' | 'developer';
-export type Account = { id: string; platform: Platform; label: string; handle: string; status: 'planned' | 'active'; notes: string };
+export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string };
+export type Account = { id: string; platform: Platform; label: string; handle: string; status: 'planned' | 'active'; notes: string } & AccountProfile;
+/** Profile description limits on each platform, used to keep drafts postable. */
+export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160 };
 export type Workspace = { businessName: string; accounts: Account[]; channels: Channel[] };
 export const EMPTY_WORKSPACE: Workspace = { businessName: '', accounts: [], channels: [] };
 export const PLATFORMS: { id: Platform; name: string; description: string; color: string; mark: string; postLabel: string }[] = [

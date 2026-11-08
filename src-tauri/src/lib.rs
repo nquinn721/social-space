@@ -2,9 +2,12 @@ use std::{collections::HashSet, fs, io::Write, path::Path, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
+mod autofill;
 mod browser;
+mod email;
 mod instagram;
 mod kling;
+mod ollama;
 mod queue;
 mod x_integration;
 
@@ -41,6 +44,16 @@ struct Account {
     handle: String,
     status: AccountStatus,
     notes: String,
+    #[serde(default)]
+    display_name: String,
+    #[serde(default)]
+    bio: String,
+    #[serde(default)]
+    website: String,
+    #[serde(default)]
+    signup_email: String,
+    #[serde(default)]
+    image_path: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -70,7 +83,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     for account in &workspace.accounts {
         if account.id.trim().is_empty()
             || !ids.insert(&account.id)
-            || [&account.id, &account.label, &account.handle, &account.notes]
+            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path]
                 .iter()
                 .any(|field| field.len() > MAX_FIELD_LENGTH)
         {
@@ -181,9 +194,9 @@ async fn open_platform_action(
     app: tauri::AppHandle,
     platform: Platform,
     action: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let url = platform_url(platform, &action).ok_or("Unknown platform action.")?;
-    browser::open_remote(&app, url, false)
+    browser::open_remote_window(&app, url, false)
 }
 
 #[tauri::command]
@@ -226,7 +239,17 @@ pub fn run() {
             queue::add_queue_job,
             queue::complete_queue_job,
             queue::delete_queue_job,
-            queue::choose_video_file
+            queue::choose_video_file,
+            ollama::ollama_models,
+            ollama::ollama_chat,
+            email::email_connection,
+            email::connect_email,
+            email::disconnect_email,
+            email::list_emails,
+            email::read_email,
+            autofill::fill_site_form,
+            autofill::choose_image_file,
+            autofill::load_image_preview
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Manager");
@@ -244,6 +267,11 @@ mod tests {
             handle: "example".into(),
             status: AccountStatus::Planned,
             notes: String::new(),
+            display_name: String::new(),
+            bio: String::new(),
+            website: String::new(),
+            signup_email: String::new(),
+            image_path: String::new(),
         }
     }
 
@@ -259,6 +287,13 @@ mod tests {
         assert!(validate_workspace(&workspace).is_ok());
         workspace.accounts.push(account("one"));
         assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn accounts_saved_before_profiles_existed_still_load() {
+        let workspace: Workspace = serde_json::from_str(r#"{"businessName":"","accounts":[{"id":"a","platform":"x","label":"Main","handle":"m","status":"active","notes":""}]}"#).unwrap();
+        assert_eq!(workspace.accounts[0].bio, "");
+        assert!(validate_workspace(&workspace).is_ok());
     }
 
     #[test]

@@ -183,6 +183,12 @@
           "markdownDescription": "Enables the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Enables the choose_image_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-choose-image-file",
+          "markdownDescription": "Enables the choose_image_file command without any pre-configured scope."
+        },
+        {
           "description": "Enables the choose_video_file command without any pre-configured scope.",
           "type": "string",
           "const": "allow-choose-video-file",
@@ -193,6 +199,12 @@
           "type": "string",
           "const": "allow-complete-queue-job",
           "markdownDescription": "Enables the complete_queue_job command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the connect_email command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-email",
+          "markdownDescription": "Enables the connect_email command without any pre-configured scope."
         },
         {
           "description": "Enables the connect_instagram command without any pre-configured scope.",
@@ -213,6 +225,12 @@
           "markdownDescription": "Enables the delete_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Enables the disconnect_email command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-disconnect-email",
+          "markdownDescription": "Enables the disconnect_email command without any pre-configured scope."
+        },
+        {
           "description": "Enables the disconnect_instagram command without any pre-configured scope.",
           "type": "string",
           "const": "allow-disconnect-instagram",
@@ -223,6 +241,18 @@
           "type": "string",
           "const": "allow-disconnect-x",
           "markdownDescription": "Enables the disconnect_x command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the email_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-email-connection",
+          "markdownDescription": "Enables the email_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the fill_site_form command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-fill-site-form",
+          "markdownDescription": "Enables the fill_site_form command without any pre-configured scope."
         },
         {
           "description": "Enables the generate_kling_video command without any pre-configured scope.",
@@ -249,16 +279,40 @@
           "markdownDescription": "Enables the kling_key_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the list_emails command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-emails",
+          "markdownDescription": "Enables the list_emails command without any pre-configured scope."
+        },
+        {
           "description": "Enables the list_queue command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-queue",
           "markdownDescription": "Enables the list_queue command without any pre-configured scope."
         },
         {
+          "description": "Enables the load_image_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-load-image-preview",
+          "markdownDescription": "Enables the load_image_preview command without any pre-configured scope."
+        },
+        {
           "description": "Enables the load_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "allow-load-workspace",
           "markdownDescription": "Enables the load_workspace command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ollama_chat command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ollama-chat",
+          "markdownDescription": "Enables the ollama_chat command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ollama_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ollama-models",
+          "markdownDescription": "Enables the ollama_models command without any pre-configured scope."
         },
         {
           "description": "Enables the open_kling command without any pre-configured scope.",
@@ -297,6 +351,12 @@
           "markdownDescription": "Enables the publish_instagram_reel command without any pre-configured scope."
         },
         {
+          "description": "Enables the read_email command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-read-email",
+          "markdownDescription": "Enables the read_email command without any pre-configured scope."
+        },
+        {
           "description": "Enables the remove_kling_key command without any pre-configured scope.",
           "type": "string",
           "const": "allow-remove-kling-key",
@@ -327,6 +387,12 @@
           "markdownDescription": "Denies the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Denies the choose_image_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-choose-image-file",
+          "markdownDescription": "Denies the choose_image_file command without any pre-configured scope."
+        },
+        {
           "description": "Denies the choose_video_file command without any pre-configured scope.",
           "type": "string",
           "const": "deny-choose-video-file",
@@ -337,6 +403,12 @@
           "type": "string",
           "const": "deny-complete-queue-job",
           "markdownDescription": "Denies the complete_queue_job command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the connect_email command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-email",
+          "markdownDescription": "Denies the connect_email command without any pre-configured scope."
         },
         {
           "description": "Denies the connect_instagram command without any pre-configured scope.",
@@ -357,6 +429,12 @@
           "markdownDescription": "Denies the delete_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Denies the disconnect_email command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-disconnect-email",
+          "markdownDescription": "Denies the disconnect_email command without any pre-configured scope."
+        },
+        {
           "description": "Denies the disconnect_instagram command without any pre-configured scope.",
           "type": "string",
           "const": "deny-disconnect-instagram",
@@ -367,6 +445,18 @@
           "type": "string",
           "const": "deny-disconnect-x",
           "markdownDescription": "Denies the disconnect_x command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the email_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-email-connection",
+          "markdownDescription": "Denies the email_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the fill_site_form command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-fill-site-form",
+          "markdownDescription": "Denies the fill_site_form command without any pre-configured scope."
         },
         {
           "description": "Denies the generate_kling_video command without any pre-configured scope.",
@@ -393,16 +483,40 @@
           "markdownDescription": "Denies the kling_key_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the list_emails command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-emails",
+          "markdownDescription": "Denies the list_emails command without any pre-configured scope."
+        },
+        {
           "description": "Denies the list_queue command without any pre-configured scope.",
           "type": "string",
           "const": "deny-list-queue",
           "markdownDescription": "Denies the list_queue command without any pre-configured scope."
         },
         {
+          "description": "Denies the load_image_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-load-image-preview",
+          "markdownDescription": "Denies the load_image_preview command without any pre-configured scope."
+        },
+        {
           "description": "Denies the load_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "deny-load-workspace",
           "markdownDescription": "Denies the load_workspace command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ollama_chat command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ollama-chat",
+          "markdownDescription": "Denies the ollama_chat command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ollama_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ollama-models",
+          "markdownDescription": "Denies the ollama_models command without any pre-configured scope."
         },
         {
           "description": "Denies the open_kling command without any pre-configured scope.",
@@ -439,6 +553,12 @@
           "type": "string",
           "const": "deny-publish-instagram-reel",
           "markdownDescription": "Denies the publish_instagram_reel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the read_email command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-read-email",
+          "markdownDescription": "Denies the read_email command without any pre-configured scope."
         },
         {
           "description": "Denies the remove_kling_key command without any pre-configured scope.",
