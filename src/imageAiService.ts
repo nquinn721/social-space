@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 
 /** Fast uses SDXL (seconds). Detailed uses Qwen-Image (minutes on a laptop GPU, sharper results). */
 export type Look = 'fast' | 'detailed';
-export type ImageStyle = 'photo' | 'illustration' | 'logo';
+export type ImageStyle = 'photo' | 'product' | 'illustration' | 'logo';
 export type ImageAiStatus = { running: boolean; looks: Look[]; canStart: boolean };
 export type GeneratedImage = { path: string; seed: number; preview: string };
 export type ImageAiSettings = { baseUrl: string };
@@ -15,6 +15,7 @@ export type RefineAmount = keyof typeof REFINE_STRENGTH;
 
 export const STYLES: { id: ImageStyle; label: string }[] = [
   { id: 'photo', label: 'Photo portrait' },
+  { id: 'product', label: 'Product photo' },
   { id: 'illustration', label: 'Illustrated avatar' },
   { id: 'logo', label: 'Logo mark' },
 ];
@@ -24,6 +25,11 @@ const STYLE_PROMPTS: Record<ImageStyle, { before: string; after: string; negativ
     before: 'photorealistic headshot portrait of a fictional person,',
     after: 'natural soft lighting, 85mm lens, shallow depth of field, sharp focus, detailed skin texture, centered, looking at camera, social media profile picture',
     negative: 'text, watermark, logo, signature, blurry, lowres, deformed, distorted face, extra fingers, cartoon, painting, cropped head, multiple people',
+  },
+  product: {
+    before: 'professional product photograph,',
+    after: 'styled close-up, soft natural light, shallow depth of field, sharp focus, clean uncluttered background, centered, no people, social media profile picture',
+    negative: 'people, person, face, hands, text, watermark, logo, signature, blurry, lowres, deformed, cluttered',
   },
   illustration: {
     before: 'stylized illustrated avatar of a fictional character,',

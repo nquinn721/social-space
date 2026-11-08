@@ -61,6 +61,10 @@ describe('profile image studio', () => {
 
   it('keeps portraits fictional in the prompt', () => {
     expect(ai.buildPrompt('red hair', 'photo').prompt).toMatch(/^photorealistic headshot portrait of a fictional person, red hair, /);
+    // Product pictures must not sneak a person in next to the product.
+    const product = ai.buildPrompt('amber candle', 'product');
+    expect(product.prompt).not.toMatch(/person|portrait/);
+    expect(product.negative).toMatch(/^people, person, face/);
     expect(ai.buildPrompt('fox', 'logo', ['', 'orange']).prompt).toBe('minimal modern logo mark, fox, orange, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon');
   });
 });

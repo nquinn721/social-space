@@ -3,7 +3,7 @@ import type { ImageStyle } from '../imageAiService';
 
 export type ProfileSuggestion = { name: string; username: string; displayName: string; description: string; imagePrompt: string; imageStyle: ImageStyle };
 
-const IMAGE_STYLES: ImageStyle[] = ['photo', 'illustration', 'logo'];
+const IMAGE_STYLES: ImageStyle[] = ['photo', 'product', 'illustration', 'logo'];
 
 /**
  * Small local models write flat, generic copy unless told what good looks like,
@@ -19,7 +19,7 @@ Rules for each field:
 - displayName: the name plus a short searchable keyword after a separator, like "Soft Wings | Kids Jewelry". At most 30 characters.
 - description: the profile bio. Start with a hook that says who it is for and what makes it special. Add one concrete, sensory detail (materials, place, process, price point or promise). End with a short call to action, like "New drops every Friday" or "Tap to shop". You may use up to 2 fitting emoji and line breaks. No hashtags. Never use filler like "Welcome to our page", "high quality", "best products", "we are passionate".
 - imagePrompt: 20 to 40 words describing the ideal profile picture: the subject, look, colors, background and mood. It must read well as a small circle. For a personal brand or creator, describe a made-up person (age range, look, expression, outfit, setting). For a product business, describe a simple logo mark or a styled product close-up. Never name or imitate a real or famous person.
-- imageStyle: "photo" for a person or product photo, "illustration" for a drawn character, "logo" for a logo mark.
+- imageStyle: "photo" for a photo of a person, "product" for a photo of a product, food or place with no people, "illustration" for a drawn character, "logo" for a logo mark.
 
 Reply with only one JSON object with the string keys "name", "username", "displayName", "description", "imagePrompt", "imageStyle".`;
 
@@ -30,7 +30,7 @@ const EXAMPLE_REPLY = JSON.stringify({
   displayName: 'Crumb & Crust | Sourdough',
   description: 'Slow-fermented sourdough from a tiny Vermont kitchen 🍞\n48-hour loaves, crackly crust, open crumb.\nWeekend preorders open Thursday ↓',
   imagePrompt: 'overhead close-up of a rustic sourdough loaf with a deep golden ear and flour dusting, on a linen cloth, warm morning window light, cream and honey tones, cozy and inviting',
-  imageStyle: 'photo',
+  imageStyle: 'product',
 });
 
 /** Pulls the first JSON object out of a model reply, tolerating code fences or extra words. */
