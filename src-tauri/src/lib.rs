@@ -8,11 +8,13 @@ mod browser;
 mod email;
 mod embedded;
 mod gmail_session;
+mod grok;
 mod instagram;
 mod kling;
 mod ollama;
 mod queue;
 mod updater;
+mod video_gen;
 mod video_sources;
 mod x_integration;
 
@@ -215,7 +217,7 @@ async fn open_kling(app: tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(StorageLock::default())
-        .manage(kling::GenerateLock::default())
+        .manage(video_gen::GenerateLock::default())
         .manage(video_sources::SourcesLock::default())
         .setup(|app| { queue::start_scheduler(app.handle().clone()); Ok(()) })
         .invoke_handler(tauri::generate_handler![
@@ -224,14 +226,16 @@ pub fn run() {
             open_platform_action,
             open_kling,
             video_sources::list_video_sources,
+            video_sources::set_active_video_source,
+            video_sources::open_video_provider_site,
             video_sources::add_video_source,
             video_sources::check_video_source,
             video_sources::rename_video_source,
             video_sources::remove_video_source,
             video_sources::open_video_provider_keys,
-            kling::generate_kling_video,
-            kling::get_kling_video,
-            kling::open_kling_video,
+            video_gen::generate_video,
+            video_gen::get_video,
+            video_gen::open_video,
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
@@ -371,5 +375,23 @@ mod tests {
         assert!(write_workspace(&path, &invalid).is_err());
         assert_eq!(read_workspace(&path).unwrap(), updated);
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// A command registered in the handler but missing from build.rs or the
+    /// capability is rejected at runtime in the installed app.
+    #[test]
+    fn every_registered_command_is_allowed() {
+        let source = include_str!("lib.rs");
+        let start = source.find(concat!("generate_handler", "![")).unwrap();
+        let handler = &source[start..];
+        let handler = &handler[handler.find('[').unwrap() + 1..handler.find(']').unwrap()];
+        let build = include_str!("../build.rs");
+        let capability = include_str!("../capabilities/default.json");
+        for command in handler.split(',').map(|item| item.trim()).filter(|item| !item.is_empty()) {
+            let name = command.rsplit("::").next().unwrap();
+            assert!(build.contains(&format!("\"{name}\"")), "{name} is missing from build.rs");
+            let permission = format!("\"allow-{}\"", name.replace('_', "-"));
+            assert!(capability.contains(&permission), "{name} is missing from capabilities/default.json");
+        }
     }
 }

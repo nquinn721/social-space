@@ -4,15 +4,13 @@ import type { Account, Workspace } from '../model';
 import * as profile from '../profileService';
 import * as x from '../xService';
 import * as email from '../emailService';
-import * as kling from '../klingService';
 import * as sources from '../videoSourcesService';
 
 vi.mock('../profileService', async (original) => ({ ...(await original<typeof import('../profileService')>()), openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn(), ensureAccountPassword: vi.fn() }));
 vi.mock('../xService', () => ({ postToX: vi.fn() }));
 vi.mock('../emailService', () => ({ listEmails: vi.fn(), readEmail: vi.fn() }));
 vi.mock('../queueService', () => ({ listQueue: vi.fn() }));
-vi.mock('../klingService', () => ({ generateKlingVideo: vi.fn() }));
-vi.mock('../videoSourcesService', () => ({ listVideoSources: vi.fn() }));
+vi.mock('../videoSourcesService', () => ({ listVideoSources: vi.fn(), generateVideo: vi.fn() }));
 
 const account: Account = { id: 'a1', platform: 'instagram', label: 'Studio', handle: 'studio', status: 'planned', notes: '', bio: 'Hello', signupEmail: 'me@example.com', imagePath: 'C:\\pics\\me.png' };
 function context(workspace: Workspace, approve = true) {
@@ -31,19 +29,19 @@ const workspace = (): Workspace => ({ businessName: 'Example LLC', accounts: [ac
 beforeEach(() => vi.resetAllMocks());
 
 describe('assistant tools', () => {
-  it('generates Kling video with the named source, or the first verified one', async () => {
-    vi.mocked(sources.listVideoSources).mockResolvedValue([
+  it('generates video with the active source, or a named one, using that provider\'s durations', async () => {
+    vi.mocked(sources.listVideoSources).mockResolvedValue({ active: 'grok', sources: [
       { id: 'bad', name: 'Old', provider: 'kling', status: 'rejected', checkedAt: 1, creditsRemaining: null, detail: null },
-      { id: 'new', name: 'Fresh', provider: 'kling', status: 'unchecked', checkedAt: null, creditsRemaining: null, detail: null },
       { id: 'main', name: 'Main', provider: 'kling', status: 'verified', checkedAt: 1, creditsRemaining: 10, detail: null },
-    ]);
-    vi.mocked(kling.generateKlingVideo).mockResolvedValue({ id: 't1', status: 'submitted', message: null, videoUrl: null });
+      { id: 'grok', name: 'Grok', provider: 'grok', status: 'verified', checkedAt: 1, creditsRemaining: null, detail: null },
+    ] });
+    vi.mocked(sources.generateVideo).mockResolvedValue({ id: 't1', status: 'pending', message: null, videoUrl: null, sourceId: 'grok', sourceName: 'Grok', provider: 'grok' });
     const ctx = context(workspace());
-    expect(await runTool('generate_kling_video', { prompt: 'A city' }, ctx)).toMatchObject({ started: true, source: 'Main' });
-    expect(kling.generateKlingVideo).toHaveBeenLastCalledWith('main', 'A city', '9:16', 5);
-    await runTool('generate_kling_video', { prompt: 'A city', source: 'fresh' }, ctx);
-    expect(kling.generateKlingVideo).toHaveBeenLastCalledWith('new', 'A city', '9:16', 5);
-    await expect(runTool('generate_kling_video', { prompt: 'A city', source: 'Old' }, ctx)).rejects.toThrow('No Kling video source named Old');
+    expect(await runTool('generate_video', { prompt: 'A city' }, ctx)).toMatchObject({ started: true, source: 'Grok' });
+    expect(sources.generateVideo).toHaveBeenLastCalledWith('grok', 'A city', '9:16', 8);
+    await runTool('generate_video', { prompt: 'A city', source: 'main', duration: 15 }, ctx);
+    expect(sources.generateVideo).toHaveBeenLastCalledWith('main', 'A city', '9:16', 5);
+    await expect(runTool('generate_video', { prompt: 'A city', source: 'Old' }, ctx)).rejects.toThrow('No usable video source named Old');
   });
 
 

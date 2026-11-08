@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-add-video-source"
+description = "Enables the add_video_source command without any pre-configured scope."
+commands.allow = ["add_video_source"]
+
+[[permission]]
+identifier = "deny-add-video-source"
+description = "Denies the add_video_source command without any pre-configured scope."
+commands.deny = ["add_video_source"]

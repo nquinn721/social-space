@@ -1,7 +1,8 @@
-//! Named video generation sources. Each source has a provider (Kling for now)
-//! and its own API key. Names and verification results live in
-//! `video-sources.json`; keys live only in Windows Credential Manager, one
-//! entry per source.
+//! Named video generation sources. Each source has a provider (Kling or Grok)
+//! and its own API key. Names, verification results and the active source live
+//! in `video-sources.json`; keys live only in Windows Credential Manager, one
+//! entry per source. All video generation uses the active source unless a
+//! request names another.
 
 use std::{
     fs,
@@ -38,6 +39,7 @@ pub struct SourcesLock(Mutex<()>);
 #[serde(rename_all = "lowercase")]
 pub enum VideoProvider {
     Kling,
+    Grok,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -51,9 +53,9 @@ pub enum SourceStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct VideoSource {
-    id: String,
-    name: String,
-    provider: VideoProvider,
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) provider: VideoProvider,
     status: SourceStatus,
     /// Unix milliseconds of the last successful check with the provider.
     checked_at: Option<u64>,
@@ -61,6 +63,38 @@ pub struct VideoSource {
     credits_remaining: Option<f64>,
     /// A short note from the last check, such as an account warning.
     detail: Option<String>,
+}
+
+/// What the app shows and stores: every source, and the one video generation uses.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourcesState {
+    active: Option<String>,
+    sources: Vec<VideoSource>,
+}
+
+/// Files written before the active source existed hold just the list.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum StoredSources {
+    State(SourcesState),
+    List(Vec<VideoSource>),
+}
+
+impl SourcesState {
+    /// Keeps `active` pointing at a usable source, preferring verified ones.
+    fn repair_active(&mut self) {
+        let usable = |id: &String| self.sources.iter().any(|source| &source.id == id && source.status != SourceStatus::Rejected);
+        if self.active.as_ref().is_some_and(usable) {
+            return;
+        }
+        self.active = self
+            .sources
+            .iter()
+            .find(|source| source.status == SourceStatus::Verified)
+            .or_else(|| self.sources.iter().find(|source| source.status != SourceStatus::Rejected))
+            .map(|source| source.id.clone());
+    }
 }
 
 /// What a provider said about a key.
@@ -120,20 +154,26 @@ fn sources_path(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|_| "Could not locate the app data folder.".into())
 }
 
-fn read_sources(path: &Path) -> Result<Option<Vec<VideoSource>>, String> {
+fn read_sources(path: &Path) -> Result<Option<SourcesState>, String> {
     match fs::read(path) {
-        Ok(contents) => serde_json::from_slice(&contents)
-            .map(Some)
-            .map_err(|_| "Could not read your video sources.".into()),
+        Ok(contents) => match serde_json::from_slice(&contents) {
+            Ok(StoredSources::State(state)) => Ok(Some(state)),
+            Ok(StoredSources::List(sources)) => {
+                let mut state = SourcesState { active: None, sources };
+                state.repair_active();
+                Ok(Some(state))
+            }
+            Err(_) => Err("Could not read your video sources.".into()),
+        },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(_) => Err("Could not open your video sources.".into()),
     }
 }
 
-fn write_sources(path: &Path, sources: &[VideoSource]) -> Result<(), String> {
+fn write_sources(path: &Path, state: &SourcesState) -> Result<(), String> {
     let parent = path.parent().ok_or("Invalid video sources path.")?;
     fs::create_dir_all(parent).map_err(|_| "Could not create the app data folder.")?;
-    let contents = serde_json::to_vec_pretty(sources).map_err(|_| "Could not encode video sources.")?;
+    let contents = serde_json::to_vec_pretty(state).map_err(|_| "Could not encode video sources.")?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|_| "Could not save video sources.")?;
     temporary
         .write_all(&contents)
@@ -148,22 +188,23 @@ fn write_sources(path: &Path, sources: &[VideoSource]) -> Result<(), String> {
 fn with_sources<T>(
     app: &AppHandle,
     lock: &SourcesLock,
-    change: impl FnOnce(&mut Vec<VideoSource>) -> Result<T, String>,
+    change: impl FnOnce(&mut SourcesState) -> Result<T, String>,
 ) -> Result<T, String> {
     let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
     let path = sources_path(app)?;
-    let mut sources = load_or_migrate(&path)?;
-    let result = change(&mut sources)?;
-    write_sources(&path, &sources)?;
+    let mut state = load_or_migrate(&path)?;
+    let result = change(&mut state)?;
+    state.repair_active();
+    write_sources(&path, &state)?;
     Ok(result)
 }
 
 /// The first time sources are read, the old single Kling key becomes a source.
-fn load_or_migrate(path: &Path) -> Result<Vec<VideoSource>, String> {
-    if let Some(sources) = read_sources(path)? {
-        return Ok(sources);
+fn load_or_migrate(path: &Path) -> Result<SourcesState, String> {
+    if let Some(state) = read_sources(path)? {
+        return Ok(state);
     }
-    let mut sources = Vec::new();
+    let mut state = SourcesState::default();
     if let Some(key) = take_legacy_kling_key()? {
         let source = VideoSource {
             id: new_id()?,
@@ -175,11 +216,12 @@ fn load_or_migrate(path: &Path) -> Result<Vec<VideoSource>, String> {
             detail: None,
         };
         store_key(&source.id, &key)?;
-        sources.push(source);
-        write_sources(path, &sources)?;
+        state.sources.push(source);
+        state.repair_active();
+        write_sources(path, &state)?;
         delete_legacy_kling_key();
     }
-    Ok(sources)
+    Ok(state)
 }
 
 // ---------- credential manager ----------
@@ -257,17 +299,19 @@ fn take_legacy_kling_key() -> Result<Option<String>, String> {
 #[cfg(not(windows))]
 fn delete_legacy_kling_key() {}
 
-/// The API key for a source, checked to belong to the expected provider.
-pub fn source_key(app: &AppHandle, lock: &SourcesLock, id: &str, provider: VideoProvider) -> Result<String, String> {
+/// The source a generation request should use: the one named, or the active one.
+pub fn resolve(app: &AppHandle, lock: &SourcesLock, id: Option<&str>) -> Result<VideoSource, String> {
     let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
-    let sources = load_or_migrate(&sources_path(app)?)?;
-    let source = sources
-        .iter()
-        .find(|source| source.id == id)
-        .ok_or("Choose a video source first.")?;
-    if source.provider != provider {
-        return Err("That video source is for a different provider.".into());
+    let state = load_or_migrate(&sources_path(app)?)?;
+    let id = id.or(state.active.as_deref()).ok_or("Add a video source under Video sources first.")?;
+    let source = state.sources.into_iter().find(|source| source.id == id).ok_or("That video source no longer exists.")?;
+    if source.status == SourceStatus::Rejected {
+        return Err(format!("{} has a rejected API key. Update it under Video sources.", source.name));
     }
+    Ok(source)
+}
+
+pub fn read_source_key(id: &str) -> Result<String, String> {
     read_key(id)
 }
 
@@ -337,8 +381,42 @@ fn kling_verdict(status: u16, body: &str) -> Verdict {
     Verdict::Unavailable(format!("Kling could not check the key right now ({reason}). Try again shortly."))
 }
 
+#[derive(Deserialize)]
+struct GrokModels {
+    #[serde(default)]
+    models: Vec<serde_json::Value>,
+}
+
+/// Reads xAI's answer to `GET /video-generation-models`, which costs nothing.
+fn grok_verdict(status: u16, body: &str) -> Verdict {
+    match status {
+        200..=299 => {
+            let count = serde_json::from_str::<GrokModels>(body).map(|value| value.models.len()).unwrap_or(0);
+            let detail = (count == 0).then(|| "This key has no Grok video models enabled. Allow them in the xAI console.".to_string());
+            Verdict::Verified { credits: None, detail }
+        }
+        400 | 401 => Verdict::Rejected("xAI did not accept this API key.".into()),
+        403 => Verdict::Rejected("This xAI key is not allowed to use video models.".into()),
+        _ => Verdict::Unavailable(format!("xAI could not check the key right now (HTTP {status}). Try again shortly.")),
+    }
+}
+
 async fn check_key(provider: VideoProvider, key: &str) -> Verdict {
     match provider {
+        VideoProvider::Grok => {
+            let client = match crate::grok::api_client() {
+                Ok(client) => client,
+                Err(reason) => return Verdict::Unavailable(reason),
+            };
+            match client.get(format!("{}/video-generation-models", crate::grok::API_BASE)).bearer_auth(key).send().await {
+                Ok(response) => {
+                    let status = response.status().as_u16();
+                    let body = response.text().await.unwrap_or_default();
+                    grok_verdict(status, &body)
+                }
+                Err(_) => Verdict::Unavailable("Could not reach xAI. Check your connection and try again.".into()),
+            }
+        }
         VideoProvider::Kling => {
             let client = match reqwest::Client::builder()
                 .https_only(true)
@@ -392,7 +470,22 @@ fn apply(source: &mut VideoSource, verdict: Verdict) -> Result<(), String> {
 // ---------- commands ----------
 
 #[tauri::command]
-pub fn list_video_sources(app: AppHandle, lock: State<'_, SourcesLock>) -> Result<Vec<VideoSource>, String> {
+pub fn list_video_sources(app: AppHandle, lock: State<'_, SourcesLock>) -> Result<SourcesState, String> {
+    let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
+    load_or_migrate(&sources_path(&app)?)
+}
+
+/// Chooses the source every video generation uses until it is changed again.
+#[tauri::command]
+pub fn set_active_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id: String) -> Result<SourcesState, String> {
+    with_sources(&app, &lock, |state| {
+        let source = state.sources.iter().find(|source| source.id == id).ok_or("Unknown video source.")?;
+        if source.status == SourceStatus::Rejected {
+            return Err("That source's key was rejected. Check it again or add a new key first.".into());
+        }
+        state.active = Some(id);
+        Ok(())
+    })?;
     let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
     load_or_migrate(&sources_path(&app)?)
 }
@@ -421,13 +514,13 @@ pub async fn add_video_source(
         Verdict::Rejected(reason) => return Err(reason),
         verdict => apply(&mut source, verdict)?,
     }
-    with_sources(&app, &lock, |sources| {
-        if sources.len() >= MAX_SOURCES {
+    with_sources(&app, &lock, |state| {
+        if state.sources.len() >= MAX_SOURCES {
             return Err(format!("You can add up to {MAX_SOURCES} video sources."));
         }
-        ensure_unique_name(sources, &source.name, None)?;
+        ensure_unique_name(&state.sources, &source.name, None)?;
         store_key(&source.id, &key)?;
-        sources.push(source.clone());
+        state.sources.push(source.clone());
         Ok(source)
     })
 }
@@ -437,6 +530,7 @@ pub async fn check_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id
     let provider = {
         let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
         load_or_migrate(&sources_path(&app)?)?
+            .sources
             .iter()
             .find(|source| source.id == id)
             .map(|source| source.provider)
@@ -444,8 +538,8 @@ pub async fn check_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id
     };
     let key = read_key(&id)?;
     let verdict = check_key(provider, &key).await;
-    with_sources(&app, &lock, |sources| {
-        let source = sources.iter_mut().find(|source| source.id == id).ok_or("Unknown video source.")?;
+    with_sources(&app, &lock, |state| {
+        let source = state.sources.iter_mut().find(|source| source.id == id).ok_or("Unknown video source.")?;
         apply(source, verdict)?;
         Ok(source.clone())
     })
@@ -454,9 +548,9 @@ pub async fn check_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id
 #[tauri::command]
 pub fn rename_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id: String, name: String) -> Result<VideoSource, String> {
     let name = clean_name(&name)?;
-    with_sources(&app, &lock, |sources| {
-        ensure_unique_name(sources, &name, Some(&id))?;
-        let source = sources.iter_mut().find(|source| source.id == id).ok_or("Unknown video source.")?;
+    with_sources(&app, &lock, |state| {
+        ensure_unique_name(&state.sources, &name, Some(&id))?;
+        let source = state.sources.iter_mut().find(|source| source.id == id).ok_or("Unknown video source.")?;
         source.name = name;
         Ok(source.clone())
     })
@@ -464,10 +558,10 @@ pub fn rename_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id: Str
 
 #[tauri::command]
 pub fn remove_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id: String) -> Result<(), String> {
-    with_sources(&app, &lock, |sources| {
-        let before = sources.len();
-        sources.retain(|source| source.id != id);
-        if sources.len() == before {
+    with_sources(&app, &lock, |state| {
+        let before = state.sources.len();
+        state.sources.retain(|source| source.id != id);
+        if state.sources.len() == before {
             return Err("Unknown video source.".into());
         }
         delete_key(&id)
@@ -478,6 +572,16 @@ pub fn remove_video_source(app: AppHandle, lock: State<'_, SourcesLock>, id: Str
 pub async fn open_video_provider_keys(app: AppHandle, provider: VideoProvider) -> Result<(), String> {
     let url = match provider {
         VideoProvider::Kling => "https://kling.ai/dev/api-key",
+        VideoProvider::Grok => "https://console.x.ai/",
+    };
+    crate::browser::open_remote(&app, url, false)
+}
+
+#[tauri::command]
+pub async fn open_video_provider_site(app: AppHandle, provider: VideoProvider) -> Result<(), String> {
+    let url = match provider {
+        VideoProvider::Kling => "https://klingai.com/",
+        VideoProvider::Grok => "https://grok.com/imagine",
     };
     crate::browser::open_remote(&app, url, false)
 }
@@ -536,16 +640,55 @@ mod tests {
         assert!(ensure_unique_name(&existing, "main", Some("ab")).is_ok());
     }
 
+    fn source(id: &str, status: SourceStatus) -> VideoSource {
+        VideoSource { id: id.into(), name: id.into(), provider: VideoProvider::Grok, status, checked_at: None, credits_remaining: None, detail: None }
+    }
+
+    #[test]
+    fn grok_keys_are_checked_by_listing_video_models() {
+        assert_eq!(grok_verdict(200, r#"{"models":[{"id":"grok-imagine-video"}]}"#), Verdict::Verified { credits: None, detail: None });
+        assert!(matches!(grok_verdict(200, r#"{"models":[]}"#), Verdict::Verified { detail: Some(_), .. }));
+        assert!(matches!(grok_verdict(401, ""), Verdict::Rejected(_)));
+        assert!(matches!(grok_verdict(400, r#"{"error":"Incorrect API key"}"#), Verdict::Rejected(_)));
+        assert!(matches!(grok_verdict(503, ""), Verdict::Unavailable(_)));
+    }
+
+    #[test]
+    fn the_active_source_always_points_at_a_usable_source() {
+        let mut state = SourcesState { active: None, sources: vec![source("a", SourceStatus::Rejected), source("b", SourceStatus::Unchecked), source("c", SourceStatus::Verified)] };
+        state.repair_active();
+        assert_eq!(state.active.as_deref(), Some("c"));
+        state.active = Some("b".into());
+        state.repair_active();
+        assert_eq!(state.active.as_deref(), Some("b"), "a chosen unchecked source is kept");
+        state.sources.retain(|item| item.id != "b");
+        state.repair_active();
+        assert_eq!(state.active.as_deref(), Some("c"));
+        state.sources = vec![source("a", SourceStatus::Rejected)];
+        state.repair_active();
+        assert_eq!(state.active, None);
+    }
+
+    #[test]
+    fn files_from_before_the_active_source_still_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SOURCES_FILE);
+        fs::write(&path, serde_json::to_vec(&vec![source("k1", SourceStatus::Verified)]).unwrap()).unwrap();
+        let state = read_sources(&path).unwrap().unwrap();
+        assert_eq!(state.active.as_deref(), Some("k1"));
+        assert_eq!(state.sources.len(), 1);
+    }
+
     #[test]
     fn sources_round_trip_through_the_file() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(SOURCES_FILE);
         assert_eq!(read_sources(&path).unwrap(), None);
-        let sources = vec![VideoSource {
+        let state = SourcesState { active: Some("0a1b".into()), sources: vec![VideoSource {
             id: "0a1b".into(), name: "Studio".into(), provider: VideoProvider::Kling,
             status: SourceStatus::Verified, checked_at: Some(5), credits_remaining: Some(1.0), detail: None,
-        }];
-        write_sources(&path, &sources).unwrap();
-        assert_eq!(read_sources(&path).unwrap(), Some(sources));
+        }] };
+        write_sources(&path, &state).unwrap();
+        assert_eq!(read_sources(&path).unwrap(), Some(state));
     }
 }

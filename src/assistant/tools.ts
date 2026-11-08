@@ -4,8 +4,8 @@ import { chooseImageFile, ensureAccountPassword, fillSiteForm, formFieldsFor, op
 export { formFieldsFor };
 import { listQueue } from '../queueService';
 import { postToX } from '../xService';
-import { generateKlingVideo } from '../klingService';
-import { listVideoSources } from '../videoSourcesService';
+import { generateVideo, listVideoSources } from '../videoSourcesService';
+import { PROVIDERS } from '../videoProviders';
 import type { ToolSpec } from './ollamaClient';
 
 export type ConfirmRequest = { title: string; detail: string };
@@ -22,7 +22,7 @@ const PLATFORM_IDS = PLATFORMS.map((platform) => platform.id);
 const PAGES = { signup: 'create', profile: 'manage', post: 'post', developer: 'developer' } as const;
 
 export const SYSTEM_PROMPT = `You are the assistant inside Socialspace, a desktop app where the user manages their own business's social accounts on Instagram, TikTok, YouTube and X.
-You can look at the workspace, draft and save account profiles (display name, bio, website, sign-up email), ask the user to pick a profile image, open platform pages in app windows, pre-fill the visible form in those windows, read the user's inbox, list the video queue, post to X through its official API, start Kling video generation, and switch app pages.
+You can look at the workspace, draft and save account profiles (display name, bio, website, sign-up email), ask the user to pick a profile image, open platform pages in app windows, pre-fill the visible form in those windows, read the user's inbox, list the video queue, post to X through its official API, start AI video generation (Kling or Grok, whichever video source is active), and switch app pages.
 Rules:
 - Write like a top brand strategist. Names are catchy (wordplay, alliteration, a vivid image), usernames short and easy to type, and bios have personality: a punchy first line, a promise or proof, and a call to action, with 1 to 3 fitting emojis and at most one hashtag. Never write filler like "Welcome to my page" or "high quality". Tailor the bio to each platform: X is witty, Instagram aesthetic, TikTok playful, YouTube says what videos to expect and how often.
 - Keep bios within each platform's limit: Instagram 150, TikTok 80, X 160, YouTube 1000 characters. Save drafts with save_account_profile before filling a form.
@@ -47,7 +47,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   { type: 'function', function: { name: 'read_email', description: 'Read one email by uid.', parameters: { type: 'object', properties: { uid: { type: 'number' } }, required: ['uid'] } } },
   { type: 'function', function: { name: 'list_video_queue', description: 'List scheduled and finished items in the video queue.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'post_to_x', description: 'Publish a post to the connected X account (asks the user first).', parameters: { type: 'object', properties: { text: str('Post text, up to 280 characters') }, required: ['text'] } } },
-  { type: 'function', function: { name: 'generate_kling_video', description: 'Start a Kling AI video generation (paid; asks the user first).', parameters: { type: 'object', properties: { prompt: str('Video prompt'), source: str('Name of the Kling video source to use; omit for the first verified one'), aspectRatio: { type: 'string', enum: ['16:9', '9:16', '1:1'] }, duration: { type: 'number', enum: [5, 10] } }, required: ['prompt'] } } },
+  { type: 'function', function: { name: 'generate_video', description: 'Start an AI video with the active video source, or a named one (paid; asks the user first).', parameters: { type: 'object', properties: { prompt: str('Video prompt'), source: str('Name of the video source to use; omit to use the active one'), aspectRatio: { type: 'string', enum: ['16:9', '9:16', '1:1'] }, duration: { type: 'number', enum: [5, 8, 10, 15] } }, required: ['prompt'] } } },
   { type: 'function', function: { name: 'go_to_page', description: 'Show a page of the app.', parameters: { type: 'object', properties: { page: { type: 'string', enum: VIEWS } }, required: ['page'] } } },
 ];
 
@@ -125,17 +125,19 @@ export async function runTool(name: string, args: Record<string, unknown>, ctx: 
       if (!await ctx.confirm({ title: 'Post to X?', detail: post })) return { posted: false, note: 'The user declined.' };
       return { posted: true, post: await postToX(post) };
     }
-    case 'generate_kling_video': {
+    case 'generate_video': {
       const prompt = text(args.prompt);
       if (!prompt) throw new Error('The prompt is empty.');
       const aspectRatio = typeof args.aspectRatio === 'string' ? args.aspectRatio : '9:16';
-      const duration = args.duration === 10 ? 10 : 5;
       const wanted = (text(args.source) ?? '').toLowerCase();
-      const kling = (await listVideoSources()).filter((item) => item.provider === 'kling' && item.status !== 'rejected');
-      const source = wanted ? kling.find((item) => item.name.toLowerCase() === wanted) : kling.find((item) => item.status === 'verified') ?? kling[0];
-      if (!source) throw new Error(wanted ? `No Kling video source named ${args.source}.` : 'No Kling video source is set up. Add one under Video sources.');
-      if (!await ctx.confirm({ title: `Generate a ${duration}s Kling video (${aspectRatio})?`, detail: `This uses paid Kling credits from ${source.name}.\n\n${prompt}` })) return { started: false, note: 'The user declined.' };
-      return { started: true, source: source.name, task: await generateKlingVideo(source.id, prompt, aspectRatio, duration) };
+      const { active, sources } = await listVideoSources();
+      const usable = sources.filter((item) => item.status !== 'rejected');
+      const source = wanted ? usable.find((item) => item.name.toLowerCase() === wanted) : usable.find((item) => item.id === active);
+      if (!source) throw new Error(wanted ? `No usable video source named ${args.source}.` : 'No video source is set up. Add one under Video sources.');
+      const provider = PROVIDERS[source.provider];
+      const duration = provider.durations.includes(Number(args.duration)) ? Number(args.duration) : provider.defaultDuration;
+      if (!await ctx.confirm({ title: `Generate a ${duration}s ${provider.name} video (${aspectRatio})?`, detail: `This uses paid credits from ${source.name}.\n\n${prompt}` })) return { started: false, note: 'The user declined.' };
+      return { started: true, source: source.name, task: await generateVideo(source.id, prompt, aspectRatio, duration) };
     }
     case 'go_to_page': {
       if (!VIEWS.includes(args.page as View)) throw new Error('Unknown page.');

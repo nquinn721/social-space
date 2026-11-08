@@ -2,7 +2,7 @@ import InstagramPublisher from './InstagramPublisher';
 import XPublisher from './XPublisher';
 import ChannelManagement from './ChannelManagement';
 import VideoQueue from './VideoQueue';
-import KlingStudio from './KlingStudio';
+import VideoStudio from './VideoStudio';
 import VideoSources from './VideoSources';
 import { UpdateBanner } from './AppUpdates';
 import InboxList from './InboxList';
@@ -16,7 +16,7 @@ import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
 import { AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
-import { loadWorkspace, openKling, openPlatformAction, saveWorkspace } from './service';
+import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { BrandMark, initialOf, PageHeader } from './ui';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
@@ -69,11 +69,6 @@ function App() {
     catch { setMessage('Could not open the platform page. Please try again.'); }
     finally { setBusy(false); }
   }
-  async function launchKling() {
-    if (busy) return;
-    setBusy(true); setMessage('');
-    try { await openKling(); } catch { setMessage('Could not open Kling. Please try again.'); } finally { setBusy(false); }
-  }
   async function saveAccount(account: Account) {
     const exists = workspace.accounts.some((item) => item.id === account.id);
     const accounts = exists ? workspace.accounts.map((item) => item.id === account.id ? account : item) : [...workspace.accounts, account];
@@ -124,7 +119,7 @@ function App() {
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
         {view === 'queue' && <><PageHeader eyebrow="Your content, lined up" title="Video queue" description="Plan videos for your channels in one place."/><VideoQueue workspace={workspace}/></>}
         {view === 'publishing' && <><PageHeader eyebrow="Ready when you are" title="Publishing" description="Create and publish in each platform's own tools, or post to X and Instagram from here."/><div className="info-banner"><ArrowDownLeft size={18}/><span>Publishing opens the platform in an app window. Sign in there to create or upload your content.</span></div><div className="publish-list">{PLATFORMS.map((platform) => <section className="publish-row" key={platform.id}><BrandMark platform={platform.id}/><div><h2>{platform.name}</h2><p>{platform.description}</p></div><button className="outline-button" disabled={busy} onClick={() => launch(platform.id, 'post')}>{platform.postLabel} <AppWindow size={15}/></button></section>)}</div><XPublisher/><InstagramPublisher/><div className="footnote">Scheduling and direct publishing to TikTok and YouTube are not connected yet. Platform availability and approvals vary.</div></>}
-        {view === 'creative' && <><PageHeader eyebrow="From idea to something real" title="Creative tools" description="A home for the tools that help bring your content to life."/><KlingStudio openKling={launchKling} onManageSources={() => navigate('sources')} busy={busy}/></>}
+        {view === 'creative' && <><PageHeader eyebrow="From idea to something real" title="Creative tools" description="A home for the tools that help bring your content to life."/><VideoStudio onManageSources={() => navigate('sources')}/></>}
         {view === 'sources' && <><PageHeader eyebrow="Where your videos come from" title="Video sources" description="Connect AI video providers with your own API keys. Each key is verified with the provider and kept in Windows Credential Manager."/><VideoSources/></>}
         {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded}/>}
       </div>
