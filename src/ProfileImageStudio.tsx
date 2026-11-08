@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Play, RefreshCw, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { buildPrompt, generateProfileImage, imageAiStatus, REFINE_STRENGTH, startImageAi, STYLES, type GeneratedImage, type ImageAiStatus, type ImageStyle, type Look, type RefineAmount } from './imageAiService';
 import { errorText } from './ui';
@@ -29,6 +29,7 @@ export default function ProfileImageStudio({ suggestion = '', disabled = false, 
   const [selected, setSelected] = useState(0);
   const [working, setWorking] = useState('');
   const [error, setError] = useState('');
+  const panel = useRef<HTMLElement>(null);
   const current = results[selected];
   const busy = Boolean(working) || disabled;
   const ready = Boolean(status?.running && status.looks.length);
@@ -44,7 +45,7 @@ export default function ProfileImageStudio({ suggestion = '', disabled = false, 
     setStatus(found);
     if (found.looks.length && !found.looks.includes(look)) setLook(found.looks[0]);
   });
-  useEffect(() => { void check(); }, []);
+  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); void check(); }, []);
   const start = () => run('Starting ComfyUI, this takes about a minute…', async () => { await startImageAi(); setStatus(await imageAiStatus()); });
 
   function keep(image: GeneratedImage, prompt: string) {
@@ -62,7 +63,7 @@ export default function ProfileImageStudio({ suggestion = '', disabled = false, 
     setRefinement('');
   });
 
-  return <section className="image-studio" aria-label="Generate a profile picture">
+  return <section ref={panel} className="image-studio" aria-label="Generate a profile picture">
     <header className="studio-head">
       <h4><Sparkles size={15}/> Generate with local AI</h4>
       <span className="studio-sub">ComfyUI on this PC. Nothing is uploaded.</span>
