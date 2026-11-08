@@ -58,6 +58,8 @@
     "allow-reveal-account-password",
     "allow-delete-account-password",
     "allow-check-for-update",
-    "allow-install-update"
+    "allow-install-update",
+    "allow-update-progress",
+    "allow-take-update-result"
   ]
 }

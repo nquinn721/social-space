@@ -13,3 +13,13 @@
 .update-commits{margin:0 0 16px;padding-left:18px;font-size:13px;color:var(--text-2);line-height:1.7;max-height:180px;overflow:auto}
 .update-actions{display:flex;gap:10px;flex-wrap:wrap}
 .update-settings .update-actions .primary-button{margin-top:0}
+.update-banner.done{border-color:var(--success-line);background:var(--success-soft)}
+.update-banner.done>svg{color:var(--success)}
+.update-banner.failed{border-color:var(--danger);background:var(--danger-soft)}
+.update-banner.failed>svg{color:var(--danger)}
+.update-progress{flex:1;display:grid;gap:7px;min-width:0}
+.update-progress strong{font-weight:600}
+.update-progress small{color:var(--text-3);font-family:Consolas,monospace;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.update-bar{height:5px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.update-bar span{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .4s ease}
+.update-settings .update-progress{margin:0 0 16px}
