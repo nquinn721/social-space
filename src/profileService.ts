@@ -19,6 +19,8 @@ export type Bounds = { x: number; y: number; width: number; height: number };
 /** Shows a platform page inside the app window, over the given area, and returns its id for filling. */
 export async function embedPlatformPage(platform: Platform, action: PlatformAction, bounds: Bounds): Promise<string> { desktopOnly(); return invoke('embed_platform_page', { platform, action, bounds }); }
 export async function setEmbeddedBounds(label: string, bounds: Bounds): Promise<void> { desktopOnly(); return invoke('set_embedded_bounds', { label, bounds }); }
+/** Opens Google's sign-up in an app window for a new Gmail, and returns the window id for filling. */
+export async function openGmailSignup(): Promise<string> { desktopOnly(); return invoke('open_gmail_signup'); }
 export async function closeEmbeddedPage(): Promise<void> { if (!isTauri()) return; return invoke('close_embedded_page'); }
 export function formFieldsFor(account: Account, verificationCode?: string): FormFields {
   const name = account.displayName || account.label;

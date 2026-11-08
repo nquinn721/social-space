@@ -36,6 +36,7 @@ fn main() {
         "list_emails",
         "read_email",
         "open_gmail_sign_in",
+        "open_gmail_signup",
         "connect_gmail_session",
         "open_gmail_message",
         "embed_platform_page",

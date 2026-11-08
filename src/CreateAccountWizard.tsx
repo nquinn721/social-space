@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
-import { planPresence } from './brands';
+import { emailTag, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
-import { chooseImageFile, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
+import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
@@ -125,6 +125,13 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
     setNote('Suggested by your local model. Edit anything you like.');
   });
+  // Optional: a separate Gmail for the brand. Plus-addresses are simpler, since their codes reach the connected inbox.
+  const makeGmail = () => run(async () => {
+    const id = await openGmailSignup();
+    const fields = { firstName: (displayName || label).trim(), username: emailTag(handle || label), birthday };
+    await fillSiteForm(id, Object.fromEntries(Object.entries(fields).filter(([, value]) => value)), { keepFilling: true });
+    setNote('Opened Google sign-up with the brand filled in. Finish it there, then put the new address in Sign-up email. Connect it under Settings to see its codes here.');
+  });
   function toggle(platform: Platform) { setChosen((list) => list.includes(platform) ? list.filter((item) => item !== platform) : [...list, platform]); }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
   function openSignup(target: Account) { setPage((last) => ({ account: target, action: 'create', nonce: (last?.nonce ?? 0) + 1 })); }
@@ -215,6 +222,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                   <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
                   <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
                 </div>
+                <p className="signin-hint">TikTok and X get their own address automatically, like you+brand@gmail.com, so no new inbox is needed. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
                 {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
               </details>
               <label>Profile image <span>optional, you can add it later</span></label>

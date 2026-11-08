@@ -393,6 +393,12 @@
           "markdownDescription": "Enables the open_gmail_sign_in command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_gmail_signup command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-gmail-signup",
+          "markdownDescription": "Enables the open_gmail_signup command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-kling",
@@ -703,6 +709,12 @@
           "type": "string",
           "const": "deny-open-gmail-sign-in",
           "markdownDescription": "Denies the open_gmail_sign_in command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_gmail_signup command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-gmail-signup",
+          "markdownDescription": "Denies the open_gmail_signup command without any pre-configured scope."
         },
         {
           "description": "Denies the open_kling command without any pre-configured scope.",

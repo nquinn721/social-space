@@ -18,6 +18,7 @@ use tauri::{AppHandle, Manager};
 
 const SETTINGS_FILE: &str = "email-source.json";
 const FEED_URL: &str = "https://mail.google.com/mail/u/0/feed/atom";
+const SIGN_UP_URL: &str = "https://accounts.google.com/signup";
 const SIGN_IN_URL: &str = "https://accounts.google.com/ServiceLogin?service=mail&continue=https://mail.google.com/mail/u/0/";
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -219,6 +220,13 @@ pub async fn list(app: &AppHandle, limit: usize, search: Option<&str>) -> Result
 
 pub fn cached(uid: u32) -> Option<FeedEntry> {
     CACHE.lock().ok()?.as_ref()?.get(&uid).cloned()
+}
+
+/// Opens Google's own sign-up page in an app window so a brand can get a new Gmail.
+/// Returns the window id so the form can be pre-filled; the user presses every button.
+#[tauri::command]
+pub fn open_gmail_signup(app: AppHandle) -> Result<String, String> {
+    crate::browser::open_remote_window(&app, SIGN_UP_URL, false)
 }
 
 #[tauri::command]

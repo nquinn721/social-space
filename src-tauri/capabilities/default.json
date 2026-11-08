@@ -43,6 +43,7 @@
     "allow-list-emails",
     "allow-read-email",
     "allow-open-gmail-sign-in",
+    "allow-open-gmail-signup",
     "allow-connect-gmail-session",
     "allow-open-gmail-message",
     "allow-embed-platform-page",

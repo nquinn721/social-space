@@ -335,6 +335,7 @@ pub fn run() {
             email::list_emails,
             email::read_email,
             gmail_session::open_gmail_sign_in,
+            gmail_session::open_gmail_signup,
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
             embedded::embed_platform_page,

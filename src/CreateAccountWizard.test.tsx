@@ -9,7 +9,7 @@ import * as suggest from './assistant/suggest';
 import type { Account } from './model';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
-  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
+  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), openGmailSignup: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
 vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(), listEmails: vi.fn(), readEmail: vi.fn() }));
 
@@ -143,5 +143,13 @@ describe('verification code detection', () => {
     await user.click(screen.getByRole('button', { name: /Start with 2 socials/ }));
     await screen.findByText('Now: Instagram (1 of 2)');
     expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', DEFAULT_SIGNUP_EMAIL, 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);
+  });
+  it('opens Google sign-up with the brand filled in for an optional new Gmail', async () => {
+    vi.mocked(profile.openGmailSignup).mockResolvedValue('site-9');
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
+    await user.click(screen.getByRole('button', { name: 'Make a new Gmail instead' }));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia' }, { keepFilling: true }));
   });
 });

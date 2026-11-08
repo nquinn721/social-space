@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { AppWindow, ImagePlus, Sparkles, UserPlus, UserRound, X as Close } from 'lucide-react';
 import AccountCredentials from './AccountCredentials';
-import { BIO_LIMITS, createAccount, getPlatform, PLATFORMS, type Account, type Platform } from './model';
+import { BIO_LIMITS, createAccount, normalizeHandle, getPlatform, PLATFORMS, type Account, type Platform } from './model';
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
 
@@ -40,7 +40,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
   const openManage = () => run(async () => { if (account) { await openPlatformWindow(account.platform, 'manage'); setNote(`Opened ${getPlatform(account.platform).name}.`); } });
   const fillProfile = () => run(async () => {
     if (!account) return;
-    const current = { ...account, displayName, bio, website, imagePath };
+    const current = { ...account, handle: normalizeHandle(handle), displayName, bio, website, imagePath };
     const id = await openPlatformWindow(account.platform, 'manage');
     await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, keepFilling: true });
     setNote(`Opened ${getPlatform(account.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
