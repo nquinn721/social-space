@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { migrateWorkspace, planPresence, plusAddress, presenceIssues } from './brands';
+import { loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues } from './brands';
 import type { Account } from './model';
 
 const BASE = 'softwings25@gmail.com';
@@ -42,5 +42,11 @@ describe('brand model', () => {
       '@same is used by another TikTok profile here. Each needs its own username.',
     ]);
     expect(issues.some((issue) => issue.accountId === '4')).toBe(false);
+  });
+
+  it('describes where a profile signs in, in plain words', () => {
+    const workspace = migrateWorkspace({ accounts: [account('1', 'instagram', 'MassageMentor'), account('2', 'instagram', 'Massage With Mia'), account('3', 'tiktok', 'Massage With Mia', 'softwings25+mia@gmail.com')] });
+    expect(loginText(workspace.accounts[1], workspace)).toBe('Signs in with softwings25@gmail.com, shared with MassageMentor.');
+    expect(loginText(workspace.accounts[2], workspace)).toBe('Its own TikTok account, signed up with softwings25+mia@gmail.com.');
   });
 });

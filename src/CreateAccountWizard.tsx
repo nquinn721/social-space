@@ -208,15 +208,15 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               </div>
               <label htmlFor="wizard-bio">Profile description <span className={`bio-count ${bioTooLong ? 'over' : ''}`}>{bioLength}/{tightest.limit}{ordered.length > 1 ? ` (${getPlatform(tightest.platform).name} limit)` : ''}</span></label>
               <textarea id="wizard-bio" rows={3} maxLength={1000} value={bio} onChange={(event) => setBio(event.target.value)}/>
-              <div className="field-row">
-                <div><label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/></div>
-                <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
-              </div>
-              {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
-              <div className="field-row">
-                <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
-                <div/>
-              </div>
+              <label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/>
+              <details className="signin-details">
+                <summary>Sign-in details <span>handled for you</span></summary>
+                <div className="field-row">
+                  <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
+                  <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
+                </div>
+                {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
+              </details>
               <label>Profile image <span>optional, you can add it later</span></label>
               <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
               {feedback}

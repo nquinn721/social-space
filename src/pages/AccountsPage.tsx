@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AppWindow, ChevronRight, Plus, Search, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type Workspace } from '../model';
-import { loginsOn, migrateWorkspace, planPresence, presenceIssues, sharesLogins } from '../brands';
+import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
@@ -28,22 +28,12 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-/** Where the profile signs in: shared with other brands, or its own account. */
-function loginText(account: Account, all: Account[], brands: Brand[]) {
-  if (!account.signupEmail) return 'No sign-up email yet';
-  if (!sharesLogins(account.platform)) return `Own account · ${account.signupEmail}`;
-  const login = loginsOn(all, account.platform).find((item) => item.accounts.some((other) => other.id === account.id));
-  const others = (login?.accounts ?? []).filter((other) => other.id !== account.id).map((other) => brands.find((brand) => brand.id === other.brandId)?.name ?? other.label);
-  return others.length ? `Login ${account.signupEmail} · shared with ${others.join(', ')}` : `Login ${account.signupEmail}`;
-}
-
 export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onOpen }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
   const issues = useMemo(() => presenceIssues(all), [all]);
-  const brands = groups.map((group) => group.brand);
   const shown = useMemo(() => {
     const text = query.trim().toLowerCase().replace(/^@/, '');
     const matches = (account: Account) => (filter === 'all' || account.platform === filter)
@@ -93,7 +83,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
               return <div key={account.id} className="account-row-wrap">
                 <button className="account-row" onClick={() => onEditAccount(account)}>
                   <BrandMark platform={account.platform}/>
-                  <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong><small>{loginText(account, all, brands)}</small>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}</div>
+                  <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}</div>
                   <span className={`pill ${account.status}`}><span className="dot"/>{live ? 'Live' : 'Not created yet'}</span>
                   <ChevronRight size={16}/>
                 </button>
@@ -108,11 +98,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         })}
       </div>
     </>}
-    <div className="section-heading" style={{ marginTop: 32 }}><div><h2>Open a platform</h2><p>Sign in and manage accounts in each platform's own window.</p></div></div>
+    <details className="more-tools"><summary>Open a social's own site</summary>
     <div className="platform-shortcuts" style={{ marginTop: 0 }}>{PLATFORMS.map((platform) => <div className="platform-shortcut" key={platform.id}>
       <BrandMark platform={platform.id} small/>
       <div><strong>{platform.name}</strong><small>{platform.description}</small></div>
       <button className="icon-button" aria-label={`Manage on ${platform.name}`} disabled={busy} onClick={() => onOpen(platform.id, 'manage')}><AppWindow size={16}/></button>
-    </div>)}</div>
+    </div>)}</div></details>
   </>;
 }

@@ -111,3 +111,12 @@ export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
   });
   return { businessName: saved.businessName ?? '', brands, accounts, channels: saved.channels ?? [] };
 }
+
+/** Where a profile signs in, in plain words: shared with other brands, or its own account. */
+export function loginText(account: Account, workspace: Pick<Workspace, 'accounts' | 'brands'>) {
+  if (!account.signupEmail) return 'No sign-up email yet.';
+  if (!sharesLogins(account.platform)) return `Its own ${getPlatform(account.platform).name} account, signed up with ${account.signupEmail}.`;
+  const login = loginsOn(workspace.accounts, account.platform).find((item) => item.accounts.some((other) => other.id === account.id));
+  const others = (login?.accounts ?? []).filter((other) => other.id !== account.id).map((other) => workspace.brands.find((brand) => brand.id === other.brandId)?.name ?? other.label);
+  return others.length ? `Signs in with ${account.signupEmail}, shared with ${others.join(', ')}.` : `Signs in with ${account.signupEmail}.`;
+}

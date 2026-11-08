@@ -38,10 +38,9 @@ describe('accounts page', () => {
     expect(onSignUp.mock.calls[0][0].map((item: Account) => item.id)).toEqual(['4', '3']);
   });
 
-  it('shows Instagram profiles sharing one login', () => {
+  it('keeps sign-in details off the list', () => {
     renderPage();
-    const brand = screen.getByRole('region', { name: 'Clip Lab' });
-    expect(within(brand).getByText('Login softwings25@gmail.com · shared with Soft Wings')).toBeInTheDocument();
+    expect(screen.queryByText(/softwings25@gmail.com/)).not.toBeInTheDocument();
   });
 
   it('offers the missing socials pre-filled with the brand details', async () => {

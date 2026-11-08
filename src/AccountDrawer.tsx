@@ -5,10 +5,10 @@ import { BIO_LIMITS, createAccount, getPlatform, PLATFORMS, type Account, type P
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
 
-type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void };
+type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void; loginNote?: string };
 
 /** Side panel to add an account or see and edit one, with its sign-in details on top. */
-export default function AccountDrawer({ account, busy, onClose, onSave, onRemove, onSignUp }: Props) {
+export default function AccountDrawer({ account, busy, onClose, onSave, onRemove, onSignUp, loginNote }: Props) {
   const [platform, setPlatform] = useState<Platform>(account?.platform ?? 'instagram');
   const [label, setLabel] = useState(account?.label ?? '');
   const [handle, setHandle] = useState(account?.handle ?? '');
@@ -65,6 +65,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
       <div className="drawer-body">
         {account && <div className="drawer-section">
           <AccountCredentials account={account}/>
+          {loginNote && <p className="login-note">{loginNote}</p>}
           <div className="drawer-actions">
             {account.status === 'planned' && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}><UserPlus size={14}/> Create on {getPlatform(account.platform).name}</button>}
             <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> {account.status === 'planned' ? 'Sign in' : 'Open'} {getPlatform(account.platform).name}</button>

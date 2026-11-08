@@ -16,6 +16,7 @@ import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
 import { AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
+import { loginText } from './brands';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { BrandMark, initialOf, PageHeader } from './ui';
 
@@ -127,7 +128,7 @@ function App() {
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
     {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} existing={workspace.accounts} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
-    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])}/>}
+    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined}/>}
   </div>;
 }
 export default App;
