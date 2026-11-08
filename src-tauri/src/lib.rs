@@ -377,6 +377,30 @@ mod tests {
         fs::remove_dir_all(directory).unwrap();
     }
 
+    /// On Windows a window built inside a sync command deadlocks WebView2 and
+    /// shows a blank white window, so every command that opens one is async.
+    #[test]
+    fn window_opening_commands_are_async() {
+        let sources = [
+            include_str!("lib.rs"),
+            include_str!("gmail_session.rs"),
+            include_str!("embedded.rs"),
+            include_str!("autofill.rs"),
+        ];
+        let opens = ["open_remote", "make_window", "WebviewWindowBuilder"];
+        for source in sources {
+            for (index, _) in source.match_indices(concat!("#[tauri::", "command]")) {
+                let rest = &source[index..];
+                let signature = &rest[..rest.find('{').unwrap()];
+                let body_end = rest.find("\n}").unwrap_or(rest.len());
+                let body = &rest[..body_end];
+                if opens.iter().any(|open| body.contains(open)) {
+                    assert!(signature.contains("async fn"), "a command that opens a window must be async: {signature}");
+                }
+            }
+        }
+    }
+
     /// A command registered in the handler but missing from build.rs or the
     /// capability is rejected at runtime in the installed app.
     #[test]

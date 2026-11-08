@@ -221,14 +221,16 @@ pub fn cached(uid: u32) -> Option<FeedEntry> {
     CACHE.lock().ok()?.as_ref()?.get(&uid).cloned()
 }
 
+// Commands that open a window must be async. A window built from a sync
+// command on Windows deadlocks WebView2 and stays blank (Tauri docs).
 #[tauri::command]
-pub fn open_gmail_sign_in(app: AppHandle) -> Result<(), String> {
+pub async fn open_gmail_sign_in(app: AppHandle) -> Result<(), String> {
     crate::browser::open_remote(&app, SIGN_IN_URL, false)
 }
 
 /// Opens one email from the list in Gmail inside the app, to read all of it.
 #[tauri::command]
-pub fn open_gmail_message(app: AppHandle, uid: u32) -> Result<(), String> {
+pub async fn open_gmail_message(app: AppHandle, uid: u32) -> Result<(), String> {
     let entry = cached(uid).ok_or("Refresh the inbox, then try again.")?;
     let link: url::Url = entry.link.parse().map_err(|_| "Gmail did not give a link for this email.")?;
     if link.scheme() != "https" || link.host_str() != Some("mail.google.com") {
