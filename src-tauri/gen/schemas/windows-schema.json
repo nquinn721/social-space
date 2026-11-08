@@ -201,6 +201,12 @@
           "markdownDescription": "Enables the choose_video_file command without any pre-configured scope."
         },
         {
+          "description": "Enables the close_embedded_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-close-embedded-page",
+          "markdownDescription": "Enables the close_embedded_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the complete_queue_job command without any pre-configured scope.",
           "type": "string",
           "const": "allow-complete-queue-job",
@@ -265,6 +271,12 @@
           "type": "string",
           "const": "allow-email-connection",
           "markdownDescription": "Enables the email_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the embed_platform_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-embed-platform-page",
+          "markdownDescription": "Enables the embed_platform_page command without any pre-configured scope."
         },
         {
           "description": "Enables the ensure_account_password command without any pre-configured scope.",
@@ -441,6 +453,12 @@
           "markdownDescription": "Enables the set_account_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the set_embedded_bounds command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-embedded-bounds",
+          "markdownDescription": "Enables the set_embedded_bounds command without any pre-configured scope."
+        },
+        {
           "description": "Enables the x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-x-connection",
@@ -469,6 +487,12 @@
           "type": "string",
           "const": "deny-choose-video-file",
           "markdownDescription": "Denies the choose_video_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the close_embedded_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-close-embedded-page",
+          "markdownDescription": "Denies the close_embedded_page command without any pre-configured scope."
         },
         {
           "description": "Denies the complete_queue_job command without any pre-configured scope.",
@@ -535,6 +559,12 @@
           "type": "string",
           "const": "deny-email-connection",
           "markdownDescription": "Denies the email_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the embed_platform_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-embed-platform-page",
+          "markdownDescription": "Denies the embed_platform_page command without any pre-configured scope."
         },
         {
           "description": "Denies the ensure_account_password command without any pre-configured scope.",
@@ -709,6 +739,12 @@
           "type": "string",
           "const": "deny-set-account-password",
           "markdownDescription": "Denies the set_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_embedded_bounds command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-embedded-bounds",
+          "markdownDescription": "Denies the set_embedded_bounds command without any pre-configured scope."
         },
         {
           "description": "Denies the x_connection command without any pre-configured scope.",

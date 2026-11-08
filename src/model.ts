@@ -3,7 +3,7 @@ export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
 export type View = 'overview' | 'accounts' | 'inbox' | 'channels' | 'queue' | 'publishing' | 'creative' | 'sources' | 'settings';
 export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'channels', 'queue', 'publishing', 'creative', 'sources', 'settings'];
 export type PlatformAction = 'create' | 'manage' | 'post' | 'developer';
-export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string };
+export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
 export type Account = { id: string; platform: Platform; label: string; handle: string; status: 'planned' | 'active'; notes: string } & AccountProfile;
 /** Profile description limits on each platform, used to keep drafts postable. */
 export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160 };
