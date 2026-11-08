@@ -2,7 +2,7 @@
 .account-row-wrap { display: flex; align-items: center; border-top: 1px solid var(--border); }
 .account-row-wrap:first-child { border-top: 0; }
 .account-row-wrap .account-row { border-top: 0; flex: 1; min-width: 0; }
-.account-row-wrap .create-on { margin-right: 18px; flex-shrink: 0; }
+.account-row-wrap .create-on { margin-right: 8px; flex-shrink: 0; }
 .account-row .row-handle { font-weight: 500; color: var(--text-2); }
 .account-row small.row-warning { display: flex; align-items: center; gap: 5px; color: var(--warning); white-space: normal; }
 .login-plan { list-style: none; display: grid; gap: 6px; margin: 2px 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
@@ -18,3 +18,4 @@
 .signin-details[open] > summary { margin-bottom: 10px; }
 .more-tools { margin-top: 32px; }
 .more-tools[open] > summary { margin-bottom: 12px; }
+.account-row-wrap .already-made { margin-right: 12px; flex-shrink: 0; }

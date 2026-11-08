@@ -15,6 +15,8 @@ type Props = {
   onCreateAccounts: (platforms?: Platform[], prefill?: WizardPrefill) => void;
   /** Runs the in-app sign-up for profiles that are saved here but not created on the social yet. */
   onSignUp?: (accounts: Account[]) => void;
+  /** For a profile made on the social outside the app: marks it Live and opens it to add the username and password. */
+  onAlreadyCreated?: (account: Account) => void;
   onOpen: (platform: Platform, action: PlatformAction) => void;
 };
 type Filter = 'all' | Platform;
@@ -28,7 +30,7 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onOpen }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
@@ -88,6 +90,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
                   <ChevronRight size={16}/>
                 </button>
                 {!live && onSignUp && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => onSignUp([account])}><AppWindow size={14}/> Create on {name}</button>}
+                {!live && onAlreadyCreated && <button className="ghost-button small-button already-made" disabled={!loaded || busy} onClick={() => onAlreadyCreated(account)}>I already made it</button>}
               </div>;
             })}</div>
             {missing.length > 0 && <div className="add-platforms"><span>Add a profile on</span>{missing.map((platform) => {

@@ -16,7 +16,7 @@ import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
 import { Film, AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
-import { EMPTY_WORKSPACE, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
+import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText } from './brands';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { BrandMark, initialOf, PageHeader } from './ui';
@@ -85,6 +85,10 @@ function App() {
   const editAccount = (account: Account) => { setEditingAccount(account); setShowAccount(true); };
   const createAccounts = (platforms?: Platform[], prefill?: WizardPrefill) => setWizard({ platforms: platforms ?? PLATFORMS.map((item) => item.id), prefill });
   /** Goes straight to the sign-up pages of accounts that are saved but not created yet. */
+  async function alreadyCreated(account: Account) {
+    const live = { ...account, status: 'active' as const };
+    if (await persist({ ...workspace, accounts: workspace.accounts.map((item) => item.id === account.id ? live : item) }, `Marked ${account.label} on ${getPlatform(account.platform).name} as live. Check the username and add its password.`)) editAccount(live);
+  }
   const signUp = (accounts: Account[]) => { setShowAccount(false); setEditingAccount(null); setWizard({ platforms: accounts.map((item) => item.platform), resume: accounts }); };
   function navigate(next: View, section?: string) {
     setView(next);
@@ -116,7 +120,7 @@ function App() {
         <UpdateBanner/>
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onOpen={launch}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}

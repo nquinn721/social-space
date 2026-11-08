@@ -38,6 +38,14 @@ describe('accounts page', () => {
     expect(onSignUp.mock.calls[0][0].map((item: Account) => item.id)).toEqual(['4', '3']);
   });
 
+  it('links a profile that was already made on the social', async () => {
+    const onAlreadyCreated = vi.fn();
+    const user = userEvent.setup();
+    renderPage({ onAlreadyCreated });
+    await user.click(within(screen.getByRole('region', { name: 'Soft Wings' })).getByRole('button', { name: 'I already made it' }));
+    expect(onAlreadyCreated).toHaveBeenCalledWith(expect.objectContaining({ id: '1', platform: 'x' }));
+  });
+
   it('keeps sign-in details off the list', () => {
     renderPage();
     expect(screen.queryByText(/softwings25@gmail.com/)).not.toBeInTheDocument();
