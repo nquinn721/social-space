@@ -441,6 +441,18 @@
           "markdownDescription": "Enables the set_account_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the take_update_result command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-take-update-result",
+          "markdownDescription": "Enables the take_update_result command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the update_progress command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-update-progress",
+          "markdownDescription": "Enables the update_progress command without any pre-configured scope."
+        },
+        {
           "description": "Enables the x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-x-connection",
@@ -709,6 +721,18 @@
           "type": "string",
           "const": "deny-set-account-password",
           "markdownDescription": "Denies the set_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the take_update_result command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-take-update-result",
+          "markdownDescription": "Denies the take_update_result command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the update_progress command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-update-progress",
+          "markdownDescription": "Denies the update_progress command without any pre-configured scope."
         },
         {
           "description": "Denies the x_connection command without any pre-configured scope.",

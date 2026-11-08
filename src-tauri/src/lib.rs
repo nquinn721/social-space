@@ -263,7 +263,9 @@ pub fn run() {
             account_passwords::reveal_account_password,
             account_passwords::delete_account_password,
             updater::check_for_update,
-            updater::install_update
+            updater::install_update,
+            updater::update_progress,
+            updater::take_update_result
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Manager");
