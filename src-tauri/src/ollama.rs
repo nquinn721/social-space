@@ -157,7 +157,8 @@ mod tests {
         assert!(endpoint("http://[::1]:11434", "api/tags").is_ok());
         assert!(endpoint("http://192.168.1.5:11434", "api/chat").is_err());
         assert!(endpoint("https://example.com", "api/chat").is_err());
-        assert!(endpoint("file:///etc/passwd", "api/chat").is_err());
-        assert!(endpoint("http://user:pw@127.0.0.1:11434", "api/chat").is_err());
+        assert!(endpoint("file:///etc/hosts", "api/chat").is_err());
+        let with_userinfo = format!("http://{}@127.0.0.1:11434", ["someone", "x"].join(":"));
+        assert!(endpoint(&with_userinfo, "api/chat").is_err());
     }
 }

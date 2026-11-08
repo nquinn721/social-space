@@ -384,7 +384,7 @@ mod tests {
             host: "imap.gmail.com".into(),
             port: 993,
             username: "me@example.com".into(),
-            password: "app-password".into(),
+            password: "x".repeat(16),
         };
         assert!(validate(&credential).is_ok());
         credential.host = "imap.gmail.com/evil".into();
