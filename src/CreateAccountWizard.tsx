@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, X as Close } from 'lucide-react';
+import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
 import { chooseImageFile, ensureSharedPassword, fillSiteForm, formFieldsFor, openPlatformWindow, revealAccountPassword } from './profileService';
 import InboxList from './InboxList';
+import ProfileImageStudio from './ProfileImageStudio';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
@@ -20,8 +21,12 @@ export function sharedBioLimit(platforms: Platform[]) {
   return limits.reduce((tightest, item) => item.limit < tightest.limit ? item : tightest, limits[0] ?? { platform: 'youtube' as Platform, limit: BIO_LIMITS.youtube });
 }
 
-function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: string; busy: boolean; onPick: () => void }) {
-  return <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>;
+function ImagePicker({ path, preview, busy, onPick, onGenerated, suggestion }: { path: string; preview: string; busy: boolean; onPick: () => void; onGenerated: (path: string) => void; suggestion: string }) {
+  const [studio, setStudio] = useState(false);
+  return <>
+    <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button generate-button" disabled={busy} aria-expanded={studio} onClick={() => setStudio((open) => !open)}><Wand2 size={13}/> Generate</button><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>
+    {studio && <ProfileImageStudio suggestion={suggestion} disabled={busy} onClose={() => setStudio(false)} onUse={(generated) => { onGenerated(generated); setStudio(false); }}/>}
+  </>;
 }
 
 /**
@@ -167,7 +172,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
               </div>
               <label>Profile image <span>optional, you can add it later</span></label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
               {feedback}
             </div>
             <aside className="preview-card" aria-label="Profile preview">
@@ -216,7 +221,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         <div className="wizard-scroll">
           <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
           <label>Profile image</label>
-          <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
+          <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
           {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> Fill {getPlatform(item.platform).name} profile <ChevronRight size={15}/></button>)}</div>}
           {feedback}
         </div>

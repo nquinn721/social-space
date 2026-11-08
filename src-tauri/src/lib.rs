@@ -7,6 +7,7 @@ mod autofill;
 mod browser;
 mod email;
 mod gmail_session;
+mod image_ai;
 mod instagram;
 mod kling;
 mod ollama;
@@ -245,6 +246,9 @@ pub fn run() {
             queue::choose_video_file,
             ollama::ollama_models,
             ollama::ollama_chat,
+            image_ai::image_ai_status,
+            image_ai::start_image_ai,
+            image_ai::generate_profile_image,
             email::email_connection,
             email::connect_email,
             email::disconnect_email,

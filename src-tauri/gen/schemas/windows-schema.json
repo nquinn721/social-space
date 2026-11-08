@@ -291,6 +291,12 @@
           "markdownDescription": "Enables the generate_kling_video command without any pre-configured scope."
         },
         {
+          "description": "Enables the generate_profile_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-generate-profile-image",
+          "markdownDescription": "Enables the generate_profile_image command without any pre-configured scope."
+        },
+        {
           "description": "Enables the get_kling_video command without any pre-configured scope.",
           "type": "string",
           "const": "allow-get-kling-video",
@@ -301,6 +307,12 @@
           "type": "string",
           "const": "allow-has-account-password",
           "markdownDescription": "Enables the has_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the image_ai_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-image-ai-status",
+          "markdownDescription": "Enables the image_ai_status command without any pre-configured scope."
         },
         {
           "description": "Enables the instagram_connection command without any pre-configured scope.",
@@ -441,6 +453,12 @@
           "markdownDescription": "Enables the set_account_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the start_image_ai command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-image-ai",
+          "markdownDescription": "Enables the start_image_ai command without any pre-configured scope."
+        },
+        {
           "description": "Enables the x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-x-connection",
@@ -561,6 +579,12 @@
           "markdownDescription": "Denies the generate_kling_video command without any pre-configured scope."
         },
         {
+          "description": "Denies the generate_profile_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-generate-profile-image",
+          "markdownDescription": "Denies the generate_profile_image command without any pre-configured scope."
+        },
+        {
           "description": "Denies the get_kling_video command without any pre-configured scope.",
           "type": "string",
           "const": "deny-get-kling-video",
@@ -571,6 +595,12 @@
           "type": "string",
           "const": "deny-has-account-password",
           "markdownDescription": "Denies the has_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the image_ai_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-image-ai-status",
+          "markdownDescription": "Denies the image_ai_status command without any pre-configured scope."
         },
         {
           "description": "Denies the instagram_connection command without any pre-configured scope.",
@@ -709,6 +739,12 @@
           "type": "string",
           "const": "deny-set-account-password",
           "markdownDescription": "Denies the set_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_image_ai command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-image-ai",
+          "markdownDescription": "Denies the start_image_ai command without any pre-configured scope."
         },
         {
           "description": "Denies the x_connection command without any pre-configured scope.",

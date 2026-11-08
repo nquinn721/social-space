@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AppWindow, ImagePlus, Sparkles, UserRound, X as Close } from 'lucide-react';
+import { AppWindow, ImagePlus, Sparkles, UserRound, Wand2, X as Close } from 'lucide-react';
 import AccountCredentials from './AccountCredentials';
+import ProfileImageStudio from './ProfileImageStudio';
 import { BIO_LIMITS, createAccount, getPlatform, PLATFORMS, type Account, type Platform } from './model';
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
@@ -19,6 +20,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
   const [website, setWebsite] = useState(account?.website ?? '');
   const [signupEmail, setSignupEmail] = useState(account?.signupEmail ?? '');
   const [imagePath, setImagePath] = useState(account?.imagePath ?? '');
+  const [studio, setStudio] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
@@ -85,7 +87,8 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
           <div className="drawer-section">
             <h3>Profile</h3>
             <label>Profile image <span>optional</span></label>
-            <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{imagePath ? imagePath.split(/[\\/]/).pop() : 'No image chosen'}</span>{imagePath && <button type="button" className="ghost-button small-button" onClick={() => setImagePath('')}>Clear</button>}<button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void pickImage()}>Choose</button></div>
+            <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{imagePath ? imagePath.split(/[\\/]/).pop() : 'No image chosen'}</span>{imagePath && <button type="button" className="ghost-button small-button" onClick={() => setImagePath('')}>Clear</button>}<button type="button" className="outline-button small-button generate-button" disabled={disabled} aria-expanded={studio} onClick={() => setStudio((open) => !open)}><Wand2 size={13}/> Generate</button><button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void pickImage()}>Choose</button></div>
+            {studio && <ProfileImageStudio disabled={disabled} onClose={() => setStudio(false)} onUse={(path) => { setImagePath(path); setStudio(false); }}/>}
             <label htmlFor="display-name">Display name <span>optional</span></label><input id="display-name" value={displayName} maxLength={120} onChange={(event) => setDisplayName(event.target.value)}/>
             <label htmlFor="bio">Profile description <span className={`bio-count ${bio.trim().length > bioLimit ? 'over' : ''}`}>{bio.trim().length}/{bioLimit}</span></label><textarea id="bio" value={bio} maxLength={1000} rows={3} onChange={(event) => setBio(event.target.value)}/>
             <label htmlFor="website">Website <span>optional</span></label><input id="website" value={website} maxLength={300} onChange={(event) => setWebsite(event.target.value)}/>
