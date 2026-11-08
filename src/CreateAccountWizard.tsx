@@ -14,6 +14,11 @@ export type WizardPrefill = { label?: string; handle?: string; brandId?: string 
 type Step = 'details' | 'signup' | 'profile';
 const STEPS: { id: Step; label: string }[] = [{ id: 'details', label: 'Details' }, { id: 'signup', label: 'Sign up' }, { id: 'profile', label: 'Profile' }];
 type Outcome = 'created' | 'skipped';
+/** During sign-up the inbox checks often, so a new code is entered on the page within seconds. */
+const SIGNUP_INBOX_MS = 6_000;
+const SENDER_WORDS: Record<Platform, RegExp> = { instagram: /\binstagram\b/i, tiktok: /\btiktok\b/i, youtube: /\b(youtube|google)\b/i, x: /\bx(\.com)?\b|\btwitter\b/i };
+/** Whether an email looks like it came from this social, so its code goes to the right sign-up page. */
+export function isMailFrom(platform: Platform, mail: { from: string; subject: string }) { return SENDER_WORDS[platform].test(`${mail.from} ${mail.subject}`); }
 
 /** The tightest description limit among the chosen socials, so one description fits them all. */
 export function sharedBioLimit(platforms: Platform[]) {
@@ -241,7 +246,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             {step === 'signup' && account && <>
               <ol className="signup-steps">
                 <li>New pages fill in automatically as you press Next.</li>
-                <li>When {name} emails a code to {account.signupEmail}, it shows up below. Press it to fill it on the page.</li>
+                <li>When {name} emails a code to {account.signupEmail}, it's entered on the page for you within seconds. You can also press a code below.</li>
                 <li>Solve any captcha or phone check yourself.</li>
               </ol>
               <section className="credentials copy-list" aria-label="Sign-up details">
@@ -253,7 +258,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               </section>
               <div className="wizard-actions"><button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button><button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
               {feedback}
-              <InboxList compact autoRefresh limit={8} onCode={(code) => void refill(code)}/>
+              <InboxList compact autoRefresh refreshMs={SIGNUP_INBOX_MS} limit={8} onCode={(code) => void refill(code)} onNewCode={(code, mail) => { if (isMailFrom(account.platform, mail)) void refill(code); }}/>
             </>}
             {step === 'profile' && <>
               <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
