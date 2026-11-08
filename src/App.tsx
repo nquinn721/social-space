@@ -120,7 +120,7 @@ function App() {
         <UpdateBanner/>
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}

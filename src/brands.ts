@@ -123,3 +123,18 @@ export function loginText(account: Account, workspace: Pick<Workspace, 'accounts
   const others = (login?.accounts ?? []).filter((other) => other.id !== account.id).map((other) => workspace.brands.find((brand) => brand.id === other.brandId)?.name ?? other.label);
   return others.length ? `Signs in with ${account.signupEmail}, shared with ${others.join(', ')}.` : `Signs in with ${account.signupEmail}.`;
 }
+
+/** Adds back whatever a backup has that this workspace is missing, matched by id. Nothing here is overwritten. */
+export function mergeRestored(current: Workspace, backup: Partial<Workspace>): { workspace: Workspace; added: number } {
+  const missing = <T extends { id: string }>(mine: T[] = [], theirs: T[] = []) => theirs.filter((item) => !mine.some((own) => own.id === item.id));
+  const accounts = missing(current.accounts, backup.accounts);
+  const workspace = migrateWorkspace({
+    ...current,
+    businessName: current.businessName || backup.businessName || '',
+    brands: [...current.brands, ...missing(current.brands, backup.brands)],
+    accounts: [...current.accounts, ...accounts],
+    categories: [...(current.categories ?? []), ...missing(current.categories, backup.categories)],
+    videos: [...(current.videos ?? []), ...missing(current.videos, backup.videos)],
+  });
+  return { workspace, added: accounts.length };
+}

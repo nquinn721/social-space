@@ -4,6 +4,7 @@ import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type P
 import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
 import '../brands.css';
+import SignIns from '../SignIns';
 import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
 
 type Props = {
@@ -18,6 +19,8 @@ type Props = {
   /** For a profile made on the social outside the app: marks it Live and opens it to add the username and password. */
   onAlreadyCreated?: (account: Account) => void;
   onOpen: (platform: Platform, action: PlatformAction) => void;
+  /** Saves a workspace rebuilt from a sign-in backup. */
+  onRestore?: (next: Workspace, message: string) => Promise<boolean | undefined>;
 };
 type Filter = 'all' | Platform;
 type BrandGroup = { key: string; brand: Brand; accounts: Account[] };
@@ -30,9 +33,10 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<'brands' | 'sign-ins'>('brands');
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
   const issues = useMemo(() => presenceIssues(all), [all]);
@@ -50,10 +54,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
 
   return <>
     <PageHeader eyebrow="Your presence" title="Accounts" description="Each brand and its profile on every social. Profiles marked Not created yet are only saved here; create them on the social in one click." actions={workspace.accounts.length ? actions : undefined}/>
-    {workspace.accounts.length === 0 ? <section className="card empty-state">
+    <div className="segmented account-tabs" role="tablist" aria-label="Accounts view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button></div>
+    {tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : workspace.accounts.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No accounts yet</strong>
-      <p>Create accounts walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have accounts? Add them here to keep their sign-in details together.</p>
+      <p>Create accounts walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have accounts? Add them here to keep their sign-in details together. Moving to a new PC? Restore your backup under Sign-ins.</p>
       <div className="heading-buttons">{actions}</div>
     </section> : <>
       <div className="toolbar">

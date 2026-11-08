@@ -28,6 +28,9 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 webpki-roots = "1"
 mailparse = "0.15"
 roxmltree = "0.20"
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
+hmac = "0.12"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

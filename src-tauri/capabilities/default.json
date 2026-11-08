@@ -58,6 +58,8 @@
     "allow-ensure-shared-password",
     "allow-reveal-account-password",
     "allow-delete-account-password",
+    "allow-export-sign-ins",
+    "allow-import-sign-ins",
     "allow-check-for-update",
     "allow-install-update"
   ]

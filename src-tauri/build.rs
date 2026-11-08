@@ -51,6 +51,8 @@ fn main() {
         "ensure_shared_password",
         "reveal_account_password",
         "delete_account_password",
+        "export_sign_ins",
+        "import_sign_ins",
         "check_for_update",
         "install_update",
     ];

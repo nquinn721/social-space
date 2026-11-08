@@ -3,6 +3,7 @@ use std::{collections::HashSet, fs, io::Write, path::Path, sync::Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 mod account_passwords;
+mod backup;
 mod autofill;
 mod browser;
 mod email;
@@ -350,6 +351,8 @@ pub fn run() {
             account_passwords::ensure_shared_password,
             account_passwords::reveal_account_password,
             account_passwords::delete_account_password,
+            backup::export_sign_ins,
+            backup::import_sign_ins,
             updater::check_for_update,
             updater::install_update
         ])

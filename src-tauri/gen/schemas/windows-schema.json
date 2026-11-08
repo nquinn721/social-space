@@ -303,6 +303,12 @@
           "markdownDescription": "Enables the ensure_shared_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the export_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-export-sign-ins",
+          "markdownDescription": "Enables the export_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Enables the fill_site_form command without any pre-configured scope.",
           "type": "string",
           "const": "allow-fill-site-form",
@@ -325,6 +331,12 @@
           "type": "string",
           "const": "allow-has-account-password",
           "markdownDescription": "Enables the has_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the import_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-import-sign-ins",
+          "markdownDescription": "Enables the import_sign_ins command without any pre-configured scope."
         },
         {
           "description": "Enables the instagram_connection command without any pre-configured scope.",
@@ -621,6 +633,12 @@
           "markdownDescription": "Denies the ensure_shared_password command without any pre-configured scope."
         },
         {
+          "description": "Denies the export_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-export-sign-ins",
+          "markdownDescription": "Denies the export_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Denies the fill_site_form command without any pre-configured scope.",
           "type": "string",
           "const": "deny-fill-site-form",
@@ -643,6 +661,12 @@
           "type": "string",
           "const": "deny-has-account-password",
           "markdownDescription": "Denies the has_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the import_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-import-sign-ins",
+          "markdownDescription": "Denies the import_sign_ins command without any pre-configured scope."
         },
         {
           "description": "Denies the instagram_connection command without any pre-configured scope.",
