@@ -183,6 +183,12 @@
           "markdownDescription": "Enables the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Enables the check_for_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-for-update",
+          "markdownDescription": "Enables the check_for_update command without any pre-configured scope."
+        },
+        {
           "description": "Enables the choose_image_file command without any pre-configured scope.",
           "type": "string",
           "const": "allow-choose-image-file",
@@ -295,6 +301,12 @@
           "type": "string",
           "const": "allow-instagram-connection",
           "markdownDescription": "Enables the instagram_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-install-update",
+          "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
           "description": "Enables the kling_key_status command without any pre-configured scope.",
@@ -423,6 +435,12 @@
           "markdownDescription": "Denies the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Denies the check_for_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-for-update",
+          "markdownDescription": "Denies the check_for_update command without any pre-configured scope."
+        },
+        {
           "description": "Denies the choose_image_file command without any pre-configured scope.",
           "type": "string",
           "const": "deny-choose-image-file",
@@ -535,6 +553,12 @@
           "type": "string",
           "const": "deny-instagram-connection",
           "markdownDescription": "Denies the instagram_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the install_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-install-update",
+          "markdownDescription": "Denies the install_update command without any pre-configured scope."
         },
         {
           "description": "Denies the kling_key_status command without any pre-configured scope.",

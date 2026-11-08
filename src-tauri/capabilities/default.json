@@ -15,6 +15,7 @@
     "allow-ollama-models", "allow-ollama-chat",
     "allow-email-connection", "allow-connect-email", "allow-disconnect-email", "allow-list-emails", "allow-read-email",
     "allow-fill-site-form", "allow-choose-image-file", "allow-load-image-preview",
-    "allow-ensure-account-password", "allow-has-account-password", "allow-set-account-password", "allow-ensure-shared-password", "allow-reveal-account-password", "allow-delete-account-password"
+    "allow-ensure-account-password", "allow-has-account-password", "allow-set-account-password", "allow-ensure-shared-password", "allow-reveal-account-password", "allow-delete-account-password",
+    "allow-check-for-update", "allow-install-update"
   ]
 }

@@ -10,6 +10,7 @@ mod instagram;
 mod kling;
 mod ollama;
 mod queue;
+mod updater;
 mod x_integration;
 
 const WORKSPACE_FILE: &str = "workspace.json";
@@ -256,7 +257,9 @@ pub fn run() {
             account_passwords::set_account_password,
             account_passwords::ensure_shared_password,
             account_passwords::reveal_account_password,
-            account_passwords::delete_account_password
+            account_passwords::delete_account_password,
+            updater::check_for_update,
+            updater::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Manager");

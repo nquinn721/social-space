@@ -1,0 +1,15 @@
+.update-banner{display:flex;align-items:center;gap:12px;background:#24202c;border:1px solid #5b4673;color:#e3d7f0;padding:10px 12px 10px 16px;border-radius:9px;font-size:12px;line-height:1.5;margin-bottom:20px}
+.update-banner>svg{flex-shrink:0;color:#c6a5ff}
+.update-banner>span{flex:1}
+.update-banner .primary-button{min-height:34px}
+.update-dismiss{display:grid;place-items:center;background:none;color:#aaa4b3;padding:4px}
+.update-settings{margin-top:18px}
+.update-settings p{margin-bottom:12px}
+.update-facts{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;font-size:12px;margin:0 0 14px}
+.update-facts dt{color:#9996a1}
+.update-facts dd{margin:0;font-family:Consolas,monospace;color:#e4e1ea}
+.update-settings .update-note{color:#c6b9d0}
+.update-settings .update-error{color:#f3a2ae}
+.update-commits{margin:0 0 16px;padding-left:18px;font-size:11px;color:#b9b4c1;line-height:1.7;max-height:180px;overflow:auto}
+.update-actions{display:flex;gap:10px;flex-wrap:wrap}
+.update-settings .update-actions .primary-button{margin-top:0}
