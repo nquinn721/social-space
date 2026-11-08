@@ -58,7 +58,7 @@ export function UpdateBanner() {
 export function UpdateSettings() {
   const { status, checking, installing, started, error, check, install } = useAppUpdate(false);
   return <section className="settings-card update-settings">
-    <h2>App updates</h2>
+    <h2><Download size={17}/> App updates</h2>
     <p>SocialSpace updates itself from the main branch: it pulls the latest code, rebuilds, and reinstalls.</p>
     <dl className="update-facts">
       <dt>Installed build</dt><dd>{status ? short(status.installedCommit) : 'Not checked yet'}</dd>

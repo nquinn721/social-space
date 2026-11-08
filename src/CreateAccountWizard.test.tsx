@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
@@ -90,5 +90,22 @@ describe('verification code detection', () => {
     expect(profile.findCode('Order 2024 shipped. Your verification code: 771204')).toBe('771204');
     expect(profile.findCode('Use 5521 to sign in')).toBe('5521');
     expect(profile.findCode('No digits here')).toBeNull();
+  });
+
+  it('starts from the details of an existing brand', () => {
+    render(<CreateAccountWizard initialPlatforms={['tiktok']} prefill={{ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.' }} onSave={vi.fn()} onClose={vi.fn()}/>);
+    expect(screen.getByLabelText('Account name')).toHaveValue('Soft Wings');
+    expect(screen.getByLabelText('Username you want optional')).toHaveValue('softwings');
+    expect(screen.getByLabelText('Sign-up email')).toHaveValue(DEFAULT_SIGNUP_EMAIL);
+    expect(screen.getByLabelText('Instagram')).not.toBeChecked();
+  });
+
+  it('fills a code straight from the inbox list', async () => {
+    const user = userEvent.setup();
+    render(<CreateAccountWizard initialPlatforms={['instagram']} onSave={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
+    await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
+    await user.click(await screen.findByRole('button', { name: 'Fill code 482913 on page' }));
+    await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' }));
   });
 });

@@ -5,6 +5,7 @@ import { errorText, runTool, SYSTEM_PROMPT, TOOL_SPECS, type ConfirmRequest, typ
 import './assistant.css';
 
 const MAX_TOOL_ROUNDS = 8;
+const SUGGESTIONS = ['Find the newest verification code in my email', 'Suggest a bio for my Instagram under 150 characters', 'Which of my accounts are still planned?'];
 const TOOL_LABELS: Record<string, string> = {
   get_workspace: 'Checked your workspace', save_account_profile: 'Saved a profile draft', choose_account_image: 'Asked for an image',
   open_platform_page: 'Opened a platform page', fill_platform_form: 'Filled a form', list_emails: 'Checked your inbox', read_email: 'Read an email',
@@ -61,7 +62,7 @@ export default function AssistantPanel({ context, onClose }: { context: Omit<Too
 
   return <aside className="assistant-panel" aria-label="Assistant">
     <header className="assistant-head">
-      <div><Bot size={18}/><strong>Assistant</strong><small>{settings.model} · on this computer</small></div>
+      <div><span className="assistant-avatar"><Bot size={17}/></span><div><strong>Assistant</strong><small><span className="dot"/>{settings.model} · runs on this PC</small></div></div>
       <button className="icon-button" aria-label="Assistant settings" onClick={() => setShowSettings((value) => !value)}><Settings2 size={17}/></button>
       <button className="icon-button" aria-label="Clear conversation" disabled={busy} onClick={() => { setHistory([]); setError(''); }}><Trash2 size={17}/></button>
       <button className="icon-button" aria-label="Close assistant" onClick={onClose}><Close size={18}/></button>
@@ -76,7 +77,8 @@ export default function AssistantPanel({ context, onClose }: { context: Omit<Too
       <p>{models.length ? `${models.length} models installed.` : 'Ollama not found or no models installed.'} Default is {DEFAULT_SETTINGS.model}; install it with <code>ollama pull {DEFAULT_SETTINGS.model}</code>.</p>
     </div>}
     <div className="assistant-log" role="log">
-      {!history.length && <div className="assistant-empty"><p>Ask me to draft profiles, set up an account form for you to submit, check your email for a code, or post to X.</p></div>}
+      {!history.length && <div className="assistant-empty"><span className="assistant-avatar"><Bot size={22}/></span><strong>How can I help?</strong><p>I can draft profiles, fill sign-up forms for you to submit, find verification codes in your email, or post to X after you approve.</p>
+        <div className="assistant-suggestions">{SUGGESTIONS.map((text) => <button key={text} type="button" onClick={() => setInput(text)}>{text}</button>)}</div></div>}
       {history.map((message, index) => {
         if (message.role === 'user') return <div key={index} className="bubble user">{message.content}</div>;
         if (message.role === 'tool') {
@@ -89,14 +91,15 @@ export default function AssistantPanel({ context, onClose }: { context: Omit<Too
         <strong>{pending.title}</strong><p>{pending.detail}</p>
         <div><button className="outline-button" onClick={() => answer(false)}>Cancel</button><button className="primary-button" onClick={() => answer(true)}><Check size={15}/> Approve</button></div>
       </div>}
-      {busy && !pending && <div className="assistant-typing" role="status">Thinking…</div>}
+      {busy && !pending && <div className="assistant-typing" role="status" aria-label="Thinking"><span/><span/><span/></div>}
       {error && <div className="error-message" role="alert">{error}</div>}
       <div ref={end}/>
     </div>
     <form className="assistant-input" onSubmit={send}>
-      <textarea aria-label="Message the assistant" rows={2} value={input} placeholder="Ask the assistant…" onChange={(event) => setInput(event.target.value)}
+      <textarea aria-label="Message the assistant" rows={1} value={input} placeholder="Ask anything…" onChange={(event) => setInput(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}/>
       <button className="primary-button" aria-label="Send" disabled={busy || !input.trim()}><Send size={16}/></button>
     </form>
+    <p className="assistant-hint">Enter to send, Shift+Enter for a new line. Nothing is posted without your approval.</p>
   </aside>;
 }
