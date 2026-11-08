@@ -2,6 +2,7 @@ import InstagramPublisher from './InstagramPublisher';
 import XPublisher from './XPublisher';
 import ChannelManagement from './ChannelManagement';
 import VideoQueue from './VideoQueue';
+import VideoLibrary from './VideoLibrary';
 import VideoStudio from './VideoStudio';
 import VideoSources from './VideoSources';
 import { UpdateBanner } from './AppUpdates';
@@ -14,7 +15,7 @@ import AccountsPage from './pages/AccountsPage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
-import { AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
+import { Film, AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText } from './brands';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
@@ -23,9 +24,9 @@ import { BrandMark, initialOf, PageHeader } from './ui';
 type NavItem = { id: View; label: string; icon: typeof Home };
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   { label: 'Accounts', items: [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Accounts', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }] },
-  { label: 'Content', items: [{ id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
+  { label: 'Content', items: [{ id: 'library', label: 'Video library', icon: Film }, { id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
 ];
-const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Accounts', inbox: 'Inbox', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', settings: 'Settings' };
+const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Accounts', inbox: 'Inbox', library: 'Video library', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', settings: 'Settings' };
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
@@ -117,6 +118,7 @@ function App() {
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
         {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onOpen={launch}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
+        {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
         {view === 'queue' && <><PageHeader eyebrow="Your content, lined up" title="Video queue" description="Plan videos for your channels in one place."/><VideoQueue workspace={workspace}/></>}
         {view === 'publishing' && <><PageHeader eyebrow="Ready when you are" title="Publishing" description="Create and publish in each platform's own tools, or post to X and Instagram from here."/><div className="info-banner"><ArrowDownLeft size={18}/><span>Publishing opens the platform in an app window. Sign in there to create or upload your content.</span></div><div className="publish-list">{PLATFORMS.map((platform) => <section className="publish-row" key={platform.id}><BrandMark platform={platform.id}/><div><h2>{platform.name}</h2><p>{platform.description}</p></div><button className="outline-button" disabled={busy} onClick={() => launch(platform.id, 'post')}>{platform.postLabel} <AppWindow size={15}/></button></section>)}</div><XPublisher/><InstagramPublisher/><div className="footnote">Scheduling and direct publishing to TikTok and YouTube are not connected yet. Platform availability and approvals vary.</div></>}

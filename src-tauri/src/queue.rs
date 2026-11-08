@@ -451,6 +451,8 @@ mod tests {
             business_name: String::new(),
             brands: vec![],
             accounts: vec![],
+            categories: vec![],
+            videos: vec![],
             channels: vec![crate::Channel {
                 id: "channel-1".into(),
                 platform: crate::Platform::Instagram,

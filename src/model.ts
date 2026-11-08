@@ -1,7 +1,7 @@
 import type { Channel } from './channelModel';
 export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
-export type View = 'overview' | 'accounts' | 'inbox' | 'channels' | 'queue' | 'publishing' | 'creative' | 'sources' | 'settings';
-export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'channels', 'queue', 'publishing', 'creative', 'sources', 'settings'];
+export type View = 'overview' | 'accounts' | 'inbox' | 'library' | 'channels' | 'queue' | 'publishing' | 'creative' | 'sources' | 'settings';
+export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'library', 'channels', 'queue', 'publishing', 'creative', 'sources', 'settings'];
 export type PlatformAction = 'create' | 'manage' | 'post' | 'developer';
 export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
 /**
@@ -14,7 +14,11 @@ export type Account = { id: string; platform: Platform; label: string; handle: s
 export type Brand = { id: string; name: string; notes: string };
 /** Profile description limits on each platform, used to keep drafts postable. */
 export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160 };
-export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[] };
+/** A kind of video inside a brand, e.g. "Rabbit". */
+export type VideoCategory = { id: string; brandId: string; name: string };
+/** One video of a category. It goes to every social of its brand; posted lists where it is up. */
+export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number };
+export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[] };
 export const EMPTY_WORKSPACE: Workspace = { businessName: '', brands: [], accounts: [], channels: [] };
 export const PLATFORMS: { id: Platform; name: string; description: string; color: string; mark: string; postLabel: string }[] = [
   { id: 'instagram', name: 'Instagram', description: 'Photos, reels & stories', color: '#fa5a8d', mark: '◎', postLabel: 'Open Instagram' },

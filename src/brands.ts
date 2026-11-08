@@ -109,7 +109,10 @@ export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
     if (!brand) { brand = newBrand(name); brands.push(brand); byName.set(name.toLowerCase(), brand); }
     return { ...account, brandId: brand.id };
   });
-  return { businessName: saved.businessName ?? '', brands, accounts, channels: saved.channels ?? [] };
+  const brandIds = new Set(brands.map((brand) => brand.id));
+  const categories = (saved.categories ?? []).filter((category) => brandIds.has(category.brandId));
+  const videos = (saved.videos ?? []).filter((video) => categories.some((category) => category.id === video.categoryId && category.brandId === video.brandId));
+  return { businessName: saved.businessName ?? '', brands, accounts, channels: saved.channels ?? [], categories, videos };
 }
 
 /** Where a profile signs in, in plain words: shared with other brands, or its own account. */
