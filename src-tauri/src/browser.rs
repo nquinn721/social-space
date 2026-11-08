@@ -44,6 +44,11 @@ fn make_window(
         .title("Socialspace · Website")
         .inner_size(1100.0, 800.0)
         .on_navigation(move |url| allowed_navigation(url, oauth_callback))
+        .on_page_load(|window, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                crate::autofill::page_loaded(&window);
+            }
+        })
         .on_new_window(move |url, features| {
             if !allowed_navigation(&url, oauth_callback) {
                 return NewWindowResponse::Deny;
@@ -59,9 +64,16 @@ fn make_window(
     } else {
         builder
     };
-    builder
+    let window = builder
         .build()
-        .map_err(|_| "Could not open the website inside the app.".into())
+        .map_err(|_| "Could not open the website inside the app.")?;
+    let closed = window.label().to_owned();
+    window.on_window_event(move |event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+            crate::autofill::window_closed(&closed);
+        }
+    });
+    Ok(window)
 }
 
 pub fn open_remote(app: &AppHandle, address: &str, oauth_callback: bool) -> Result<(), String> {

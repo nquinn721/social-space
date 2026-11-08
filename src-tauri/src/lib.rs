@@ -2,6 +2,7 @@ use std::{collections::HashSet, fs, io::Write, path::Path, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
+mod account_passwords;
 mod autofill;
 mod browser;
 mod email;
@@ -249,7 +250,11 @@ pub fn run() {
             email::read_email,
             autofill::fill_site_form,
             autofill::choose_image_file,
-            autofill::load_image_preview
+            autofill::load_image_preview,
+            account_passwords::ensure_account_password,
+            account_passwords::has_account_password,
+            account_passwords::reveal_account_password,
+            account_passwords::delete_account_password
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Manager");

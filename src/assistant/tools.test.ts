@@ -5,7 +5,7 @@ import * as profile from '../profileService';
 import * as x from '../xService';
 import * as email from '../emailService';
 
-vi.mock('../profileService', () => ({ openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn() }));
+vi.mock('../profileService', async (original) => ({ ...(await original<typeof import('../profileService')>()), openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn(), ensureAccountPassword: vi.fn() }));
 vi.mock('../xService', () => ({ postToX: vi.fn() }));
 vi.mock('../emailService', () => ({ listEmails: vi.fn(), readEmail: vi.fn() }));
 vi.mock('../queueService', () => ({ listQueue: vi.fn() }));
@@ -52,7 +52,11 @@ describe('assistant tools', () => {
   it('fills an open window from the saved profile and only attaches the image when asked', async () => {
     const ctx = context(workspace());
     await runTool('fill_platform_form', { windowId: 'site-3', accountId: 'a1', includeImage: true }, ctx);
-    expect(profile.fillSiteForm).toHaveBeenCalledWith('site-3', { email: 'me@example.com', username: 'studio', fullName: 'Studio', displayName: 'Studio', bio: 'Hello' }, 'C:\\pics\\me.png');
+    expect(profile.fillSiteForm).toHaveBeenCalledWith('site-3', { email: 'me@example.com', username: 'studio', fullName: 'Studio', displayName: 'Studio', bio: 'Hello' }, { imagePath: 'C:\\pics\\me.png', accountId: 'a1', includePassword: false, keepFilling: true });
+    expect(profile.ensureAccountPassword).not.toHaveBeenCalled();
+    await runTool('fill_platform_form', { windowId: 'site-3', accountId: 'a1', includePassword: true }, ctx);
+    expect(profile.ensureAccountPassword).toHaveBeenCalledWith('a1');
+    expect(vi.mocked(profile.fillSiteForm).mock.calls[1][2]).toMatchObject({ includePassword: true, accountId: 'a1' });
     expect(formFieldsFor(account, '123456').verificationCode).toBe('123456');
   });
 

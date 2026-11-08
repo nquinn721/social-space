@@ -34,6 +34,10 @@ fn main() {
         "fill_site_form",
         "choose_image_file",
         "load_image_preview",
+        "ensure_account_password",
+        "has_account_password",
+        "reveal_account_password",
+        "delete_account_password",
     ];
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(commands));

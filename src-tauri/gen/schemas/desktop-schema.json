@@ -219,6 +219,12 @@
           "markdownDescription": "Enables the connect_x command without any pre-configured scope."
         },
         {
+          "description": "Enables the delete_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-delete-account-password",
+          "markdownDescription": "Enables the delete_account_password command without any pre-configured scope."
+        },
+        {
           "description": "Enables the delete_queue_job command without any pre-configured scope.",
           "type": "string",
           "const": "allow-delete-queue-job",
@@ -249,6 +255,12 @@
           "markdownDescription": "Enables the email_connection command without any pre-configured scope."
         },
         {
+          "description": "Enables the ensure_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ensure-account-password",
+          "markdownDescription": "Enables the ensure_account_password command without any pre-configured scope."
+        },
+        {
           "description": "Enables the fill_site_form command without any pre-configured scope.",
           "type": "string",
           "const": "allow-fill-site-form",
@@ -265,6 +277,12 @@
           "type": "string",
           "const": "allow-get-kling-video",
           "markdownDescription": "Enables the get_kling_video command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the has_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-has-account-password",
+          "markdownDescription": "Enables the has_account_password command without any pre-configured scope."
         },
         {
           "description": "Enables the instagram_connection command without any pre-configured scope.",
@@ -363,6 +381,12 @@
           "markdownDescription": "Enables the remove_kling_key command without any pre-configured scope."
         },
         {
+          "description": "Enables the reveal_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reveal-account-password",
+          "markdownDescription": "Enables the reveal_account_password command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_kling_key command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-kling-key",
@@ -423,6 +447,12 @@
           "markdownDescription": "Denies the connect_x command without any pre-configured scope."
         },
         {
+          "description": "Denies the delete_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-delete-account-password",
+          "markdownDescription": "Denies the delete_account_password command without any pre-configured scope."
+        },
+        {
           "description": "Denies the delete_queue_job command without any pre-configured scope.",
           "type": "string",
           "const": "deny-delete-queue-job",
@@ -453,6 +483,12 @@
           "markdownDescription": "Denies the email_connection command without any pre-configured scope."
         },
         {
+          "description": "Denies the ensure_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ensure-account-password",
+          "markdownDescription": "Denies the ensure_account_password command without any pre-configured scope."
+        },
+        {
           "description": "Denies the fill_site_form command without any pre-configured scope.",
           "type": "string",
           "const": "deny-fill-site-form",
@@ -469,6 +505,12 @@
           "type": "string",
           "const": "deny-get-kling-video",
           "markdownDescription": "Denies the get_kling_video command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the has_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-has-account-password",
+          "markdownDescription": "Denies the has_account_password command without any pre-configured scope."
         },
         {
           "description": "Denies the instagram_connection command without any pre-configured scope.",
@@ -565,6 +607,12 @@
           "type": "string",
           "const": "deny-remove-kling-key",
           "markdownDescription": "Denies the remove_kling_key command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reveal_account_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reveal-account-password",
+          "markdownDescription": "Denies the reveal_account_password command without any pre-configured scope."
         },
         {
           "description": "Denies the save_kling_key command without any pre-configured scope.",

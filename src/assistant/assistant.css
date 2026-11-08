@@ -33,3 +33,34 @@
 .profile-image span{font-size:11px;color:#9a97a3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .bio-count{float:right;font-weight:400;color:#85818c}
 .bio-count.over{color:#f18a9a}
+.inbox{background:#19191e;border:1px solid #2b2a31;border-radius:11px;padding:14px;font-size:12px}
+.inbox.empty p{color:#9996a1;line-height:1.6}
+.inbox-head{display:flex;align-items:center;gap:8px;color:#c6a5ff;margin-bottom:10px}
+.inbox-head strong{color:#eee;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inbox-list{list-style:none;margin:0;padding:0;max-height:340px;overflow:auto}
+.inbox.compact .inbox-list{max-height:220px}
+.inbox-list button{width:100%;text-align:left;background:none;color:#a9a6b2;padding:9px 8px;border-radius:7px;display:block}
+.inbox-list button:hover{background:#222129}
+.inbox-list button.unread strong{color:#fff}
+.inbox-list strong,.inbox-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inbox-list strong{font-size:12px;color:#d6d3dc;font-weight:600}
+.inbox-list small{font-size:10.5px;margin-top:3px}
+.inbox-none{color:#85838f;padding:14px 8px}
+.inbox-message h3{font-size:14px;margin:8px 0 4px}
+.inbox-message small{color:#8c8a94;font-size:10.5px}
+.inbox-message pre{white-space:pre-wrap;font:12px/1.5 inherit;color:#c9c5d0;max-height:260px;overflow:auto;margin:12px 0 0}
+.inbox-code{display:flex;align-items:center;gap:10px;background:#25202f;border:1px solid #5a4673;border-radius:9px;padding:10px 12px;margin-top:12px}
+.inbox-code span{color:#b59ada;font-size:11px;font-weight:700}
+.inbox-code strong{font-size:20px;letter-spacing:3px;flex:1}
+.inbox-code .primary-button,.inbox-code .outline-button{min-height:32px}
+.wizard{width:min(100%,560px)}
+.wizard-steps{display:flex;gap:6px;margin:14px 0 18px}
+.wizard-steps span{flex:1;height:4px;border-radius:4px;background:#34313b}
+.wizard-steps span.done{background:#c4a0ff}
+.wizard ol{padding-left:18px;color:#c9c5d0;font-size:12px;line-height:1.7;margin:0 0 16px}
+.wizard-actions{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}
+.wizard .error-message{margin-top:10px}
+.password-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#a6a2ad;margin-bottom:14px}
+.password-row code{background:#121216;border:1px solid #3b3942;border-radius:6px;padding:6px 9px;color:#eee;font-size:12px}
+.heading-buttons{display:flex;gap:10px;flex-wrap:wrap}
+.heading-row>.heading-buttons{margin-bottom:4px}
