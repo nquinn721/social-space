@@ -449,6 +449,7 @@ mod tests {
         let job = item(QueueMode::Automatic, QueuePlatform::Instagram, 100);
         let mut workspace = crate::Workspace {
             business_name: String::new(),
+            brands: vec![],
             accounts: vec![],
             channels: vec![crate::Channel {
                 id: "channel-1".into(),

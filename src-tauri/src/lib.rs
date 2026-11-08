@@ -24,6 +24,8 @@ const MAX_FIELD_LENGTH: usize = 1_000;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Workspace {
     business_name: String,
+    #[serde(default)]
+    brands: Vec<Brand>,
     accounts: Vec<Account>,
     #[serde(default)]
     channels: Vec<Channel>,
@@ -37,6 +39,16 @@ struct Channel {
     name: String,
     handle: String,
     account_id: Option<String>,
+    notes: String,
+}
+
+/// A brand or category that owns one profile per social.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Brand {
+    id: String,
+    name: String,
+    #[serde(default)]
     notes: String,
 }
 
@@ -61,6 +73,9 @@ struct Account {
     image_path: String,
     #[serde(default)]
     birthday: String,
+    /// Older workspaces have none; the app assigns one by name when it loads them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    brand_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -83,8 +98,18 @@ enum AccountStatus {
 struct StorageLock(Mutex<()>);
 
 fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
-    if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS {
+    if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS || workspace.brands.len() > MAX_ACCOUNTS {
         return Err("The workspace is too large to save.".into());
+    }
+    let mut brand_ids = HashSet::new();
+    for brand in &workspace.brands {
+        if brand.id.trim().is_empty() || brand.name.trim().is_empty() || !brand_ids.insert(&brand.id)
+            || [&brand.id, &brand.name, &brand.notes].iter().any(|field| field.len() > MAX_FIELD_LENGTH) {
+            return Err("Each brand needs a unique ID, a name, and fields under 1,000 bytes.".into());
+        }
+    }
+    if workspace.accounts.iter().any(|account| account.brand_id.as_ref().is_some_and(|id| !brand_ids.contains(id))) {
+        return Err("An account belongs to a brand that does not exist.".into());
     }
     let mut ids = HashSet::new();
     for account in &workspace.accounts {
@@ -292,6 +317,7 @@ mod tests {
             signup_email: String::new(),
             image_path: String::new(),
             birthday: String::new(),
+            brand_id: None,
         }
     }
 
@@ -299,6 +325,7 @@ mod tests {
     fn workspace_round_trips_and_rejects_duplicate_ids() {
         let mut workspace = Workspace {
             business_name: "Example LLC".into(),
+            brands: vec![],
             accounts: vec![account("one")],
             channels: vec![],
         };
@@ -324,6 +351,18 @@ mod tests {
         workspace.channels.push(Channel { id: "channel-1".into(), platform: Platform::Instagram, name: "Main".into(), handle: "main".into(), account_id: Some("account-1".into()), notes: String::new() });
         assert!(validate_workspace(&workspace).is_ok());
         workspace.channels[0].platform = Platform::Youtube;
+        assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn accounts_must_belong_to_a_saved_brand() {
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new() }], accounts: vec![account("one")], channels: vec![] };
+        workspace.accounts[0].brand_id = Some("b".into());
+        let json = serde_json::to_string(&workspace).unwrap();
+        assert!(json.contains(r#""brandId":"b""#));
+        assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
+        assert!(validate_workspace(&workspace).is_ok());
+        workspace.accounts[0].brand_id = Some("missing".into());
         assert!(validate_workspace(&workspace).is_err());
     }
 
@@ -357,6 +396,7 @@ mod tests {
         let path = directory.join("workspace.json");
         let workspace = Workspace {
             business_name: "Example LLC".into(),
+            brands: vec![],
             accounts: vec![account("one")],
             channels: vec![],
         };
