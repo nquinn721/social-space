@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AppWindow, Check, Mail } from 'lucide-react';
-import { connectEmail, connectGmailSession, disconnectEmail, emailConnection, openGmailSignIn, type EmailConnection } from './emailService';
+import { Mail } from 'lucide-react';
+import { connectEmail, disconnectEmail, emailConnection, type EmailConnection } from './emailService';
+import GmailConnect from './GmailConnect';
 import { errorText } from './ui';
 
 export default function EmailSettings() {
@@ -13,7 +14,6 @@ export default function EmailSettings() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [signInOpened, setSignInOpened] = useState(false);
   useEffect(() => { emailConnection().then((value) => { setConnection(value); setAvailable(true); }).catch(() => setAvailable(false)); }, []);
   async function run(action: () => Promise<void>) { if (busy) return; setBusy(true); setError(''); setMessage(''); try { await action(); } catch (reason) { setError(errorText(reason, 'The request failed.')); } finally { setBusy(false); } }
   function connect(event: FormEvent) {
@@ -29,11 +29,7 @@ export default function EmailSettings() {
     </> : <>
       <div className="gmail-signin">
         <h3>Sign in to Gmail in the app <span className="pill-tag">Recommended</span></h3>
-        <p>No app password needed. Sign in to Gmail in the window that opens, and the app keeps you signed in and reads new mail from there. You can close the window once Gmail loads.</p>
-        <div className="row-buttons">
-          <button type="button" className="outline-button" disabled={busy} onClick={() => void run(async () => { await openGmailSignIn(); setSignInOpened(true); })}><AppWindow size={15}/> Sign in to Gmail</button>
-          <button type="button" className="primary-button" disabled={busy} onClick={() => void run(async () => { setConnection(await connectGmailSession()); setMessage('Gmail connected. New verification emails now show up in the Inbox.'); })}><Check size={15}/> {signInOpened ? "I'm signed in, connect" : 'Use my Gmail sign-in'}</button>
-        </div>
+        <GmailConnect onConnected={(value) => { setConnection(value); setMessage('Gmail connected. New verification emails now show up in the Inbox.'); }}/>
       </div>
       <details className="imap-option"><summary>Use an app password instead (IMAP)</summary><form onSubmit={connect}>
       <p>Gmail and Outlook need an app password, not your normal password. It's stored in Windows Credential Manager.</p>

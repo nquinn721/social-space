@@ -11,6 +11,7 @@ type Props = {
   onAddAccount: () => void;
   onEditAccount: (account: Account) => void;
   onCreateAccounts: (platforms?: Platform[], prefill?: WizardPrefill) => void;
+  onSignUp?: (accounts: Account[]) => void;
   onOpen: (platform: Platform, action: PlatformAction) => void;
 };
 type Filter = 'all' | Platform;
@@ -31,7 +32,7 @@ export function groupByBrand(accounts: Account[]): Brand[] {
 
 const statusText = (account: Account) => `${account.handle ? `@${account.handle}` : 'No handle added'} · ${account.status === 'active' ? 'In use' : 'Planned'}`;
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onOpen }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onOpen }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const brands = useMemo(() => {
@@ -68,12 +69,14 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
           const full = allBrands.find((item) => item.key === brand.key) ?? brand;
           const missing = PLATFORMS.filter((platform) => !full.accounts.some((account) => account.platform === platform.id));
           const lead = full.accounts.find((account) => account.imagePath) ?? full.accounts[0];
+          const planned = full.accounts.filter((account) => account.status === 'planned');
           const handles = [...new Set(full.accounts.map((account) => account.handle).filter(Boolean))];
           return <section className="brand-card" key={brand.key} aria-label={brand.name}>
             <div className="brand-card-head">
               <AccountAvatar account={lead} name={brand.name} size="lg"/>
               <div><h2>{brand.name}</h2><p>{handles.length ? handles.map((handle) => `@${handle}`).join(', ') : 'No username yet'} · {full.accounts.length} {full.accounts.length === 1 ? 'social' : 'socials'}</p></div>
               <div className="brand-platforms">{full.accounts.map((account) => <BrandMark key={account.id} platform={account.platform} small/>)}</div>
+              {planned.length > 0 && onSignUp && <button type="button" className="primary-button small-button" disabled={!loaded || busy} onClick={() => onSignUp(planned)}><UserPlus size={14}/> Sign up on {planned.length === 1 ? getPlatform(planned[0].platform).name : `${planned.length} planned`}</button>}
             </div>
             <div className="account-rows">{brand.accounts.map((account) => <button key={account.id} className="account-row" onClick={() => onEditAccount(account)}>
               <BrandMark platform={account.platform}/>

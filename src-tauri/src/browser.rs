@@ -8,7 +8,7 @@ use tauri::{
 static NEXT_WINDOW: AtomicU64 = AtomicU64::new(1);
 const OAUTH_CALLBACK_PORT: u16 = 49173;
 
-fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
+pub(crate) fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
     if url.as_str() == "about:blank" {
         return true;
     }
@@ -32,7 +32,7 @@ fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
     }
 }
 
-fn make_window(
+pub(crate) fn make_window(
     app: &AppHandle,
     url: url::Url,
     oauth_callback: bool,
@@ -46,7 +46,7 @@ fn make_window(
         .on_navigation(move |url| allowed_navigation(url, oauth_callback))
         .on_page_load(|window, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished {
-                crate::autofill::page_loaded(&window);
+                crate::autofill::page_loaded(window.as_ref());
             }
         })
         .on_new_window(move |url, features| {

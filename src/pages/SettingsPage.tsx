@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Download, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Bot, Building2, Clapperboard, Download, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import { UpdateSettings } from '../AppUpdates';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/ollamaClient';
@@ -10,6 +11,7 @@ type Props = { businessName: string; onBusinessNameChange: (value: string) => vo
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
   { id: 'email', label: 'Email inbox', icon: Mail },
+  { id: 'video-sources', label: 'Video sources', icon: Clapperboard },
   { id: 'assistant', label: 'Assistant', icon: Bot },
   { id: 'updates', label: 'App updates', icon: Download },
 ];
@@ -43,7 +45,7 @@ function AssistantSettingsCard() {
 
 export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded }: Props) {
   return <>
-    <PageHeader eyebrow="Make it yours" title="Settings" description="Your workspace, inbox, assistant and app updates."/>
+    <PageHeader eyebrow="Make it yours" title="Settings" description="Your workspace, inbox, video sources, assistant and app updates."/>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">{SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }}><Icon size={16}/>{label}</a>)}</nav>
       <div className="settings-stack">
@@ -55,6 +57,11 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <button className="primary-button" disabled={busy || !loaded}>Save changes</button>
         </form>
         <EmailSettings/>
+        <section className="settings-card" id="video-sources">
+          <h2><Clapperboard size={17}/> Video sources</h2>
+          <p>AI video providers you generate with, each under its own name and API key. Keys are checked with the provider and stored in Windows Credential Manager.</p>
+          <VideoSources/>
+        </section>
         <AssistantSettingsCard/>
         <div id="updates" style={{ scrollMarginTop: 80 }}><UpdateSettings/></div>
         <div className="privacy-note"><ShieldCheck size={18}/><span>Your workspace is stored on this PC. Passwords live in Windows Credential Manager and are only shown when you ask.</span></div>

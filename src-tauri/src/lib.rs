@@ -6,12 +6,16 @@ mod account_passwords;
 mod autofill;
 mod browser;
 mod email;
+mod embedded;
 mod gmail_session;
+mod grok;
 mod instagram;
 mod kling;
 mod ollama;
 mod queue;
 mod updater;
+mod video_gen;
+mod video_sources;
 mod x_integration;
 
 const WORKSPACE_FILE: &str = "workspace.json";
@@ -57,6 +61,8 @@ struct Account {
     signup_email: String,
     #[serde(default)]
     image_path: String,
+    #[serde(default)]
+    birthday: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -86,7 +92,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     for account in &workspace.accounts {
         if account.id.trim().is_empty()
             || !ids.insert(&account.id)
-            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path]
+            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path, &account.birthday]
                 .iter()
                 .any(|field| field.len() > MAX_FIELD_LENGTH)
         {
@@ -207,29 +213,29 @@ async fn open_kling(app: tauri::AppHandle) -> Result<(), String> {
     browser::open_remote(&app, "https://klingai.com/", false)
 }
 
-#[tauri::command]
-async fn open_kling_developer(app: tauri::AppHandle) -> Result<(), String> {
-    browser::open_remote(&app, "https://kling.ai/dev/api-key", false)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(StorageLock::default())
-        .manage(kling::GenerateLock::default())
+        .manage(video_gen::GenerateLock::default())
+        .manage(video_sources::SourcesLock::default())
         .setup(|app| { queue::start_scheduler(app.handle().clone()); Ok(()) })
         .invoke_handler(tauri::generate_handler![
             load_workspace,
             save_workspace,
             open_platform_action,
             open_kling,
-            open_kling_developer,
-            kling::kling_key_status,
-            kling::save_kling_key,
-            kling::remove_kling_key,
-            kling::generate_kling_video,
-            kling::get_kling_video,
-            kling::open_kling_video,
+            video_sources::list_video_sources,
+            video_sources::set_active_video_source,
+            video_sources::open_video_provider_site,
+            video_sources::add_video_source,
+            video_sources::check_video_source,
+            video_sources::rename_video_source,
+            video_sources::remove_video_source,
+            video_sources::open_video_provider_keys,
+            video_gen::generate_video,
+            video_gen::get_video,
+            video_gen::open_video,
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
@@ -253,6 +259,9 @@ pub fn run() {
             gmail_session::open_gmail_sign_in,
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
+            embedded::embed_platform_page,
+            embedded::set_embedded_bounds,
+            embedded::close_embedded_page,
             autofill::fill_site_form,
             autofill::choose_image_file,
             autofill::load_image_preview,
@@ -288,6 +297,7 @@ mod tests {
             website: String::new(),
             signup_email: String::new(),
             image_path: String::new(),
+            birthday: String::new(),
         }
     }
 
@@ -367,5 +377,47 @@ mod tests {
         assert!(write_workspace(&path, &invalid).is_err());
         assert_eq!(read_workspace(&path).unwrap(), updated);
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// On Windows a window built inside a sync command deadlocks WebView2 and
+    /// shows a blank white window, so every command that opens one is async.
+    #[test]
+    fn window_opening_commands_are_async() {
+        let sources = [
+            include_str!("lib.rs"),
+            include_str!("gmail_session.rs"),
+            include_str!("embedded.rs"),
+            include_str!("autofill.rs"),
+        ];
+        let opens = ["open_remote", "make_window", "WebviewWindowBuilder"];
+        for source in sources {
+            for (index, _) in source.match_indices(concat!("#[tauri::", "command]")) {
+                let rest = &source[index..];
+                let signature = &rest[..rest.find('{').unwrap()];
+                let body_end = rest.find("\n}").unwrap_or(rest.len());
+                let body = &rest[..body_end];
+                if opens.iter().any(|open| body.contains(open)) {
+                    assert!(signature.contains("async fn"), "a command that opens a window must be async: {signature}");
+                }
+            }
+        }
+    }
+
+    /// A command registered in the handler but missing from build.rs or the
+    /// capability is rejected at runtime in the installed app.
+    #[test]
+    fn every_registered_command_is_allowed() {
+        let source = include_str!("lib.rs");
+        let start = source.find(concat!("generate_handler", "![")).unwrap();
+        let handler = &source[start..];
+        let handler = &handler[handler.find('[').unwrap() + 1..handler.find(']').unwrap()];
+        let build = include_str!("../build.rs");
+        let capability = include_str!("../capabilities/default.json");
+        for command in handler.split(',').map(|item| item.trim()).filter(|item| !item.is_empty()) {
+            let name = command.rsplit("::").next().unwrap();
+            assert!(build.contains(&format!("\"{name}\"")), "{name} is missing from build.rs");
+            let permission = format!("\"allow-{}\"", name.replace('_', "-"));
+            assert!(capability.contains(&permission), "{name} is missing from capabilities/default.json");
+        }
     }
 }

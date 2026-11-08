@@ -11,3 +11,12 @@ describe('profile suggestions', () => {
     expect(parseSuggestion('{"name":"Only name"}')).toBeNull();
   });
 });
+
+describe('naming prompt', () => {
+  it('teaches the model what a good account looks like, with an example within the limit', async () => {
+    const { NAMING_PROMPT } = await import('./suggest');
+    expect(NAMING_PROMPT).toMatch(/call to action/);
+    const example = NAMING_PROMPT.slice(NAMING_PROMPT.lastIndexOf('{'));
+    expect(parseSuggestion(example)?.description.length).toBeLessThanOrEqual(80);
+  });
+});

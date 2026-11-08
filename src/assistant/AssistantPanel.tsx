@@ -9,7 +9,7 @@ const SUGGESTIONS = ['Find the newest verification code in my email', 'Suggest a
 const TOOL_LABELS: Record<string, string> = {
   get_workspace: 'Checked your workspace', save_account_profile: 'Saved a profile draft', choose_account_image: 'Asked for an image',
   open_platform_page: 'Opened a platform page', fill_platform_form: 'Filled a form', list_emails: 'Checked your inbox', read_email: 'Read an email',
-  list_video_queue: 'Checked the video queue', post_to_x: 'Posting to X', generate_kling_video: 'Kling video', go_to_page: 'Changed page',
+  list_video_queue: 'Checked the video queue', post_to_x: 'Posting to X', generate_video: 'AI video', go_to_page: 'Changed page',
 };
 type Pending = ConfirmRequest & { resolve: (approved: boolean) => void };
 

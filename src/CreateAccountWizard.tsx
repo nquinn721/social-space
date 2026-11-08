@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
-import { chooseImageFile, ensureSharedPassword, fillSiteForm, formFieldsFor, openPlatformWindow, revealAccountPassword } from './profileService';
+import { chooseImageFile, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
@@ -20,6 +20,13 @@ export function sharedBioLimit(platforms: Platform[]) {
   return limits.reduce((tightest, item) => item.limit < tightest.limit ? item : tightest, limits[0] ?? { platform: 'youtube' as Platform, limit: BIO_LIMITS.youtube });
 }
 
+/** A page to show in the wizard's site area. nonce makes "Reopen" load it again. */
+type SitePage = { account: Account; action: 'create' | 'manage'; imagePath?: string; nonce: number };
+function boundsOf(element: HTMLElement): Bounds {
+  const rect = element.getBoundingClientRect();
+  return { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height };
+}
+
 function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: string; busy: boolean; onPick: () => void }) {
   return <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>;
 }
@@ -29,8 +36,8 @@ function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: s
  * The social list comes from PLATFORMS, so a newly supported social is included automatically.
  * It only fills forms: Nate presses every button and solves any captcha himself.
  */
-export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill }) {
-  const [step, setStep] = useState<Step>('details');
+export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill, resume }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill; resume?: Account[] }) {
+  const [step, setStep] = useState<Step>(resume?.length ? 'signup' : 'details');
   const [chosen, setChosen] = useState<Platform[]>(initialPlatforms ?? PLATFORMS.map((platform) => platform.id));
   const [idea, setIdea] = useState('');
   const [label, setLabel] = useState(prefill?.label ?? '');
@@ -40,7 +47,10 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [website, setWebsite] = useState(prefill?.website ?? '');
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [birthday, setBirthday] = useState(prefill?.birthday ?? '');
+  const [page, setPage] = useState<SitePage | null>(null);
+  const frame = useRef<HTMLDivElement>(null);
+  const [accounts, setAccounts] = useState<Account[]>(resume ?? []);
   const [current, setCurrent] = useState(0);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [windowId, setWindowId] = useState('');
@@ -63,6 +73,40 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     return () => window.removeEventListener('keydown', onKey);
   }, [busy, step, onClose]);
 
+  // The sign-up page is a real browser view placed over the site area of the wizard.
+  useEffect(() => {
+    const element = frame.current;
+    if (!page || !element) return;
+    let cancelled = false;
+    setWindowId('');
+    (async () => {
+      try {
+        const id = await embedPlatformPage(page.account.platform, page.action, boundsOf(element));
+        if (cancelled) return;
+        setWindowId(id);
+        await fillSiteForm(id, formFieldsFor(page.account), page.action === 'create'
+          ? { accountId: page.account.id, includePassword: true, keepFilling: true }
+          : { imagePath: page.imagePath, accountId: page.account.id, keepFilling: true });
+      } catch (reason) { if (!cancelled) setError(errorText(reason)); }
+    })();
+    return () => { cancelled = true; };
+  }, [page]);
+  useEffect(() => {
+    const element = frame.current;
+    if (!windowId || !element) return;
+    const place = () => { void setEmbeddedBounds(windowId, boundsOf(element)).catch(() => undefined); };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    observer?.observe(element);
+    window.addEventListener('resize', place);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', place); };
+  }, [windowId]);
+  useEffect(() => () => { void closeEmbeddedPage().catch(() => undefined); }, []);
+  // Saved accounts that are not created yet go straight to their first sign-up page.
+  useEffect(() => {
+    if (!resume?.length) return;
+    void run(async () => { await ensureSharedPassword(resume.map((item) => item.id)); openSignup(resume[0]); });
+  }, []);
+
   async function run(action: () => Promise<void>) {
     if (busy) return;
     setBusy(true); setError(''); setNote('');
@@ -75,23 +119,19 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   });
   function toggle(platform: Platform) { setChosen((list) => list.includes(platform) ? list.filter((item) => item !== platform) : [...list, platform]); }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
-  async function openSignup(target: Account) {
-    const id = await openPlatformWindow(target.platform, 'create');
-    setWindowId(id);
-    await fillSiteForm(id, formFieldsFor(target), { accountId: target.id, includePassword: true, keepFilling: true });
-  }
+  function openSignup(target: Account) { setPage((last) => ({ account: target, action: 'create', nonce: (last?.nonce ?? 0) + 1 })); }
 
   function start(event: FormEvent) {
     event.preventDefault();
     if (!label.trim() || !ordered.length || bioTooLong) return;
     void run(async () => {
-      const made = ordered.map((platform): Account => ({ ...createAccount(platform, label, handle, 'planned', ''), displayName: displayName.trim(), bio: bio.trim(), website: website.trim(), signupEmail: signupEmail.trim(), imagePath }));
+      const made = ordered.map((platform): Account => ({ ...createAccount(platform, label, handle, 'planned', ''), displayName: displayName.trim(), bio: bio.trim(), website: website.trim(), signupEmail: signupEmail.trim(), imagePath, birthday }));
       for (const item of made) await onSave(item);
       setAccounts(made);
       await ensureSharedPassword(made.map((item) => item.id));
       setCurrent(0);
-      await openSignup(made[0]);
       setStep('signup');
+      openSignup(made[0]);
     });
   }
   const refill = (code?: string) => run(async () => {
@@ -99,7 +139,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: !code, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
   });
-  const reopen = () => run(async () => { if (account) await openSignup(account); });
+  const reopen = () => { if (account) openSignup(account); };
   const togglePassword = () => run(async () => { if (!account) return; if (!showPass && !password) setPassword(await revealAccountPassword(account.id)); setShowPass((value) => !value); });
   const copy = (what: string, value: string | (() => Promise<string>)) => run(async () => {
     await navigator.clipboard.writeText(typeof value === 'string' ? value : await value());
@@ -115,15 +155,13 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     }
     setOutcomes((map) => ({ ...map, [account.id]: outcome }));
     const next = current + 1;
-    if (next < accounts.length) { setCurrent(next); await openSignup(accounts[next]); }
-    else setStep('profile');
+    if (next < accounts.length) { setCurrent(next); openSignup(accounts[next]); }
+    else { setPage(null); setWindowId(''); await closeEmbeddedPage(); setStep('profile'); }
   });
   const fillProfile = (target: Account) => run(async () => {
     const updated = { ...target, imagePath };
     if (imagePath !== target.imagePath) { await onSave(updated); setAccounts((list) => list.map((item) => item.id === updated.id ? updated : item)); }
-    const id = await openPlatformWindow(target.platform, 'manage');
-    setWindowId(id);
-    await fillSiteForm(id, formFieldsFor(updated), { imagePath: imagePath || undefined, accountId: target.id, keepFilling: true });
+    setPage((last) => ({ account: updated, action: 'manage', imagePath: imagePath || undefined, nonce: (last?.nonce ?? 0) + 1 }));
     setNote(`Opened ${getPlatform(target.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
   });
   const created = accounts.filter((item) => outcomes[item.id] === 'created');
@@ -132,7 +170,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const shownName = displayName.trim() || label.trim();
   const shownHandle = normalizeHandle(handle);
 
-  return <div className="modal-backdrop"><section className="dialog wizard" role="dialog" aria-modal="true" aria-labelledby="wizard-title">
+  return <div className="modal-backdrop"><section className={`dialog wizard ${step === 'details' ? '' : 'site-open'}`} role="dialog" aria-modal="true" aria-labelledby="wizard-title">
     <aside className="wizard-rail">
       <div><p className="greeting">Guided sign-up</p><h2 id="wizard-title">Create accounts</h2></div>
       <ol className="wizard-steps">{STEPS.map((item, index) => <li key={item.id} className={index === stepIndex ? 'current' : index < stepIndex ? 'done' : ''} aria-current={index === stepIndex ? 'step' : undefined}><span className="step-num">{index < stepIndex ? <Check size={12} strokeWidth={3}/> : index + 1}</span>{item.label}</li>)}</ol>
@@ -140,7 +178,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         const outcome = outcomes[item.id];
         return <li key={item.id} className={step === 'signup' && index === current ? 'current' : outcome ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcome === 'created' ? 'Created' : outcome === 'skipped' ? 'Skipped' : step === 'signup' && index === current ? 'Now' : 'Next'}</em></li>;
       })}</ol>}
-      <p className="rail-note">Socialspace only fills in forms. You press every button and handle any captcha, birthday or phone check.</p>
+      <p className="rail-note">Socialspace only fills in forms. You press every button and solve any captcha or phone check.</p>
     </aside>
 
     <div className="wizard-main">
@@ -166,6 +204,10 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <div><label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/></div>
                 <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
               </div>
+              <div className="field-row">
+                <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
+                <div/>
+              </div>
               <label>Profile image <span>optional, you can add it later</span></label>
               <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
               {feedback}
@@ -185,42 +227,42 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         <div className="wizard-foot"><span className="foot-note">Accounts are saved as planned until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
       </form>}
 
-      {step === 'signup' && account && <>
-        <div className="wizard-top"><div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>The {name} sign-up window is open with your details filled in.</p></div>{closeButton}</div>
-        <div className="wizard-scroll">
-          <div className="signup-grid">
-            <div>
+      {step !== 'details' && <>
+        <div className="wizard-top">{step === 'signup' && account
+          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>Your details are filled in on the {name} page below. Check them, then press Next or Sign up on the page yourself.</p></div>
+          : <div><h3>Finish the profiles</h3><p>{created.length ? `Created on ${created.map((item) => getPlatform(item.platform).name).join(', ')}.` : 'No accounts were marked as created.'} Add the picture and description now, or later from Accounts. Skipped socials stay saved as planned.</p></div>}{closeButton}</div>
+        <div className="site-stage">
+          <div ref={frame} className="site-frame" aria-label="Site page">{!windowId && <span>{page ? 'Loading the page…' : 'Pick a social on the right to open its profile settings here.'}</span>}</div>
+          <aside className="site-side">
+            {step === 'signup' && account && <>
               <ol className="signup-steps">
-                <li>Check each page in the {name} window, then press Next or Sign up yourself. New pages fill in automatically.</li>
-                <li>When {name} emails a code to {account.signupEmail}, it shows up on the right. Press it to fill it on the page.</li>
-                <li>Handle any captcha, birthday or phone check yourself.</li>
-                <li>When the account exists, press the button below.</li>
+                <li>New pages fill in automatically as you press Next.</li>
+                <li>When {name} emails a code to {account.signupEmail}, it shows up below. Press it to fill it on the page.</li>
+                <li>Solve any captcha or phone check yourself.</li>
               </ol>
               <section className="credentials copy-list" aria-label="Sign-up details">
                 <h3>Sign-up details</h3>
                 <div className="credential-row"><span>Email</span><code>{account.signupEmail}</code><button type="button" className="icon-button" aria-label="Copy email" onClick={() => void copy('Email', account.signupEmail ?? '')}><Copy size={15}/></button></div>
                 {account.handle && <div className="credential-row"><span>Username</span><code>{account.handle}</code><button type="button" className="icon-button" aria-label="Copy username" onClick={() => void copy('Username', account.handle)}><Copy size={15}/></button></div>}
                 <div className="credential-row"><span>Password</span><code>{showPass && password ? password : '••••••••••••••••'}</code><button type="button" className="icon-button" aria-label={showPass ? 'Hide password' : 'Show password'} onClick={() => void togglePassword()}>{showPass ? <EyeOff size={15}/> : <Eye size={15}/>}</button><button type="button" className="icon-button" aria-label="Copy password" onClick={() => void copyPassword()}><Copy size={15}/></button></div>
+                {account.birthday && <div className="credential-row"><span>Birthday</span><code>{account.birthday}</code><button type="button" className="icon-button" aria-label="Copy birthday" onClick={() => void copy('Birthday', account.birthday ?? '')}><Copy size={15}/></button></div>}
               </section>
-              <div className="wizard-actions"><button type="button" className="outline-button small-button" disabled={busy} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button><button type="button" className="outline-button small-button" disabled={busy} onClick={() => void reopen()}><AppWindow size={14}/> Reopen {name} sign-up</button></div>
+              <div className="wizard-actions"><button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button><button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
               {feedback}
-            </div>
-            <InboxList compact autoRefresh limit={8} onCode={(code) => void refill(code)}/>
-          </div>
+              <InboxList compact autoRefresh limit={8} onCode={(code) => void refill(code)}/>
+            </>}
+            {step === 'profile' && <>
+              <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
+              <label>Profile image</label>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
+              {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> Fill {getPlatform(item.platform).name} profile <ChevronRight size={15}/></button>)}</div>}
+              {feedback}
+            </>}
+          </aside>
         </div>
-        <div className="wizard-foot"><button type="button" className="outline-button" disabled={busy} onClick={() => void advance('skipped')}><SkipForward size={15}/> Skip {name}</button><button type="button" className="primary-button" disabled={busy} onClick={() => void advance('created')}><Check size={15}/> {name} account is created{current + 1 < accounts.length ? ', next' : ''}</button></div>
-      </>}
-
-      {step === 'profile' && <>
-        <div className="wizard-top"><div><h3>Finish the profiles</h3><p className="dialog-copy" style={{ margin: '4px 0 0' }}>{created.length ? `Created on ${created.map((item) => getPlatform(item.platform).name).join(', ')}.` : 'No accounts were marked as created.'} Add the profile picture and description now, or later from Accounts. Skipped socials stay saved as planned.</p></div>{closeButton}</div>
-        <div className="wizard-scroll">
-          <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
-          <label>Profile image</label>
-          <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
-          {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> Fill {getPlatform(item.platform).name} profile <ChevronRight size={15}/></button>)}</div>}
-          {feedback}
-        </div>
-        <div className="wizard-foot"><button type="button" className="primary-button" disabled={busy} onClick={onClose}>Done</button></div>
+        {step === 'signup' && account
+          ? <div className="wizard-foot"><button type="button" className="outline-button" disabled={busy} onClick={() => void advance('skipped')}><SkipForward size={15}/> Skip {name}</button><button type="button" className="primary-button" disabled={busy} onClick={() => void advance('created')}><Check size={15}/> {name} account is created{current + 1 < accounts.length ? ', next' : ''}</button></div>
+          : <div className="wizard-foot"><button type="button" className="primary-button" disabled={busy} onClick={onClose}>Done</button></div>}
       </>}
     </div>
   </section></div>;
