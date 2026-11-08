@@ -143,6 +143,7 @@ describe('verification code detection', () => {
     await user.click(screen.getByRole('button', { name: /Start with 2 socials/ }));
     await screen.findByText('Now: Instagram (1 of 2)');
     expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', DEFAULT_SIGNUP_EMAIL, 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);
+    expect(saved.every((item) => item.handle === 'massagewithmia' && item.displayName === 'Massage With Mia')).toBe(true);
   });
   it('opens Google sign-up with the brand filled in for an optional new Gmail', async () => {
     vi.mocked(profile.openGmailSignup).mockResolvedValue('site-9');

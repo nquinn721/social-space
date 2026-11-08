@@ -68,6 +68,9 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const preview = useImagePreview(imagePath);
   const ordered = PLATFORMS.map((platform) => platform.id).filter((id) => chosen.includes(id));
   const tightest = sharedBioLimit(ordered);
+  // Left blank, the username and display name come from the account name, e.g. Massage With Mia → @massagewithmia.
+  const shownName = displayName.trim() || label.trim();
+  const shownHandle = normalizeHandle(handle) || (label.trim() ? emailTag(label) : '');
   // Each social either adds this brand to a login that has room, or gets a new account with an unused email.
   const plans = ordered.map((platform) => planPresence(existing, platform, label.trim() || handle || 'brand', signupEmail));
   const bioLength = bio.trim().length;
@@ -140,7 +143,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     event.preventDefault();
     if (!label.trim() || !ordered.length || bioTooLong) return;
     void run(async () => {
-      const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, handle, 'planned', ''), displayName: displayName.trim(), bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, birthday, ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
+      const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, shownHandle, 'planned', ''), displayName: shownName, bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, birthday, ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
       for (const item of made) await onSave(item);
       setAccounts(made);
       await ensureSharedPassword(made.map((item) => item.id));
@@ -182,8 +185,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const created = accounts.filter((item) => outcomes[item.id] === 'created');
   const feedback = <>{note && <p className="success-message" role="status">{note}</p>}{error && <div className="error-message" role="alert">{error}</div>}</>;
   const closeButton = <button type="button" className="icon-button" onClick={onClose} aria-label="Close" disabled={busy}><Close size={18}/></button>;
-  const shownName = displayName.trim() || label.trim();
-  const shownHandle = normalizeHandle(handle);
+
 
   return <div className="modal-backdrop"><section className={`dialog wizard ${step === 'details' ? '' : 'site-open'}`} role="dialog" aria-modal="true" aria-labelledby="wizard-title">
     <aside className="wizard-rail">
@@ -210,8 +212,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               <label htmlFor="wizard-name">Account name</label>
               <input id="wizard-name" autoFocus required maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="e.g. Soft Wings Studio"/>
               <div className="field-row">
-                <div><label htmlFor="wizard-handle">Username you want <span>optional</span></label><input id="wizard-handle" maxLength={120} value={handle} onChange={(event) => setHandle(event.target.value)} placeholder="@softwings"/></div>
-                <div><label htmlFor="wizard-display">Display name <span>optional</span></label><input id="wizard-display" maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)}/></div>
+                <div><label htmlFor="wizard-handle">Username you want <span>optional</span></label><input id="wizard-handle" maxLength={120} value={handle} onChange={(event) => setHandle(event.target.value)} placeholder={label.trim() ? `@${emailTag(label)}` : '@softwings'}/></div>
+                <div><label htmlFor="wizard-display">Display name <span>optional</span></label><input id="wizard-display" maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={label.trim() || undefined}/></div>
               </div>
               <label htmlFor="wizard-bio">Profile description <span className={`bio-count ${bioTooLong ? 'over' : ''}`}>{bioLength}/{tightest.limit}{ordered.length > 1 ? ` (${getPlatform(tightest.platform).name} limit)` : ''}</span></label>
               <textarea id="wizard-bio" rows={3} maxLength={1000} value={bio} onChange={(event) => setBio(event.target.value)}/>
