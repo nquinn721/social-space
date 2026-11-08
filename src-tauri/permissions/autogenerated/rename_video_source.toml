@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-rename-video-source"
+description = "Enables the rename_video_source command without any pre-configured scope."
+commands.allow = ["rename_video_source"]
+
+[[permission]]
+identifier = "deny-rename-video-source"
+description = "Denies the rename_video_source command without any pre-configured scope."
+commands.deny = ["rename_video_source"]

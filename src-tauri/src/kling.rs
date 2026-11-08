@@ -1,29 +1,8 @@
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Default)]
-pub struct GenerateLock(AtomicBool);
-
-struct GenerateGuard<'a>(&'a AtomicBool);
-
-impl<'a> GenerateGuard<'a> {
-    fn acquire(lock: &'a GenerateLock) -> Result<Self, String> {
-        lock.0
-            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
-            .map_err(|_| "A Kling generation is already being submitted.".to_string())?;
-        Ok(Self(&lock.0))
-    }
-}
-
-impl Drop for GenerateGuard<'_> {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::Release);
-    }
-}
+use crate::video_gen::VideoTask;
 
 pub(crate) const API_BASE: &str = "https://api-singapore.klingai.com";
 const CREATE_PATH: &str = "/text-to-video/kling-3.0-turbo";
@@ -66,16 +45,7 @@ struct ApiOutput {
     url: Option<String>,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KlingTask {
-    id: String,
-    status: String,
-    message: Option<String>,
-    video_url: Option<String>,
-}
-
-impl From<ApiTask> for KlingTask {
+impl From<ApiTask> for VideoTask {
     fn from(task: ApiTask) -> Self {
         let video_url = task.outputs.into_iter().find_map(|output| {
             if output.kind == "video" {
@@ -93,7 +63,7 @@ impl From<ApiTask> for KlingTask {
     }
 }
 
-fn safe_video_url(value: &str) -> bool {
+pub(crate) fn safe_video_url(value: &str) -> bool {
     let Ok(url) = reqwest::Url::parse(value) else {
         return false;
     };
@@ -110,7 +80,7 @@ fn safe_video_url(value: &str) -> bool {
         && domain != "localhost"
 }
 
-fn validate_prompt(prompt: &str, aspect_ratio: &str, duration: u8) -> Result<(), String> {
+pub(crate) fn validate_prompt(prompt: &str, aspect_ratio: &str, duration: u8) -> Result<(), String> {
     if prompt.trim().is_empty() || prompt.chars().count() > MAX_PROMPT_CHARS {
         return Err("Enter a prompt of up to 3,072 characters.".into());
     }
@@ -165,44 +135,28 @@ async fn decode_response<T: serde::de::DeserializeOwned>(
         .ok_or_else(|| "Kling returned no task data.".into())
 }
 
-fn source_key(
-    app: &tauri::AppHandle,
-    sources: &crate::video_sources::SourcesLock,
-    source_id: &str,
-) -> Result<String, String> {
-    crate::video_sources::source_key(app, sources, source_id, crate::video_sources::VideoProvider::Kling)
-}
-
-#[tauri::command]
-pub async fn generate_kling_video(
-    app: tauri::AppHandle,
-    lock: tauri::State<'_, GenerateLock>,
-    sources: tauri::State<'_, crate::video_sources::SourcesLock>,
-    source_id: String,
-    prompt: String,
-    aspect_ratio: String,
-    duration: u8,
-) -> Result<KlingTask, String> {
-    let _guard = GenerateGuard::acquire(&lock)?;
-    validate_prompt(&prompt, &aspect_ratio, duration)?;
-    let key = source_key(&app, &sources, &source_id)?;
+/// Starts a Kling text-to-video task. The caller has already validated the prompt.
+pub async fn create(key: &str, prompt: &str, aspect_ratio: &str, duration: u8) -> Result<VideoTask, String> {
     let body = CreateVideo {
         prompt: prompt.trim(),
         settings: VideoSettings {
             resolution: "720p",
-            aspect_ratio: &aspect_ratio,
+            aspect_ratio,
             duration,
         },
     };
-    let response = api_client()?.post(format!("{API_BASE}{CREATE_PATH}"))
+    let response = api_client()?
+        .post(format!("{API_BASE}{CREATE_PATH}"))
         .bearer_auth(key)
         .json(&body)
-        .send().await.map_err(|_| "Could not reach Kling. A timed-out request may still have created a billable task; check Kling before retrying.")?;
+        .send()
+        .await
+        .map_err(|_| "Could not reach Kling. A timed-out request may still have created a billable task; check Kling before retrying.")?;
     let task: ApiTask = decode_response(response).await?;
     Ok(task.into())
 }
 
-async fn fetch_task(key: String, task_id: &str) -> Result<KlingTask, String> {
+pub async fn fetch(key: &str, task_id: &str) -> Result<VideoTask, String> {
     validate_task_id(task_id)?;
     let response = api_client()?
         .get(format!("{API_BASE}/tasks"))
@@ -219,44 +173,9 @@ async fn fetch_task(key: String, task_id: &str) -> Result<KlingTask, String> {
     Ok(task.into())
 }
 
-#[tauri::command]
-pub async fn get_kling_video(
-    app: tauri::AppHandle,
-    sources: tauri::State<'_, crate::video_sources::SourcesLock>,
-    source_id: String,
-    task_id: String,
-) -> Result<KlingTask, String> {
-    let key = source_key(&app, &sources, &source_id)?;
-    fetch_task(key, &task_id).await
-}
-
-#[tauri::command]
-pub async fn open_kling_video(
-    app: tauri::AppHandle,
-    sources: tauri::State<'_, crate::video_sources::SourcesLock>,
-    source_id: String,
-    task_id: String,
-) -> Result<(), String> {
-    let key = source_key(&app, &sources, &source_id)?;
-    let task = fetch_task(key, &task_id).await?;
-    let url = task
-        .video_url
-        .ok_or("No video is available for this task yet.")?;
-    crate::browser::open_remote(&app, &url, false)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn generation_guard_rejects_duplicate_and_releases_on_drop() {
-        let lock = GenerateLock::default();
-        let guard = GenerateGuard::acquire(&lock).unwrap();
-        assert!(GenerateGuard::acquire(&lock).is_err());
-        drop(guard);
-        assert!(GenerateGuard::acquire(&lock).is_ok());
-    }
 
     #[test]
     fn request_has_the_documented_settings_and_validates_inputs() {
@@ -282,7 +201,7 @@ mod tests {
     #[test]
     fn parses_task_result_and_rejects_unsafe_video_urls() {
         let response: ApiResponse<Vec<ApiTask>> = serde_json::from_value(serde_json::json!({"code": 0, "data": [{"id":"123", "status":"succeeded", "outputs":[{"type":"video", "url":"https://cdn.example.com/video.mp4"}]}]})).unwrap();
-        let task: KlingTask = response.data.unwrap().remove(0).into();
+        let task: VideoTask = response.data.unwrap().remove(0).into();
         assert_eq!(
             task.video_url.as_deref(),
             Some("https://cdn.example.com/video.mp4")

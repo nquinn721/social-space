@@ -183,10 +183,22 @@
           "markdownDescription": "Enables the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Enables the add_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-add-video-source",
+          "markdownDescription": "Enables the add_video_source command without any pre-configured scope."
+        },
+        {
           "description": "Enables the check_for_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check-for-update",
           "markdownDescription": "Enables the check_for_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the check_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-video-source",
+          "markdownDescription": "Enables the check_video_source command without any pre-configured scope."
         },
         {
           "description": "Enables the choose_image_file command without any pre-configured scope.",
@@ -297,16 +309,16 @@
           "markdownDescription": "Enables the fill_site_form command without any pre-configured scope."
         },
         {
-          "description": "Enables the generate_kling_video command without any pre-configured scope.",
+          "description": "Enables the generate_video command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-generate-kling-video",
-          "markdownDescription": "Enables the generate_kling_video command without any pre-configured scope."
+          "const": "allow-generate-video",
+          "markdownDescription": "Enables the generate_video command without any pre-configured scope."
         },
         {
-          "description": "Enables the get_kling_video command without any pre-configured scope.",
+          "description": "Enables the get_video command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-get-kling-video",
-          "markdownDescription": "Enables the get_kling_video command without any pre-configured scope."
+          "const": "allow-get-video",
+          "markdownDescription": "Enables the get_video command without any pre-configured scope."
         },
         {
           "description": "Enables the has_account_password command without any pre-configured scope.",
@@ -327,12 +339,6 @@
           "markdownDescription": "Enables the install_update command without any pre-configured scope."
         },
         {
-          "description": "Enables the kling_key_status command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-kling-key-status",
-          "markdownDescription": "Enables the kling_key_status command without any pre-configured scope."
-        },
-        {
           "description": "Enables the list_emails command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-emails",
@@ -343,6 +349,12 @@
           "type": "string",
           "const": "allow-list-queue",
           "markdownDescription": "Enables the list_queue command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_video_sources command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-video-sources",
+          "markdownDescription": "Enables the list_video_sources command without any pre-configured scope."
         },
         {
           "description": "Enables the load_image_preview command without any pre-configured scope.",
@@ -387,22 +399,28 @@
           "markdownDescription": "Enables the open_kling command without any pre-configured scope."
         },
         {
-          "description": "Enables the open_kling_developer command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-open-kling-developer",
-          "markdownDescription": "Enables the open_kling_developer command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the open_kling_video command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-open-kling-video",
-          "markdownDescription": "Enables the open_kling_video command without any pre-configured scope."
-        },
-        {
           "description": "Enables the open_platform_action command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-platform-action",
           "markdownDescription": "Enables the open_platform_action command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-video",
+          "markdownDescription": "Enables the open_video command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_video_provider_keys command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-video-provider-keys",
+          "markdownDescription": "Enables the open_video_provider_keys command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_video_provider_site command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-video-provider-site",
+          "markdownDescription": "Enables the open_video_provider_site command without any pre-configured scope."
         },
         {
           "description": "Enables the post_to_x command without any pre-configured scope.",
@@ -423,22 +441,22 @@
           "markdownDescription": "Enables the read_email command without any pre-configured scope."
         },
         {
-          "description": "Enables the remove_kling_key command without any pre-configured scope.",
+          "description": "Enables the remove_video_source command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-remove-kling-key",
-          "markdownDescription": "Enables the remove_kling_key command without any pre-configured scope."
+          "const": "allow-remove-video-source",
+          "markdownDescription": "Enables the remove_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rename_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rename-video-source",
+          "markdownDescription": "Enables the rename_video_source command without any pre-configured scope."
         },
         {
           "description": "Enables the reveal_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-reveal-account-password",
           "markdownDescription": "Enables the reveal_account_password command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the save_kling_key command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-save-kling-key",
-          "markdownDescription": "Enables the save_kling_key command without any pre-configured scope."
         },
         {
           "description": "Enables the save_workspace command without any pre-configured scope.",
@@ -451,6 +469,12 @@
           "type": "string",
           "const": "allow-set-account-password",
           "markdownDescription": "Enables the set_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_active_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-active-video-source",
+          "markdownDescription": "Enables the set_active_video_source command without any pre-configured scope."
         },
         {
           "description": "Enables the set_embedded_bounds command without any pre-configured scope.",
@@ -471,10 +495,22 @@
           "markdownDescription": "Denies the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Denies the add_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-add-video-source",
+          "markdownDescription": "Denies the add_video_source command without any pre-configured scope."
+        },
+        {
           "description": "Denies the check_for_update command without any pre-configured scope.",
           "type": "string",
           "const": "deny-check-for-update",
           "markdownDescription": "Denies the check_for_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-video-source",
+          "markdownDescription": "Denies the check_video_source command without any pre-configured scope."
         },
         {
           "description": "Denies the choose_image_file command without any pre-configured scope.",
@@ -585,16 +621,16 @@
           "markdownDescription": "Denies the fill_site_form command without any pre-configured scope."
         },
         {
-          "description": "Denies the generate_kling_video command without any pre-configured scope.",
+          "description": "Denies the generate_video command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-generate-kling-video",
-          "markdownDescription": "Denies the generate_kling_video command without any pre-configured scope."
+          "const": "deny-generate-video",
+          "markdownDescription": "Denies the generate_video command without any pre-configured scope."
         },
         {
-          "description": "Denies the get_kling_video command without any pre-configured scope.",
+          "description": "Denies the get_video command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-get-kling-video",
-          "markdownDescription": "Denies the get_kling_video command without any pre-configured scope."
+          "const": "deny-get-video",
+          "markdownDescription": "Denies the get_video command without any pre-configured scope."
         },
         {
           "description": "Denies the has_account_password command without any pre-configured scope.",
@@ -615,12 +651,6 @@
           "markdownDescription": "Denies the install_update command without any pre-configured scope."
         },
         {
-          "description": "Denies the kling_key_status command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-kling-key-status",
-          "markdownDescription": "Denies the kling_key_status command without any pre-configured scope."
-        },
-        {
           "description": "Denies the list_emails command without any pre-configured scope.",
           "type": "string",
           "const": "deny-list-emails",
@@ -631,6 +661,12 @@
           "type": "string",
           "const": "deny-list-queue",
           "markdownDescription": "Denies the list_queue command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_video_sources command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-video-sources",
+          "markdownDescription": "Denies the list_video_sources command without any pre-configured scope."
         },
         {
           "description": "Denies the load_image_preview command without any pre-configured scope.",
@@ -675,22 +711,28 @@
           "markdownDescription": "Denies the open_kling command without any pre-configured scope."
         },
         {
-          "description": "Denies the open_kling_developer command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-open-kling-developer",
-          "markdownDescription": "Denies the open_kling_developer command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the open_kling_video command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-open-kling-video",
-          "markdownDescription": "Denies the open_kling_video command without any pre-configured scope."
-        },
-        {
           "description": "Denies the open_platform_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-platform-action",
           "markdownDescription": "Denies the open_platform_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-video",
+          "markdownDescription": "Denies the open_video command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_video_provider_keys command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-video-provider-keys",
+          "markdownDescription": "Denies the open_video_provider_keys command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_video_provider_site command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-video-provider-site",
+          "markdownDescription": "Denies the open_video_provider_site command without any pre-configured scope."
         },
         {
           "description": "Denies the post_to_x command without any pre-configured scope.",
@@ -711,22 +753,22 @@
           "markdownDescription": "Denies the read_email command without any pre-configured scope."
         },
         {
-          "description": "Denies the remove_kling_key command without any pre-configured scope.",
+          "description": "Denies the remove_video_source command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-remove-kling-key",
-          "markdownDescription": "Denies the remove_kling_key command without any pre-configured scope."
+          "const": "deny-remove-video-source",
+          "markdownDescription": "Denies the remove_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rename_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rename-video-source",
+          "markdownDescription": "Denies the rename_video_source command without any pre-configured scope."
         },
         {
           "description": "Denies the reveal_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "deny-reveal-account-password",
           "markdownDescription": "Denies the reveal_account_password command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the save_kling_key command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-save-kling-key",
-          "markdownDescription": "Denies the save_kling_key command without any pre-configured scope."
         },
         {
           "description": "Denies the save_workspace command without any pre-configured scope.",
@@ -739,6 +781,12 @@
           "type": "string",
           "const": "deny-set-account-password",
           "markdownDescription": "Denies the set_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_active_video_source command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-active-video-source",
+          "markdownDescription": "Denies the set_active_video_source command without any pre-configured scope."
         },
         {
           "description": "Denies the set_embedded_bounds command without any pre-configured scope.",

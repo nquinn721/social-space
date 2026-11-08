@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-active-video-source"
+description = "Enables the set_active_video_source command without any pre-configured scope."
+commands.allow = ["set_active_video_source"]
+
+[[permission]]
+identifier = "deny-set-active-video-source"
+description = "Denies the set_active_video_source command without any pre-configured scope."
+commands.deny = ["set_active_video_source"]
