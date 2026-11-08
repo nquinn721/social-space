@@ -55,6 +55,8 @@ fn main() {
         "import_sign_ins",
         "check_for_update",
         "install_update",
+        "update_progress",
+        "take_update_result",
     ];
     record_build_source();
     let attributes = tauri_build::Attributes::new()
