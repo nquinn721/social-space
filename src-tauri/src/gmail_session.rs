@@ -164,7 +164,7 @@ async fn fetch(app: &AppHandle) -> Result<Feed, String> {
         .cookies_for_url(feed_url.clone())
         .map_err(|_| "Could not read the Gmail sign-in from the app.")?;
     if cookies.is_empty() {
-        return Err("Not signed in to Gmail in the app yet. Use Sign in to Gmail in Settings.".into());
+        return Err("Not signed in to Gmail yet. Press Sign in to Gmail.".into());
     }
     let header = cookies
         .iter()
@@ -184,7 +184,7 @@ async fn fetch(app: &AppHandle) -> Result<Feed, String> {
         .map_err(|_| "Could not reach Gmail. Check your internet connection.")?;
     let status = response.status();
     if status.is_redirection() || status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return Err("Your Gmail sign-in in the app has expired. Sign in to Gmail again in Settings.".into());
+        return Err("Your Gmail sign-in has expired. Press Sign in to Gmail again.".into());
     }
     if !status.is_success() {
         return Err(format!("Gmail returned an error ({status})."));

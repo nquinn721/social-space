@@ -3,6 +3,7 @@ import { AppWindow, ArrowLeft, Check, Copy, Inbox, Mail, RefreshCw } from 'lucid
 import { emailConnection, listEmails, openGmailMessage, readEmail, type EmailConnection, type EmailMessage, type EmailSummary } from './emailService';
 import { findCode } from './profileService';
 import { errorText } from './ui';
+import GmailConnect from './GmailConnect';
 
 /** How often the inbox checks for new mail while it's on screen. */
 const AUTO_REFRESH_MS = 20_000;
@@ -54,7 +55,11 @@ export default function InboxList({ limit = 10, compact = false, onCode, autoRef
   }
   const code = open ? findCode(`${open.subject}\n${open.body}`) : null;
 
-  if (connection === null) return <div className="inbox empty">{error ? <div className="error-message" role="alert">{error}</div> : <p>Connect your email in Settings → Email inbox to see verification codes here.</p>}</div>;
+  if (connection === null) return <div className="inbox empty">
+    <div className="inbox-head"><Mail size={16}/><strong>Verification codes</strong></div>
+    {error && <div className="error-message" role="alert">{error}</div>}
+    <GmailConnect compact={compact} onConnected={(value) => { setError(''); setConnection(value); void refresh(); }}/>
+  </div>;
 
   const reader = open && <div className="inbox-message">
     {compact && <button type="button" className="text-button" onClick={() => setOpen(null)}><ArrowLeft size={14}/> Back to inbox</button>}
