@@ -1,33 +1,42 @@
 /* ───────────────── Design tokens ───────────────── */
 :root {
-  --bg: #0d0d11;
-  --surface: #15151b;
-  --surface-2: #1b1b22;
-  --surface-3: #23232c;
-  --surface-hover: #202029;
-  --border: #272730;
-  --border-strong: #363642;
-  --text: #f3f2f7;
-  --text-2: #b6b4c1;
-  --text-3: #85838f;
-  --accent: #a68bff;
-  --accent-hover: #b9a3ff;
-  --accent-ink: #160f2b;
-  --accent-text: #c9b8ff;
-  --accent-soft: rgba(166, 139, 255, 0.13);
-  --accent-line: rgba(166, 139, 255, 0.38);
-  --success: #4ad6a0;
-  --success-soft: rgba(74, 214, 160, 0.12);
-  --success-line: rgba(74, 214, 160, 0.32);
-  --warning: #f5c26b;
-  --warning-soft: rgba(245, 194, 107, 0.12);
-  --danger: #ff8a96;
-  --danger-soft: rgba(255, 138, 150, 0.11);
-  --danger-line: rgba(255, 138, 150, 0.34);
-  --instagram: #ff6fa3; --instagram-soft: rgba(255, 111, 163, 0.14);
-  --tiktok: #5ee6dc;    --tiktok-soft: rgba(94, 230, 220, 0.13);
-  --youtube: #ff6b73;   --youtube-soft: rgba(255, 107, 115, 0.14);
-  --x: #ecebf2;         --x-soft: rgba(236, 235, 242, 0.1);
+  /* Neutral black and greys, so the color splashes do the talking. */
+  --bg: #09090b;
+  --surface: #111113;
+  --surface-2: #17171a;
+  --surface-3: #212125;
+  --surface-hover: #1c1c20;
+  --border: #232327;
+  --border-strong: #323238;
+  --text: #fafafa;
+  --text-2: #a1a1aa;
+  --text-3: #6f6f78;
+  /* Vibrant splash: electric violet lead, hot pink and cyan around it. */
+  --pink: #ff3d8b;
+  --violet: #8b5cff;
+  --cyan: #19d3ff;
+  --lime: #b4f34a;
+  --amber: #ffb224;
+  --splash: linear-gradient(120deg, #ff3d8b 0%, #8b5cff 50%, #19d3ff 100%);
+  --splash-soft: linear-gradient(120deg, rgba(255, 61, 139, 0.16), rgba(139, 92, 255, 0.12) 50%, rgba(25, 211, 255, 0.1));
+  --accent: #8b5cff;
+  --accent-hover: #a07bff;
+  --accent-ink: #ffffff;
+  --accent-text: #b79cff;
+  --accent-soft: rgba(139, 92, 255, 0.14);
+  --accent-line: rgba(139, 92, 255, 0.45);
+  --success: #3ee39b;
+  --success-soft: rgba(62, 227, 155, 0.12);
+  --success-line: rgba(62, 227, 155, 0.35);
+  --warning: #ffb224;
+  --warning-soft: rgba(255, 178, 36, 0.13);
+  --danger: #ff4d6a;
+  --danger-soft: rgba(255, 77, 106, 0.12);
+  --danger-line: rgba(255, 77, 106, 0.4);
+  --instagram: #ff3d8b; --instagram-soft: rgba(255, 61, 139, 0.15);
+  --tiktok: #19e3e3;    --tiktok-soft: rgba(25, 227, 227, 0.13);
+  --youtube: #ff3b3b;   --youtube-soft: rgba(255, 59, 59, 0.15);
+  --x: #fafafa;         --x-soft: rgba(250, 250, 250, 0.09);
   --radius-sm: 7px;
   --radius: 10px;
   --radius-lg: 14px;
@@ -493,3 +502,50 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
   .kling-art { height: 150px; width: 100%; }
   .search-input { max-width: none; margin-left: 0; }
 }
+
+/* ───────────────── Vibrant accents ───────────────── */
+.primary-button { background: var(--splash); background-size: 160% 100%; background-position: 0 0; color: #fff; box-shadow: 0 4px 18px rgba(139, 92, 255, 0.35); transition: background-position 0.3s, box-shadow 0.2s, filter 0.2s; }
+.primary-button:hover:not(:disabled) { background: var(--splash); background-size: 160% 100%; background-position: 100% 0; box-shadow: 0 6px 24px rgba(255, 61, 139, 0.35); }
+.text-button { color: var(--cyan); }
+.brand strong span { background: var(--splash); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand-symbol span:nth-child(1) { background: var(--violet); }
+.brand-symbol span:nth-child(2) { background: var(--pink); }
+.brand-symbol span:nth-child(3) { background: var(--cyan); }
+.brand-symbol span:nth-child(4) { background: var(--amber); }
+.sidebar { background: #0c0c0e; }
+.nav-item.selected { background: linear-gradient(90deg, rgba(139, 92, 255, 0.2), rgba(139, 92, 255, 0.04)); }
+.nav-item.selected::before { background: var(--splash); }
+.greeting { background: var(--splash); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
+.avatar { background: var(--splash); color: #fff; }
+.stat { position: relative; overflow: hidden; }
+.stat::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; }
+.stat::after { content: ''; position: absolute; width: 120px; height: 120px; right: -40px; top: -60px; border-radius: 50%; filter: blur(40px); opacity: 0.35; pointer-events: none; }
+.stat:nth-child(1)::before, .stat:nth-child(1)::after { background: var(--pink); }
+.stat:nth-child(2)::before, .stat:nth-child(2)::after { background: var(--violet); }
+.stat:nth-child(3)::before, .stat:nth-child(3)::after { background: var(--cyan); }
+.stat:nth-child(4)::before, .stat:nth-child(4)::after { background: var(--lime); }
+.setup-card { background: var(--splash-soft), var(--surface); border-color: var(--accent-line); }
+.setup-progress span, .limit-bar span, .wizard-steps li.current .step-num { background: var(--splash); border-color: transparent; color: #fff; }
+.quick-action > svg:first-child { color: var(--cyan); }
+.quick-action:nth-child(1) > svg:first-child { color: var(--pink); }
+.quick-action:nth-child(2) > svg:first-child { color: var(--cyan); }
+.quick-action:nth-child(3) > svg:first-child { color: var(--violet); }
+.quick-action:nth-child(4) > svg:first-child { color: var(--amber); }
+.brand-card { transition: border-color 0.15s; }
+.brand-card:hover { border-color: var(--border-strong); }
+.platform-tile:hover, .quick-action:hover { border-color: var(--accent-line); }
+.idea-card { background: var(--splash-soft); border-color: var(--accent-line); }
+.idea-card label svg, .settings-card h2 svg, .credentials h3 svg, .inbox-head > svg { color: var(--pink); }
+.pill.active, .pill.success { box-shadow: inset 0 0 0 1px var(--success-line); }
+.code-chip { background: rgba(25, 211, 255, 0.1); border-color: rgba(25, 211, 255, 0.4); color: var(--cyan); }
+.code-chip:hover { background: var(--cyan); color: #00151c; }
+.inbox-code { background: rgba(25, 211, 255, 0.08); border-color: rgba(25, 211, 255, 0.4); }
+.inbox-code span { color: var(--cyan); }
+.platform-pick:has(input:checked) { background: var(--splash-soft); }
+.platform-pick:has(input:checked) .pick-check { background: var(--splash); border-color: transparent; color: #fff; }
+.wizard-rail { background: #0c0c0e; }
+.empty-state .empty-icon { background: var(--splash); color: #fff; }
+.dialog, .drawer { border-color: var(--border-strong); }
+.dialog.wizard { box-shadow: 0 0 0 1px rgba(139, 92, 255, 0.15), 0 30px 100px rgba(0, 0, 0, 0.7), 0 0 80px rgba(139, 92, 255, 0.12); }
+.update-banner { background: var(--splash-soft) !important; border-color: var(--accent-line) !important; }
+.limit-list li.over .limit-bar span { background: var(--danger); }
