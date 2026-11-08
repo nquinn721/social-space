@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
+import { planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
 import { chooseImageFile, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
@@ -9,7 +10,7 @@ import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 /** All new accounts verify through this inbox unless changed in the form. */
 export const DEFAULT_SIGNUP_EMAIL = 'softwings25@gmail.com';
 /** Details to start the form with, e.g. when adding an existing brand to more socials. */
-export type WizardPrefill = { label?: string; handle?: string } & AccountProfile;
+export type WizardPrefill = { label?: string; handle?: string; brandId?: string } & AccountProfile;
 type Step = 'details' | 'signup' | 'profile';
 const STEPS: { id: Step; label: string }[] = [{ id: 'details', label: 'Details' }, { id: 'signup', label: 'Sign up' }, { id: 'profile', label: 'Profile' }];
 type Outcome = 'created' | 'skipped';
@@ -36,7 +37,7 @@ function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: s
  * The social list comes from PLATFORMS, so a newly supported social is included automatically.
  * It only fills forms: Nate presses every button and solves any captcha himself.
  */
-export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill, resume }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill; resume?: Account[] }) {
+export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill, resume, existing = [] }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill; resume?: Account[]; existing?: Account[] }) {
   const [step, setStep] = useState<Step>(resume?.length ? 'signup' : 'details');
   const [chosen, setChosen] = useState<Platform[]>(initialPlatforms ?? PLATFORMS.map((platform) => platform.id));
   const [idea, setIdea] = useState('');
@@ -62,6 +63,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const preview = useImagePreview(imagePath);
   const ordered = PLATFORMS.map((platform) => platform.id).filter((id) => chosen.includes(id));
   const tightest = sharedBioLimit(ordered);
+  // Each social either adds this brand to a login that has room, or gets a new account with an unused email.
+  const plans = ordered.map((platform) => planPresence(existing, platform, label.trim() || handle || 'brand', signupEmail));
   const bioLength = bio.trim().length;
   const bioTooLong = bioLength > tightest.limit;
   const account = accounts[current];
@@ -125,7 +128,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     event.preventDefault();
     if (!label.trim() || !ordered.length || bioTooLong) return;
     void run(async () => {
-      const made = ordered.map((platform): Account => ({ ...createAccount(platform, label, handle, 'planned', ''), displayName: displayName.trim(), bio: bio.trim(), website: website.trim(), signupEmail: signupEmail.trim(), imagePath, birthday }));
+      const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, handle, 'planned', ''), displayName: displayName.trim(), bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, birthday, ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
       for (const item of made) await onSave(item);
       setAccounts(made);
       await ensureSharedPassword(made.map((item) => item.id));
@@ -204,6 +207,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <div><label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/></div>
                 <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
               </div>
+              {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
               <div className="field-row">
                 <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
                 <div/>
@@ -224,7 +228,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             </aside>
           </div>
         </div>
-        <div className="wizard-foot"><span className="foot-note">Accounts are saved as planned until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
+        <div className="wizard-foot"><span className="foot-note">Profiles are saved as not created yet until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
       </form>}
 
       {step !== 'details' && <>

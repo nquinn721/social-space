@@ -35,7 +35,7 @@ function greeting() {
 
 export default function OverviewPage({ workspace, loaded, onNavigate, onCreateAccounts, onAddAccount, onOpenAssistant }: Props) {
   const { email, model } = useConnections();
-  const brands = new Set(workspace.accounts.map((account) => account.label.trim().toLowerCase())).size;
+  const brands = workspace.brands?.length ?? new Set(workspace.accounts.map((account) => account.label.trim().toLowerCase())).size;
   const live = workspace.accounts.filter((account) => account.status === 'active').length;
   const platformsInUse = new Set(workspace.accounts.filter((account) => account.status === 'active').map((account) => account.platform)).size;
   const steps = [

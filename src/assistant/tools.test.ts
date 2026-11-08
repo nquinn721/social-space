@@ -26,7 +26,7 @@ function context(workspace: Workspace, approve = true) {
   };
   return ctx;
 }
-const workspace = (): Workspace => ({ businessName: 'Example LLC', accounts: [account], channels: [] });
+const workspace = (): Workspace => ({ businessName: 'Example LLC', brands: [], accounts: [account], channels: [] });
 
 beforeEach(() => vi.resetAllMocks());
 

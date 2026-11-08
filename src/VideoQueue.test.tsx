@@ -14,7 +14,7 @@ vi.mock('./queueService', () => ({
 vi.mock('./service', () => ({ openPlatformAction: vi.fn() }));
 
 const workspace: Workspace = {
-  businessName: 'Example LLC', accounts: [],
+  businessName: 'Example LLC', brands: [], accounts: [],
   channels: [
     { id: 'youtube-1', platform: 'youtube', name: 'Video channel', handle: 'videos', accountId: null, notes: '' },
     { id: 'instagram-1', platform: 'instagram', name: 'Shop reels', handle: 'shop', accountId: null, notes: '' },
