@@ -6,6 +6,7 @@ mod browser;
 mod instagram;
 mod kling;
 mod queue;
+mod updater;
 mod x_integration;
 
 const WORKSPACE_FILE: &str = "workspace.json";
@@ -226,7 +227,9 @@ pub fn run() {
             queue::add_queue_job,
             queue::complete_queue_job,
             queue::delete_queue_job,
-            queue::choose_video_file
+            queue::choose_video_file,
+            updater::check_for_update,
+            updater::install_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Manager");
