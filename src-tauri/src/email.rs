@@ -33,6 +33,14 @@ struct Credential {
 pub struct EmailConnection {
     host: String,
     username: String,
+    /// "imap" for an app-password mailbox, "gmail" for the in-app Gmail sign-in.
+    kind: &'static str,
+}
+
+impl EmailConnection {
+    pub fn gmail(address: String) -> Self {
+        Self { host: "Gmail sign-in in the app".into(), username: address, kind: "gmail" }
+    }
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -256,15 +264,20 @@ fn summary(fetch: &imap::types::Fetch) -> Option<EmailSummary> {
 }
 
 #[tauri::command]
-pub fn email_connection() -> Result<Option<EmailConnection>, String> {
+pub fn email_connection(app: tauri::AppHandle) -> Result<Option<EmailConnection>, String> {
+    if let Some(address) = crate::gmail_session::active(&app) {
+        return Ok(Some(EmailConnection::gmail(address)));
+    }
     Ok(load()?.map(|credential| EmailConnection {
         host: credential.host,
         username: credential.username,
+        kind: "imap",
     }))
 }
 
 #[tauri::command]
 pub async fn connect_email(
+    app: tauri::AppHandle,
     host: String,
     port: Option<u16>,
     username: String,
@@ -281,9 +294,11 @@ pub async fn connect_email(
         let mut session = open(&credential)?;
         let _ = session.logout();
         store(&credential)?;
+        crate::gmail_session::forget(&app)?;
         Ok(EmailConnection {
             host: credential.host,
             username: credential.username,
+            kind: "imap",
         })
     })
     .await
@@ -291,7 +306,10 @@ pub async fn connect_email(
 }
 
 #[tauri::command]
-pub fn disconnect_email() -> Result<(), String> {
+pub fn disconnect_email(app: tauri::AppHandle) -> Result<(), String> {
+    if crate::gmail_session::active(&app).is_some() {
+        return crate::gmail_session::forget(&app);
+    }
     #[cfg(windows)]
     return match entry()?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -303,12 +321,21 @@ pub fn disconnect_email() -> Result<(), String> {
 
 #[tauri::command]
 pub async fn list_emails(
+    app: tauri::AppHandle,
     limit: Option<usize>,
     unread_only: Option<bool>,
     search: Option<String>,
 ) -> Result<Vec<EmailSummary>, String> {
-    let credential = required()?;
     let limit = limit.unwrap_or(10).clamp(1, MAX_LIST);
+    if crate::gmail_session::active(&app).is_some() {
+        // Gmail's feed only holds unread mail, so every item is unread.
+        let entries = crate::gmail_session::list(&app, limit, search.as_deref()).await?;
+        return Ok(entries
+            .into_iter()
+            .map(|entry| EmailSummary { uid: entry.uid, from: entry.from, subject: entry.subject, date: entry.date, unread: true })
+            .collect());
+    }
+    let credential = required()?;
     let query = search_query(search.as_deref(), unread_only.unwrap_or(false))?;
     tauri::async_runtime::spawn_blocking(move || {
         let failed = "Could not read your inbox.";
@@ -335,7 +362,16 @@ pub async fn list_emails(
 }
 
 #[tauri::command]
-pub async fn read_email(uid: u32) -> Result<EmailMessage, String> {
+pub async fn read_email(app: tauri::AppHandle, uid: u32) -> Result<EmailMessage, String> {
+    if let Some(address) = crate::gmail_session::active(&app) {
+        let entry = crate::gmail_session::cached(uid).ok_or("Refresh the inbox, then open the email again.")?;
+        let body = if entry.link.is_empty() {
+            entry.preview
+        } else {
+            format!("{}\n\n(Gmail only shares a preview here. Open Gmail in the app to read the whole email.)", entry.preview)
+        };
+        return Ok(EmailMessage { uid, from: entry.from, to: address, subject: entry.subject, date: entry.date, body });
+    }
     let credential = required()?;
     tauri::async_runtime::spawn_blocking(move || {
         let failed = "Could not open that email.";

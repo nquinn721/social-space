@@ -502,6 +502,13 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
   .kling-art { height: 150px; width: 100%; }
   .search-input { max-width: none; margin-left: 0; }
 }
+.gmail-signin { border: 1px solid var(--border-strong); border-radius: 10px; padding: 14px 16px; margin: 12px 0; }
+.gmail-signin h3 { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 0 0 6px; }
+.gmail-signin p { margin: 0 0 12px; }
+.pill-tag { font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 7px; }
+.row-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.imap-option summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin: 6px 0; }
+.imap-option form { margin-top: 8px; }
 
 /* ───────────────── Vibrant accents ───────────────── */
 .primary-button { background: var(--splash); background-size: 160% 100%; background-position: 0 0; color: #fff; box-shadow: 0 4px 18px rgba(139, 92, 255, 0.35); transition: background-position 0.3s, box-shadow 0.2s, filter 0.2s; }
