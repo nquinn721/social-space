@@ -6,6 +6,7 @@ mod account_passwords;
 mod autofill;
 mod browser;
 mod email;
+mod embedded;
 mod gmail_session;
 mod instagram;
 mod kling;
@@ -57,6 +58,8 @@ struct Account {
     signup_email: String,
     #[serde(default)]
     image_path: String,
+    #[serde(default)]
+    birthday: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -86,7 +89,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     for account in &workspace.accounts {
         if account.id.trim().is_empty()
             || !ids.insert(&account.id)
-            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path]
+            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path, &account.birthday]
                 .iter()
                 .any(|field| field.len() > MAX_FIELD_LENGTH)
         {
@@ -253,6 +256,9 @@ pub fn run() {
             gmail_session::open_gmail_sign_in,
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
+            embedded::embed_platform_page,
+            embedded::set_embedded_bounds,
+            embedded::close_embedded_page,
             autofill::fill_site_form,
             autofill::choose_image_file,
             autofill::load_image_preview,
@@ -286,6 +292,7 @@ mod tests {
             website: String::new(),
             signup_email: String::new(),
             image_path: String::new(),
+            birthday: String::new(),
         }
     }
 

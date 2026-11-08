@@ -45,10 +45,13 @@ pub struct FormFields {
     website: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     verification_code: Option<String>,
+    /// YYYY-MM-DD, filled into birthday dropdowns or date fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    birthday: Option<String>,
 }
 
 impl FormFields {
-    fn values(&self) -> [&Option<String>; 10] {
+    fn values(&self) -> [&Option<String>; 11] {
         [
             &self.email,
             &self.phone,
@@ -60,6 +63,7 @@ impl FormFields {
             &self.bio,
             &self.website,
             &self.verification_code,
+            &self.birthday,
         ]
     }
 }
@@ -93,7 +97,7 @@ fn remember(label: &str, script: Option<String>) {
 }
 
 /// Called by site windows after each page finishes loading.
-pub fn page_loaded(window: &tauri::WebviewWindow) {
+pub fn page_loaded(window: &tauri::Webview) {
     let script = PENDING
         .lock()
         .ok()
@@ -158,6 +162,17 @@ fn validate(fields: &FormFields) -> Result<(), String> {
     if too_long {
         return Err("A form value is too long.".into());
     }
+    if let Some(birthday) = fields.birthday.as_deref() {
+        let parts: Vec<&str> = birthday.split('-').collect();
+        let valid = parts.len() == 3
+            && parts[0].len() == 4
+            && parts.iter().all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+            && (1..=12).contains(&parts[1].parse::<u32>().unwrap_or(0))
+            && (1..=31).contains(&parts[2].parse::<u32>().unwrap_or(0));
+        if !valid {
+            return Err("Birthday must be a date like 1995-04-23.".into());
+        }
+    }
     Ok(())
 }
 
@@ -213,6 +228,30 @@ const FILL_SCRIPT: &str = r#"function (data) {
       used.add(el);
       setValue(el, value);
       filled.push(key);
+    }
+    if (data.fields.birthday) {
+      const [year, month, day] = data.fields.birthday.split('-').map(Number);
+      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const unset = (el) => el.selectedIndex <= 0 || el.value === '' || el.value === '0';
+      const choose = (el, pick) => {
+        const option = Array.from(el.options).find(pick);
+        if (!option) return false;
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, option.value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.style.outline = '2px solid #8b5cf6';
+        return true;
+      };
+      let picked = false;
+      for (const el of Array.from(document.querySelectorAll('select')).filter((el) => visible(el) && !el.disabled && unset(el))) {
+        const text = (describe(el) + ' ' + (el.title || '')).toLowerCase();
+        const label = (option) => option.text.trim().toLowerCase();
+        if (/month/.test(text)) picked = choose(el, (o) => Number(o.value) === month || label(o).startsWith(months[month - 1])) || picked;
+        else if (/year/.test(text)) picked = choose(el, (o) => o.value === String(year) || label(o) === String(year)) || picked;
+        else if (/day/.test(text)) picked = choose(el, (o) => Number(o.value) === day || label(o) === String(day)) || picked;
+      }
+      for (const el of fields.filter((el) => (el.type || '').toLowerCase() === 'date')) { setValue(el, data.fields.birthday); picked = true; }
+      if (picked) filled.push('birthday');
     }
     if (data.password) {
       const boxes = fields.filter((el) => (el.type || '').toLowerCase() === 'password');
@@ -276,10 +315,12 @@ pub fn fill_site_form(
         return Err("That window cannot be filled.".into());
     }
     let window = app
-        .get_webview_window(&window_label)
-        .ok_or("That window is closed. Open the page again.")?;
-    let url = window.url().map_err(|_| "Could not read the window address.")?;
-    if !platform_host(&url) {
+        .get_webview(&window_label)
+        .ok_or("That page is closed. Open it again.")?;
+    let url = window.url().map_err(|_| "Could not read the page address.")?;
+    // Right after opening, the page may still be blank; it is filled when it finishes loading.
+    let still_loading = url.scheme() == "about" || url.host_str().is_none();
+    if !still_loading && !platform_host(&url) {
         return Err("Forms can only be filled on X, Instagram, TikTok, or YouTube pages.".into());
     }
     let image = match image_path.as_deref().filter(|path| !path.is_empty()) {
@@ -297,6 +338,10 @@ pub fn fill_site_form(
     };
     let watch = keep_filling.unwrap_or(false);
     let script = fill_script(&FillPayload { fields: &fields, image, password, watch })?;
+    if still_loading {
+        remember(&window_label, Some(script));
+        return Ok(());
+    }
     remember(&window_label, watch.then(|| script.clone()));
     window
         .eval(&script)
@@ -359,6 +404,16 @@ mod tests {
         assert_eq!(image_mime(Path::new("me.jpeg")), Some("image/jpeg"));
         assert_eq!(image_mime(Path::new("me.exe")), None);
         assert!(read_image("/definitely/missing.png").is_err());
+    }
+
+    #[test]
+    fn birthdays_must_be_real_dates() {
+        let ok = FormFields { birthday: Some("1995-04-23".into()), ..Default::default() };
+        assert!(validate(&ok).is_ok());
+        for bad in ["1995-13-01", "95-04-23", "1995-04-00", "1995/04/23", "x"] {
+            let fields = FormFields { birthday: Some(bad.into()), ..Default::default() };
+            assert!(validate(&fields).is_err(), "{bad}");
+        }
     }
 
     #[test]
