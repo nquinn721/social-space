@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AppWindow, ChevronRight, Plus, Search, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
+import { AppWindow, ArrowLeft, ChevronRight, Plus, Search, Trash2, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type Workspace } from '../model';
 import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
@@ -21,8 +21,12 @@ type Props = {
   onOpen: (platform: Platform, action: PlatformAction) => void;
   /** Saves a workspace rebuilt from a sign-in backup. */
   onRestore?: (next: Workspace, message: string) => Promise<boolean | undefined>;
+  onOpenLibrary?: () => void;
+  /** Removes a profile from the app (asks first). It never deletes anything on the social. */
+  onRemoveAccount?: (account: Account) => void;
+  /** Removes a brand with all its profiles and videos from the app (asks first). */
+  onRemoveBrand?: (brand: Brand) => void;
 };
-type Filter = 'all' | Platform;
 type BrandGroup = { key: string; brand: Brand; accounts: Account[] };
 const ORDER = PLATFORMS.map((platform) => platform.id);
 const byPlatform = (a: Account, b: Account) => ORDER.indexOf(a.platform) - ORDER.indexOf(b.platform);
@@ -33,78 +37,98 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore }: Props) {
-  const [filter, setFilter] = useState<Filter>('all');
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand }: Props) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<'brands' | 'sign-ins'>('brands');
+  const [openId, setOpenId] = useState<string | null>(null);
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
   const issues = useMemo(() => presenceIssues(all), [all]);
   const shown = useMemo(() => {
     const text = query.trim().toLowerCase().replace(/^@/, '');
-    const matches = (account: Account) => (filter === 'all' || account.platform === filter)
-      && (!text || account.label.toLowerCase().includes(text) || account.handle.toLowerCase().includes(text) || (account.displayName ?? '').toLowerCase().includes(text));
-    return groups.map((group) => ({ ...group, visible: group.accounts.filter(matches) })).filter((group) => group.visible.length > 0);
-  }, [groups, filter, query]);
+    return groups.filter((group) => !text || group.brand.name.toLowerCase().includes(text)
+      || group.accounts.some((account) => account.handle.toLowerCase().includes(text) || (account.displayName ?? '').toLowerCase().includes(text)));
+  }, [groups, query]);
+  const open = groups.find((group) => group.brand.id === openId);
 
   const actions = <>
-    <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an account</button>
-    <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> Create accounts</button>
+    <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
+    <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
   </>;
+  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button></div>;
+
+  if (open && tab === 'brands') {
+    const { brand, accounts } = open;
+    const missing = PLATFORMS.filter((platform) => !accounts.some((account) => account.platform === platform.id));
+    const notCreated = accounts.filter((account) => account.status !== 'active');
+    const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
+    const baseEmail = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
+    const categories = (workspace.categories ?? []).filter((category) => category.brandId === brand.id);
+    const videos = (workspace.videos ?? []).filter((video) => video.brandId === brand.id);
+    return <>
+      <button type="button" className="text-button back-link" onClick={() => setOpenId(null)}><ArrowLeft size={15}/> All brands</button>
+      <div className="brand-hero">
+        <AccountAvatar account={lead} name={brand.name} size="lg"/>
+        <div><h1>{brand.name}</h1><p>{accounts.length - notCreated.length} of {accounts.length} {accounts.length === 1 ? 'profile' : 'profiles'} live{missing.length ? ` · not on ${missing.map((platform) => platform.name).join(', ')} yet` : ''}</p></div>
+        {notCreated.length > 1 && onSignUp && <button className="primary-button" disabled={!loaded || busy} onClick={() => onSignUp(notCreated)}><AppWindow size={15}/> Create all {notCreated.length} on the socials</button>}
+      </div>
+      <section className="brand-card" aria-label={`${brand.name} profiles`}>
+        <div className="brand-section-title"><h2>Profiles</h2></div>
+        <div className="account-rows">{accounts.map((account) => {
+          const name = getPlatform(account.platform).name;
+          const live = account.status === 'active';
+          const problems = issues.filter((issue) => issue.accountId === account.id);
+          return <div key={account.id} className="account-row-wrap">
+            <button className="account-row" onClick={() => onEditAccount(account)}>
+              <BrandMark platform={account.platform}/>
+              <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}</div>
+              <span className={`pill ${account.status}`}><span className="dot"/>{live ? 'Live' : 'Not created yet'}</span>
+              <ChevronRight size={16}/>
+            </button>
+            {!live && onSignUp && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => onSignUp([account])}><AppWindow size={14}/> Create on {name}</button>}
+            {!live && onAlreadyCreated && <button className="ghost-button small-button already-made" disabled={!loaded || busy} onClick={() => onAlreadyCreated(account)}>I already made it</button>}
+            {!live && onRemoveAccount && <button className="icon-button remove-profile" aria-label={`Delete ${name} profile`} title="Delete this profile from the app" disabled={!loaded || busy} onClick={() => onRemoveAccount(account)}><Trash2 size={15}/></button>}
+          </div>;
+        })}</div>
+        {missing.length > 0 && <div className="add-platforms"><span>Add a profile on</span>{missing.map((platform) => {
+          const plan = planPresence(all, platform.id, brand.name, baseEmail);
+          return <button key={platform.id} className="chip-button" title={plan.reason} disabled={!loaded || busy} onClick={() => onCreateAccounts([platform.id], { brandId: brand.id, label: brand.name, handle: lead?.handle, displayName: lead?.displayName, bio: lead?.bio, website: lead?.website, signupEmail: baseEmail, imagePath: lead?.imagePath, birthday: lead?.birthday })}><Plus size={13}/> {platform.name}</button>;
+        })}</div>}
+      </section>
+      <section className="brand-card brand-videos" aria-label={`${brand.name} videos`}>
+        <div className="brand-section-title"><h2>Videos</h2>{onOpenLibrary && <button type="button" className="text-button" onClick={onOpenLibrary}>Open video library <ChevronRight size={15}/></button>}</div>
+        <p className="brand-videos-summary">{videos.length} {videos.length === 1 ? 'video' : 'videos'} in {categories.length} {categories.length === 1 ? 'category' : 'categories'}{categories.length ? `: ${categories.map((category) => category.name).join(', ')}` : ''}</p>
+      </section>
+      <SignIns workspace={{ ...workspace, accounts }} busy={busy} onEdit={onEditAccount} onRestore={async () => false} showBackup={false}/>
+      {onRemoveBrand && <div className="danger-zone"><button type="button" className="remove-button" disabled={!loaded || busy} onClick={() => onRemoveBrand(brand)}><Trash2 size={14}/> Delete {brand.name}</button><small>{accounts.some((account) => account.status === 'active') ? 'Live profiles stay on the socials; only their saved details here are removed.' : 'Removes the brand, its profiles and its videos from the app.'}</small></div>}
+    </>;
+  }
 
   return <>
-    <PageHeader eyebrow="Your presence" title="Accounts" description="Each brand and its profile on every social. Profiles marked Not created yet are only saved here; create them on the social in one click." actions={workspace.accounts.length ? actions : undefined}/>
-    <div className="segmented account-tabs" role="tablist" aria-label="Accounts view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button></div>
-    {tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : workspace.accounts.length === 0 ? <section className="card empty-state">
+    <PageHeader eyebrow="Your brands" title="Brands" description="Each brand gets one profile on every social. Open a brand to create its profiles, see its sign-ins and its videos." actions={actions}/>
+    {tabs}
+    {tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
-      <strong>No accounts yet</strong>
-      <p>Create accounts walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have accounts? Add them here to keep their sign-in details together. Moving to a new PC? Restore your backup under Sign-ins.</p>
+      <strong>No brands yet</strong>
+      <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>
       <div className="heading-buttons">{actions}</div>
     </section> : <>
-      <div className="toolbar">
-        <div className="segmented" role="group" aria-label="Filter accounts by social">
-          <button type="button" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>All <span>{workspace.accounts.length}</span></button>
-          {PLATFORMS.map((platform) => <button type="button" key={platform.id} aria-pressed={filter === platform.id} onClick={() => setFilter(platform.id)}>{platform.name} <span>{workspace.accounts.filter((account) => account.platform === platform.id).length}</span></button>)}
-        </div>
-        <label className="search-input"><span className="sr-only">Search accounts</span><Search size={15}/><input type="search" placeholder="Search by name or handle" value={query} onChange={(event) => setQuery(event.target.value)}/></label>
-      </div>
-      <div className="brand-list">
-        {shown.length === 0 && <p className="footnote">No accounts match. Try another filter or search.</p>}
-        {shown.map(({ key, brand, accounts, visible }) => {
-          const missing = PLATFORMS.filter((platform) => !accounts.some((account) => account.platform === platform.id));
-          const notCreated = accounts.filter((account) => account.status !== 'active');
-          const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
-          const handles = [...new Set(accounts.map((account) => account.handle).filter(Boolean))];
-          const baseEmail = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
-          return <section className="brand-card" key={key} aria-label={brand.name}>
-            <div className="brand-card-head">
-              <AccountAvatar account={lead} name={brand.name} size="lg"/>
-              <div><h2>{brand.name}</h2><p>{handles.length ? handles.map((handle) => `@${handle}`).join(', ') : 'No username yet'} · {accounts.length - notCreated.length} of {accounts.length} live</p></div>
-              {notCreated.length > 1 && onSignUp ? <button className="primary-button small-button" disabled={!loaded || busy} onClick={() => onSignUp(notCreated)}><AppWindow size={14}/> Create all {notCreated.length} on the socials</button>
-                : <div className="brand-platforms">{accounts.map((account) => <BrandMark key={account.id} platform={account.platform} small/>)}</div>}
-            </div>
-            <div className="account-rows">{visible.map((account) => {
-              const name = getPlatform(account.platform).name;
-              const live = account.status === 'active';
-              const problems = issues.filter((issue) => issue.accountId === account.id);
-              return <div key={account.id} className="account-row-wrap">
-                <button className="account-row" onClick={() => onEditAccount(account)}>
-                  <BrandMark platform={account.platform}/>
-                  <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}</div>
-                  <span className={`pill ${account.status}`}><span className="dot"/>{live ? 'Live' : 'Not created yet'}</span>
-                  <ChevronRight size={16}/>
-                </button>
-                {!live && onSignUp && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => onSignUp([account])}><AppWindow size={14}/> Create on {name}</button>}
-                {!live && onAlreadyCreated && <button className="ghost-button small-button already-made" disabled={!loaded || busy} onClick={() => onAlreadyCreated(account)}>I already made it</button>}
-              </div>;
-            })}</div>
-            {missing.length > 0 && <div className="add-platforms"><span>Add a profile on</span>{missing.map((platform) => {
-              const plan = planPresence(all, platform.id, brand.name, baseEmail);
-              return <button key={platform.id} className="chip-button" title={plan.reason} disabled={!loaded || busy} onClick={() => onCreateAccounts([platform.id], { brandId: brand.id, label: brand.name, handle: lead?.handle, displayName: lead?.displayName, bio: lead?.bio, website: lead?.website, signupEmail: baseEmail, imagePath: lead?.imagePath, birthday: lead?.birthday })}><Plus size={13}/> {platform.name}</button>;
-            })}</div>}
-          </section>;
-        })}
-      </div>
+      <div className="toolbar"><label className="search-input"><span className="sr-only">Search brands</span><Search size={15}/><input type="search" placeholder="Search brands or usernames" value={query} onChange={(event) => setQuery(event.target.value)}/></label></div>
+      {shown.length === 0 && <p className="footnote">No brands match that search.</p>}
+      <div className="brand-grid">{shown.map(({ brand, accounts }) => {
+        const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
+        const live = accounts.filter((account) => account.status === 'active').length;
+        return <button type="button" key={brand.id} className="brand-tile" aria-label={`Open ${brand.name}`} onClick={() => setOpenId(brand.id)}>
+          <AccountAvatar account={lead} name={brand.name} size="lg"/>
+          <strong>{brand.name}</strong>
+          <small>{live} of {accounts.length} live</small>
+          <span className="tile-socials">{PLATFORMS.map((platform) => {
+            const profile = accounts.find((account) => account.platform === platform.id);
+            const state = !profile ? 'none' : profile.status === 'active' ? 'live' : 'planned';
+            return <span key={platform.id} className={`tile-social ${state}`} title={`${platform.name}: ${state === 'live' ? 'Live' : state === 'planned' ? 'Not created yet' : 'No profile'}`}><BrandMark platform={platform.id} small/></span>;
+          })}</span>
+        </button>;
+      })}</div>
     </>}
     <details className="more-tools"><summary>Open a social's own site</summary>
     <div className="platform-shortcuts" style={{ marginTop: 0 }}>{PLATFORMS.map((platform) => <div className="platform-shortcut" key={platform.id}>

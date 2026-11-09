@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, Eye, EyeOff, KeyRound, Pencil } from 'lucide-react';
 import type { Account } from './model';
-import { hasAccountPassword, revealAccountPassword, setAccountPassword } from './profileService';
+import { hasAccountPassword, onPasswordSaved, revealAccountPassword, setAccountPassword } from './profileService';
 
 function errorText(reason: unknown) { return typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : 'Something went wrong.'; }
 
@@ -14,7 +14,11 @@ export default function AccountCredentials({ account }: { account: Account }) {
   const [changing, setChanging] = useState(false);
   const [copied, setCopied] = useState('');
   const [error, setError] = useState('');
-  useEffect(() => { hasAccountPassword(account.id).then(setHasPassword).catch((reason) => { setHasPassword(false); setError(errorText(reason)); }); }, [account.id]);
+  useEffect(() => {
+    const check = () => { hasAccountPassword(account.id).then(setHasPassword).catch((reason) => { setHasPassword(false); setError(errorText(reason)); }); setPassword(''); };
+    check();
+    return onPasswordSaved(account.id, check);
+  }, [account.id]);
   async function load() { if (password) return password; const value = await revealAccountPassword(account.id); setPassword(value); return value; }
   async function toggle() { setError(''); try { if (!visible) await load(); setVisible(!visible); } catch (reason) { setError(errorText(reason)); } }
   async function copy(label: string, value: string | (() => Promise<string>)) {
