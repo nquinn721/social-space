@@ -17,7 +17,9 @@ export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80
 /** A kind of video inside a brand, e.g. "Rabbit". */
 export type VideoCategory = { id: string; brandId: string; name: string };
 /** One video of a category. It goes to every social of its brand; posted lists where it is up. */
-export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number };
+/** An AI video source still making a library video. Cleared once the finished file is saved. */
+export type VideoGeneration = { sourceId: string; sourceName: string; provider: 'kling' | 'grok'; taskId: string; prompt: string; status: 'working' | 'failed'; message?: string };
+export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration };
 export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[] };
 export const EMPTY_WORKSPACE: Workspace = { businessName: '', brands: [], accounts: [], channels: [] };
 export const PLATFORMS: { id: Platform; name: string; description: string; color: string; mark: string; postLabel: string }[] = [

@@ -23,3 +23,5 @@ export async function openProviderSite(provider: VideoProvider): Promise<void> {
 export async function generateVideo(sourceId: string | null, prompt: string, aspectRatio: string, duration: number): Promise<StartedVideo> { desktopOnly(); return invoke('generate_video', { sourceId, prompt, aspectRatio, duration }); }
 export async function getVideo(sourceId: string, taskId: string): Promise<VideoTask> { desktopOnly(); return invoke('get_video', { sourceId, taskId }); }
 export async function openVideo(sourceId: string, taskId: string): Promise<void> { desktopOnly(); return invoke('open_video', { sourceId, taskId }); }
+/** Downloads a finished video into Videos\SocialSpace\<brand>\<category> and returns the saved file's path. */
+export async function saveGeneratedVideo(sourceId: string, taskId: string, brand: string, category: string, title: string): Promise<string> { desktopOnly(); return invoke('save_generated_video', { sourceId, taskId, brand, category, title }); }
