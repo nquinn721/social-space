@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { AlertCircle, AppWindow, Check, ChevronDown, Film, FolderOpen, Loader2, Plus, RotateCw, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Loader2, Play, Plus, RotateCw, Sparkles, Trash2, X } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Platform, type PlatformAction, type Video, type VideoCategory, type Workspace } from './model';
 import { chooseVideoFile } from './queueService';
 import { BrandMark, errorText, PageHeader } from './ui';
 import { ASPECT_RATIOS, PROVIDERS } from './videoProviders';
 import { DESKTOP_ONLY, listVideoSources, type SourcesState } from './videoSourcesService';
 import { useVideoGenerations } from './useVideoGenerations';
+import { isLocalVideo, openVideoFile, showVideoInFolder, videoPreviewUrl } from './videoFileService';
 import './library.css';
 
 type Props = {
@@ -125,10 +126,13 @@ function VideoRow({ video, socials, busy, disabled, progress, onToggle, onOpen, 
   const job = video.generation;
   const next = socials.find((platform) => !video.posted.includes(platform));
   const fileName = video.mediaSource.split(/[\\/]/).pop();
+  const playable = !job && isLocalVideo(video.mediaSource);
+  const [watching, setWatching] = useState(false);
   return <li className={`library-video ${job ? `is-${job.status}` : ''}`} aria-label={video.title}>
-    <div className="library-video-icon">{job?.status === 'working' ? <Loader2 size={16} className="spin"/> : job?.status === 'failed' ? <AlertCircle size={16}/> : <Film size={16}/>}</div>
+    {playable ? <button type="button" className="library-video-icon library-play" aria-label={`${watching ? 'Hide' : 'Play'} ${video.title}`} aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <X size={16}/> : <Play size={16}/>}</button>
+      : <div className="library-video-icon">{job?.status === 'working' ? <Loader2 size={16} className="spin"/> : job?.status === 'failed' ? <AlertCircle size={16}/> : <Film size={16}/>}</div>}
     <div className="library-video-body">
-      <strong>{video.title}</strong>
+      {playable ? <button type="button" className="library-video-title" onClick={() => setWatching(!watching)}>{video.title}</button> : <strong>{video.title}</strong>}
       {job?.status === 'working' && <small>Being made by {job.sourceName} ({PROVIDERS[job.provider]?.name ?? job.provider}){progress ? ` · ${progress}` : ''}. Saves here when ready.</small>}
       {job?.status === 'failed' && <small className="library-failed">{job.message || `${job.sourceName} could not make this video.`}</small>}
       {!job && <small title={video.mediaSource}>{fileName || 'No file yet'}{socials.length > 0 && ` · ${video.posted.filter((platform) => socials.includes(platform)).length} of ${socials.length} socials`}</small>}
@@ -142,7 +146,28 @@ function VideoRow({ video, socials, busy, disabled, progress, onToggle, onOpen, 
       {job && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={onRetry}><RotateCw size={14}/> {job.status === 'failed' ? 'Try again' : 'Check now'}</button>}
       <button type="button" className="icon-button" aria-label={`Remove ${video.title}`} disabled={disabled} onClick={onRemove}><Trash2 size={15}/></button>
     </div>
+    {playable && watching && <VideoPlayer path={video.mediaSource} title={video.title}/>}
   </li>;
+}
+
+/** Plays a video saved on this PC right in the library. */
+function VideoPlayer({ path, title }: { path: string; title: string }) {
+  const [src, setSrc] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    videoPreviewUrl(path).then((url) => { if (live) setSrc(url); }).catch((reason) => { if (live) setError(errorText(reason, 'Could not open this video.')); });
+    return () => { live = false; };
+  }, [path]);
+  const act = (action: (file: string) => Promise<void>) => () => { setError(''); action(path).catch((reason) => setError(errorText(reason))); };
+  return <div className="library-player">
+    {src ? <video src={src} controls autoPlay aria-label={title} onError={() => setError('This video could not be played here. Try opening it in your player.')}/> : !error && <div className="library-player-loading"><Loader2 size={18} className="spin"/></div>}
+    <div className="library-player-buttons">
+      <button type="button" className="ghost-button small-button" onClick={act(openVideoFile)}><ExternalLink size={14}/> Open in player</button>
+      <button type="button" className="ghost-button small-button" onClick={act(showVideoInFolder)}><FolderOpen size={14}/> Show in folder</button>
+    </div>
+    {error && <div className="error-message" role="alert">{error}</div>}
+  </div>;
 }
 
 type AddProps = { brandId: string; category: VideoCategory; disabled: boolean; onSave: (video: Video) => Promise<boolean | undefined>; onClose: () => void };

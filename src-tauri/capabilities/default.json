@@ -23,6 +23,8 @@
     "allow-get-video",
     "allow-open-video",
     "allow-save-generated-video",
+    "allow-preview-video-file",
+    "allow-open-video-file",
     "allow-connect-x",
     "allow-x-connection",
     "allow-disconnect-x",

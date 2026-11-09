@@ -17,6 +17,7 @@ mod kling;
 mod ollama;
 mod queue;
 mod updater;
+mod video_files;
 mod video_gen;
 mod video_sources;
 mod x_integration;
@@ -341,6 +342,8 @@ pub fn run() {
             video_gen::get_video,
             video_gen::open_video,
             video_gen::save_generated_video,
+            video_files::preview_video_file,
+            video_files::open_video_file,
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
