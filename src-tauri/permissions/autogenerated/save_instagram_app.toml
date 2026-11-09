@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-instagram-app"
+description = "Enables the save_instagram_app command without any pre-configured scope."
+commands.allow = ["save_instagram_app"]
+
+[[permission]]
+identifier = "deny-save-instagram-app"
+description = "Denies the save_instagram_app command without any pre-configured scope."
+commands.deny = ["save_instagram_app"]

@@ -44,8 +44,18 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
     if (!account) return;
     const current = { ...account, handle: normalizeHandle(handle), displayName, bio, website, imagePath };
     const id = await openPlatformWindow(account.platform, 'manage');
-    await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, keepFilling: true });
+    // A live account already shows its old details, so those are replaced (once each) instead of skipped.
+    await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, keepFilling: true, replace: account.status === 'active' });
     setNote(`Opened ${getPlatform(account.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
+  });
+  // Instagram edits name and username in Accounts Center, not on the profile page.
+  const fillIdentity = () => run(async () => {
+    if (!account) return;
+    const name = displayName.trim() || label.trim();
+    const fields = { username: normalizeHandle(handle), fullName: name };
+    const id = await openPlatformWindow(account.platform, 'identity');
+    await fillSiteForm(id, Object.fromEntries(Object.entries(fields).filter(([, value]) => value)), { keepFilling: true, replace: true });
+    setNote('Opened Instagram Accounts Center. Choose your profile, then Name or Username: the new value is filled in for you to check and save.');
   });
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -72,6 +82,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
             {account.status === 'planned' && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}><UserPlus size={14}/> Create on {getPlatform(account.platform).name}</button>}
             <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> {account.status === 'planned' ? 'Sign in' : 'Open'} {getPlatform(account.platform).name}</button>
             <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillProfile()}><Sparkles size={14}/> Fill profile on {getPlatform(account.platform).name}</button>
+            {account.platform === 'instagram' && account.status === 'active' && <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillIdentity()}><Wand2 size={14}/> Change name & username</button>}
           </div>
           {note && <p className="success-message" role="status">{note}</p>}
         </div>}

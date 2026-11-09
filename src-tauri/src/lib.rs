@@ -12,6 +12,7 @@ mod gmail_session;
 mod image_ai;
 mod grok;
 mod instagram;
+mod instagram_login;
 mod kling;
 mod ollama;
 mod queue;
@@ -284,6 +285,8 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Instagram, "create") => Some("https://www.instagram.com/accounts/emailsignup/"),
         (Platform::Instagram, "manage") => Some("https://www.instagram.com/accounts/edit/"),
         (Platform::Instagram, "post") => Some("https://www.instagram.com/"),
+        // Instagram moved name and username editing to Accounts Center.
+        (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
         (Platform::Instagram, "developer") => {
             Some("https://developers.facebook.com/products/instagram/")
         }
@@ -343,9 +346,15 @@ pub fn run() {
             x_integration::disconnect_x,
             x_integration::post_to_x,
             instagram::connect_instagram,
+            instagram_login::instagram_app_ready,
+            instagram_login::save_instagram_app,
+            instagram_login::connect_instagram_app,
             instagram::instagram_connection,
             instagram::disconnect_instagram,
             instagram::publish_instagram_reel,
+            instagram::publish_instagram_photo,
+            instagram::publish_instagram_reel_file,
+            instagram::choose_instagram_video,
             queue::list_queue,
             queue::add_queue_job,
             queue::complete_queue_job,

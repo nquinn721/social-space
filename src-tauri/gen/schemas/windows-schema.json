@@ -207,6 +207,12 @@
           "markdownDescription": "Enables the choose_image_file command without any pre-configured scope."
         },
         {
+          "description": "Enables the choose_instagram_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-choose-instagram-video",
+          "markdownDescription": "Enables the choose_instagram_video command without any pre-configured scope."
+        },
+        {
           "description": "Enables the choose_video_file command without any pre-configured scope.",
           "type": "string",
           "const": "allow-choose-video-file",
@@ -241,6 +247,12 @@
           "type": "string",
           "const": "allow-connect-instagram",
           "markdownDescription": "Enables the connect_instagram command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the connect_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-instagram-app",
+          "markdownDescription": "Enables the connect_instagram_app command without any pre-configured scope."
         },
         {
           "description": "Enables the connect_x command without any pre-configured scope.",
@@ -349,6 +361,12 @@
           "type": "string",
           "const": "allow-import-sign-ins",
           "markdownDescription": "Enables the import_sign_ins command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the instagram_app_ready command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-instagram-app-ready",
+          "markdownDescription": "Enables the instagram_app_ready command without any pre-configured scope."
         },
         {
           "description": "Enables the instagram_connection command without any pre-configured scope.",
@@ -465,10 +483,22 @@
           "markdownDescription": "Enables the prepare_update command without any pre-configured scope."
         },
         {
+          "description": "Enables the publish_instagram_photo command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-publish-instagram-photo",
+          "markdownDescription": "Enables the publish_instagram_photo command without any pre-configured scope."
+        },
+        {
           "description": "Enables the publish_instagram_reel command without any pre-configured scope.",
           "type": "string",
           "const": "allow-publish-instagram-reel",
           "markdownDescription": "Enables the publish_instagram_reel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the publish_instagram_reel_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-publish-instagram-reel-file",
+          "markdownDescription": "Enables the publish_instagram_reel_file command without any pre-configured scope."
         },
         {
           "description": "Enables the read_email command without any pre-configured scope.",
@@ -505,6 +535,12 @@
           "type": "string",
           "const": "allow-save-generated-video",
           "markdownDescription": "Enables the save_generated_video command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-instagram-app",
+          "markdownDescription": "Enables the save_instagram_app command without any pre-configured scope."
         },
         {
           "description": "Enables the save_workspace command without any pre-configured scope.",
@@ -585,6 +621,12 @@
           "markdownDescription": "Denies the choose_image_file command without any pre-configured scope."
         },
         {
+          "description": "Denies the choose_instagram_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-choose-instagram-video",
+          "markdownDescription": "Denies the choose_instagram_video command without any pre-configured scope."
+        },
+        {
           "description": "Denies the choose_video_file command without any pre-configured scope.",
           "type": "string",
           "const": "deny-choose-video-file",
@@ -619,6 +661,12 @@
           "type": "string",
           "const": "deny-connect-instagram",
           "markdownDescription": "Denies the connect_instagram command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the connect_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-instagram-app",
+          "markdownDescription": "Denies the connect_instagram_app command without any pre-configured scope."
         },
         {
           "description": "Denies the connect_x command without any pre-configured scope.",
@@ -727,6 +775,12 @@
           "type": "string",
           "const": "deny-import-sign-ins",
           "markdownDescription": "Denies the import_sign_ins command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the instagram_app_ready command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-instagram-app-ready",
+          "markdownDescription": "Denies the instagram_app_ready command without any pre-configured scope."
         },
         {
           "description": "Denies the instagram_connection command without any pre-configured scope.",
@@ -843,10 +897,22 @@
           "markdownDescription": "Denies the prepare_update command without any pre-configured scope."
         },
         {
+          "description": "Denies the publish_instagram_photo command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-publish-instagram-photo",
+          "markdownDescription": "Denies the publish_instagram_photo command without any pre-configured scope."
+        },
+        {
           "description": "Denies the publish_instagram_reel command without any pre-configured scope.",
           "type": "string",
           "const": "deny-publish-instagram-reel",
           "markdownDescription": "Denies the publish_instagram_reel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the publish_instagram_reel_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-publish-instagram-reel-file",
+          "markdownDescription": "Denies the publish_instagram_reel_file command without any pre-configured scope."
         },
         {
           "description": "Denies the read_email command without any pre-configured scope.",
@@ -883,6 +949,12 @@
           "type": "string",
           "const": "deny-save-generated-video",
           "markdownDescription": "Denies the save_generated_video command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-instagram-app",
+          "markdownDescription": "Denies the save_instagram_app command without any pre-configured scope."
         },
         {
           "description": "Denies the save_workspace command without any pre-configured scope.",

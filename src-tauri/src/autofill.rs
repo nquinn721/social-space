@@ -81,6 +81,8 @@ struct FillPayload<'a> {
     image: Option<ImagePayload>,
     password: Option<String>,
     watch: bool,
+    /// Overwrite values already on the page (editing an existing profile), once per field.
+    replace: bool,
 }
 
 /// Fill scripts to re-run when a window loads its next page during sign-up.
@@ -183,8 +185,8 @@ fn fill_script(payload: &FillPayload) -> Result<String, String> {
 
 /// Matches visible inputs by autocomplete, type, name, label, and placeholder;
 /// sets values the way typing would so React-based forms notice them; and
-/// outlines what it filled. Only empty fields are filled, so the user's own
-/// edits are kept. It never clicks or submits anything. With `watch`, it keeps
+/// outlines what it filled. Only empty fields are filled (or, with `replace`,
+/// each field once), so the user's own edits are kept. It never clicks or submits anything. With `watch`, it keeps
 /// filling fields that appear on later steps of the same page for a while.
 const FILL_SCRIPT: &str = r#"function (data) {
   const rules = [
@@ -206,14 +208,17 @@ const FILL_SCRIPT: &str = r#"function (data) {
   const setValue = (el, value) => {
     const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+    done.add(el);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
     el.style.outline = '2px solid #8b5cf6';
   };
+  // Fields filled once are left alone afterwards, so later page changes never undo the user's edits.
+  const done = window.__socialspaceDone || (window.__socialspaceDone = new WeakSet());
   const fill = () => {
     const filled = [];
     const fields = Array.from(document.querySelectorAll('input, textarea')).filter((el) =>
-      visible(el) && !el.disabled && !el.readOnly && !el.value);
+      visible(el) && !el.disabled && !el.readOnly && (data.replace ? !done.has(el) : !el.value));
     const candidates = fields.filter((el) =>
       !['password', 'hidden', 'file', 'checkbox', 'radio', 'submit', 'button'].includes((el.type || '').toLowerCase()));
     const used = new Set();
@@ -309,6 +314,7 @@ pub fn fill_site_form(
     account_id: Option<String>,
     include_password: Option<bool>,
     keep_filling: Option<bool>,
+    replace: Option<bool>,
 ) -> Result<(), String> {
     validate(&fields)?;
     if !window_label.starts_with("site-") {
@@ -337,7 +343,8 @@ pub fn fill_site_form(
         None
     };
     let watch = keep_filling.unwrap_or(false);
-    let script = fill_script(&FillPayload { fields: &fields, image, password, watch })?;
+    let replace = replace.unwrap_or(false);
+    let script = fill_script(&FillPayload { fields: &fields, image, password, watch, replace })?;
     if still_loading {
         remember(&window_label, Some(script));
         return Ok(());
@@ -390,7 +397,8 @@ mod tests {
             bio: Some("Quote \" and </script> stay data".into()),
             ..Default::default()
         };
-        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false }).unwrap();
+        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: true }).unwrap();
+        assert!(script.contains(r#""replace":true"#));
         assert!(script.contains(r#""bio":"Quote \" and </script> stay data""#));
         assert!(!script.contains("\"email\""));
         assert!(!script.contains(".submit("));

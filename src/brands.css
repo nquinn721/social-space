@@ -64,3 +64,13 @@
 .account-row-wrap .remove-profile { margin-right: 12px; flex-shrink: 0; color: var(--text-3); }
 .danger-zone { display: flex; align-items: center; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
 .danger-zone small { color: var(--text-3); font-size: 12px; }
+.connection-list { padding: 4px 0; }
+.connection-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+.connection-row:first-child { border-top: 0; }
+.connection-row > div { flex: 1; min-width: 0; }
+.connection-row strong { display: block; font-size: 13.5px; }
+.connection-row small { display: block; font-size: 12.5px; color: var(--text-3); }
+.connection-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--surface-3); color: var(--text-2); }
+.account-row small.row-connected { color: var(--success); }
+.account-row small.row-unconnected { color: var(--text-3); }
+.connection-pick { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); margin: 10px 0; }
