@@ -2,7 +2,8 @@ import type { Channel } from './channelModel';
 export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
 export type View = 'overview' | 'accounts' | 'inbox' | 'library' | 'channels' | 'queue' | 'publishing' | 'creative' | 'sources' | 'updates' | 'settings';
 export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'library', 'channels', 'queue', 'publishing', 'creative', 'sources', 'updates', 'settings'];
-export type PlatformAction = 'create' | 'manage' | 'post' | 'developer';
+/** identity: where name and username are edited (Instagram's Accounts Center). */
+export type PlatformAction = 'create' | 'manage' | 'post' | 'developer' | 'identity';
 export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
 /**
  * One profile of a brand on one social. status says whether it really exists there:

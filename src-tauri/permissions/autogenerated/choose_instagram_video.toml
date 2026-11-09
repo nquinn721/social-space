@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-choose-instagram-video"
+description = "Enables the choose_instagram_video command without any pre-configured scope."
+commands.allow = ["choose_instagram_video"]
+
+[[permission]]
+identifier = "deny-choose-instagram-video"
+description = "Denies the choose_instagram_video command without any pre-configured scope."
+commands.deny = ["choose_instagram_video"]
