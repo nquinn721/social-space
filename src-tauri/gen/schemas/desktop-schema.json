@@ -249,6 +249,12 @@
           "markdownDescription": "Enables the connect_instagram command without any pre-configured scope."
         },
         {
+          "description": "Enables the connect_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-instagram-app",
+          "markdownDescription": "Enables the connect_instagram_app command without any pre-configured scope."
+        },
+        {
           "description": "Enables the connect_x command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect-x",
@@ -355,6 +361,12 @@
           "type": "string",
           "const": "allow-import-sign-ins",
           "markdownDescription": "Enables the import_sign_ins command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the instagram_app_ready command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-instagram-app-ready",
+          "markdownDescription": "Enables the instagram_app_ready command without any pre-configured scope."
         },
         {
           "description": "Enables the instagram_connection command without any pre-configured scope.",
@@ -525,6 +537,12 @@
           "markdownDescription": "Enables the save_generated_video command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-instagram-app",
+          "markdownDescription": "Enables the save_instagram_app command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-workspace",
@@ -645,6 +663,12 @@
           "markdownDescription": "Denies the connect_instagram command without any pre-configured scope."
         },
         {
+          "description": "Denies the connect_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-instagram-app",
+          "markdownDescription": "Denies the connect_instagram_app command without any pre-configured scope."
+        },
+        {
           "description": "Denies the connect_x command without any pre-configured scope.",
           "type": "string",
           "const": "deny-connect-x",
@@ -751,6 +775,12 @@
           "type": "string",
           "const": "deny-import-sign-ins",
           "markdownDescription": "Denies the import_sign_ins command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the instagram_app_ready command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-instagram-app-ready",
+          "markdownDescription": "Denies the instagram_app_ready command without any pre-configured scope."
         },
         {
           "description": "Denies the instagram_connection command without any pre-configured scope.",
@@ -919,6 +949,12 @@
           "type": "string",
           "const": "deny-save-generated-video",
           "markdownDescription": "Denies the save_generated_video command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_instagram_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-instagram-app",
+          "markdownDescription": "Denies the save_instagram_app command without any pre-configured scope."
         },
         {
           "description": "Denies the save_workspace command without any pre-configured scope.",

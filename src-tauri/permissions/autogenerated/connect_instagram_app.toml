@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-connect-instagram-app"
+description = "Enables the connect_instagram_app command without any pre-configured scope."
+commands.allow = ["connect_instagram_app"]
+
+[[permission]]
+identifier = "deny-connect-instagram-app"
+description = "Denies the connect_instagram_app command without any pre-configured scope."
+commands.deny = ["connect_instagram_app"]

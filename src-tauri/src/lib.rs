@@ -12,6 +12,7 @@ mod gmail_session;
 mod image_ai;
 mod grok;
 mod instagram;
+mod instagram_login;
 mod kling;
 mod ollama;
 mod queue;
@@ -345,6 +346,9 @@ pub fn run() {
             x_integration::disconnect_x,
             x_integration::post_to_x,
             instagram::connect_instagram,
+            instagram_login::instagram_app_ready,
+            instagram_login::save_instagram_app,
+            instagram_login::connect_instagram_app,
             instagram::instagram_connection,
             instagram::disconnect_instagram,
             instagram::publish_instagram_reel,

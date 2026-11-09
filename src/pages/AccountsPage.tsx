@@ -111,7 +111,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   return <>
     <PageHeader eyebrow="Your brands" title="Brands" description="Each brand gets one profile on every social. Open a brand to create its profiles, see its sign-ins and its videos." actions={actions}/>
     {tabs}
-    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
+    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
       <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>
