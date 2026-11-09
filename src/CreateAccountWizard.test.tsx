@@ -6,11 +6,13 @@ import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard
 import * as profile from './profileService';
 import * as email from './emailService';
 import * as suggest from './assistant/suggest';
+import * as imageAi from './imageAiService';
 import type { Account } from './model';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
-  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
+  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), openGmailSignup: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
 vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
+vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), imageAiStatus: vi.fn(), startImageAi: vi.fn(), generateProfileImage: vi.fn() }));
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(), listEmails: vi.fn(), readEmail: vi.fn() }));
 
 beforeEach(() => {
@@ -65,7 +67,10 @@ describe('create account wizard', () => {
   });
 
   it('suggests a name and description from an idea', async () => {
-    vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.' });
+    vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.', imagePrompt: 'pastel butterfly logo mark', imageStyle: 'logo' });
+    vi.mocked(imageAi.imageAiStatus).mockResolvedValue({ running: true, looks: ['fast', 'detailed'], canStart: true });
+    vi.mocked(imageAi.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\profile-1.png', seed: 1, preview: 'data:image/png;base64,1' });
+    vi.mocked(profile.loadImagePreview).mockResolvedValue('data:image/png;base64,1');
     const user = userEvent.setup();
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText(/Your idea/), 'butterfly jewelry for kids');
@@ -75,6 +80,9 @@ describe('create account wizard', () => {
     expect(screen.getByLabelText('Username you want optional')).toHaveValue('flutterfinds');
     expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
     expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X']);
+    // The matching picture is made straight away and becomes the account's image.
+    expect(await screen.findByText('profile-1.png')).toBeInTheDocument();
+    expect(vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt).toBe('minimal modern logo mark, pastel butterfly logo mark, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon');
   });
 
   it('keeps one description within the tightest chosen limit', async () => {
@@ -130,5 +138,27 @@ describe('verification code detection', () => {
     await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
     await user.click(await screen.findByRole('button', { name: 'Fill code 482913 on page' }));
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' }));
+  });
+  it('adds Instagram to the shared login and gives TikTok its own email when the base one is taken', async () => {
+    const saved: Account[] = [];
+    const existing: Account[] = [{ id: 'old-ig', platform: 'instagram', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }, { id: 'old-tt', platform: 'tiktok', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }];
+    const user = userEvent.setup();
+    render(<CreateAccountWizard initialPlatforms={['instagram', 'tiktok']} existing={existing} prefill={{ brandId: 'brand-mia' }} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
+    const plan = screen.getByRole('list', { name: 'Login plan' });
+    expect(plan).toHaveTextContent('Adds to your Instagram login softwings25@gmail.com (2 of 5 profiles).');
+    expect(plan).toHaveTextContent('New TikTok account with its own email softwings25+massagewithmia@gmail.com.');
+    await user.click(screen.getByRole('button', { name: /Start with 2 socials/ }));
+    await screen.findByText('Now: Instagram (1 of 2)');
+    expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', DEFAULT_SIGNUP_EMAIL, 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);
+    expect(saved.every((item) => item.handle === 'massagewithmia' && item.displayName === 'Massage With Mia')).toBe(true);
+  });
+  it('opens Google sign-up with the brand filled in for an optional new Gmail', async () => {
+    vi.mocked(profile.openGmailSignup).mockResolvedValue('site-9');
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
+    await user.click(screen.getByRole('button', { name: 'Make a new Gmail instead' }));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia' }, { keepFilling: true }));
   });
 });

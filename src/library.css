@@ -1,0 +1,24 @@
+/* Video library: categories on the left, a category's videos and where each is posted on the right. */
+.library-brands { margin-bottom: 16px; }
+.library-layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .library-layout { grid-template-columns: 1fr; } }
+.library-categories { padding: 14px; }
+.library-categories h2, .library-add h2 { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.library-categories ul { list-style: none; display: grid; gap: 4px; margin-bottom: 10px; }
+.library-categories li button { width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; }
+.library-categories li button:hover, .library-categories li button.selected { background: var(--surface-2); }
+.library-categories strong { display: block; font-size: 13.5px; }
+.library-categories small { display: block; font-size: 12px; color: var(--text-3); }
+.inline-add { display: flex; gap: 6px; }
+.inline-add input { flex: 1; min-width: 0; }
+.library-add { padding: 16px; margin-bottom: 14px; }
+.library-add .primary-button { margin-top: 10px; }
+.library-videos { display: grid; gap: 10px; }
+.library-video { padding: 12px 14px; }
+.library-video-head { display: flex; align-items: center; gap: 10px; }
+.library-video-head > div { flex: 1; min-width: 0; }
+.library-video-head strong { display: block; font-size: 13.5px; }
+.library-video-head small { font-size: 12px; color: var(--text-3); }
+.library-posted { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.posted-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--border); font-size: 12.5px; color: var(--text-2); }
+.posted-chip.done { background: var(--success-soft); color: var(--success); border-color: transparent; }

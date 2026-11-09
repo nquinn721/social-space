@@ -20,8 +20,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('workspace account management', () => {
+  it('always has an Updates page in the sidebar', async () => {
+    vi.mocked(service.loadWorkspace).mockResolvedValue({ businessName: '', brands: [], accounts: [], channels: [] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Updates' }));
+    expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart SocialSpace' })).toBeInTheDocument();
+  });
+
   it('adds an account while preserving the existing workspace', async () => {
-    vi.mocked(service.loadWorkspace).mockResolvedValue({ businessName: 'Example LLC', accounts: [], channels: [] });
+    vi.mocked(service.loadWorkspace).mockResolvedValue({ businessName: 'Example LLC', brands: [], accounts: [], channels: [] });
     const user = userEvent.setup();
     render(<App />);
 
@@ -38,6 +47,7 @@ describe('workspace account management', () => {
     await waitFor(() => expect(service.saveWorkspace).toHaveBeenCalledOnce());
     expect(service.saveWorkspace).toHaveBeenCalledWith({
       businessName: 'Example LLC',
+      brands: [],
       channels: [],
       accounts: [expect.objectContaining({ platform: 'youtube', label: 'Example Channel', handle: 'example', status: 'active', notes: '' })],
     });
@@ -45,7 +55,7 @@ describe('workspace account management', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Accounts' }));
     expect(screen.getByText('Example Channel')).toBeInTheDocument();
-    expect(screen.getByText('@example · In use')).toBeInTheDocument();
+    expect(screen.getByText('Live')).toBeInTheDocument();
   });
 
   it('keeps account and settings saves disabled when loading fails', async () => {

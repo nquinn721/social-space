@@ -18,6 +18,7 @@ use tauri::{AppHandle, Manager};
 
 const SETTINGS_FILE: &str = "email-source.json";
 const FEED_URL: &str = "https://mail.google.com/mail/u/0/feed/atom";
+const SIGN_UP_URL: &str = "https://accounts.google.com/signup";
 const SIGN_IN_URL: &str = "https://accounts.google.com/ServiceLogin?service=mail&continue=https://mail.google.com/mail/u/0/";
 const TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -223,6 +224,14 @@ pub fn cached(uid: u32) -> Option<FeedEntry> {
 
 // Commands that open a window must be async. A window built from a sync
 // command on Windows deadlocks WebView2 and stays blank (Tauri docs).
+
+/// Opens Google's own sign-up page in an app window so a brand can get a new Gmail.
+/// Returns the window id so the form can be pre-filled; the user presses every button.
+#[tauri::command]
+pub async fn open_gmail_signup(app: AppHandle) -> Result<String, String> {
+    crate::browser::open_remote_window(&app, SIGN_UP_URL, false)
+}
+
 #[tauri::command]
 pub async fn open_gmail_sign_in(app: AppHandle) -> Result<(), String> {
     crate::browser::open_remote(&app, SIGN_IN_URL, false)

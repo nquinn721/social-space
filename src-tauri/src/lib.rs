@@ -3,11 +3,13 @@ use std::{collections::HashSet, fs, io::Write, path::Path, sync::Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 mod account_passwords;
+mod backup;
 mod autofill;
 mod browser;
 mod email;
 mod embedded;
 mod gmail_session;
+mod image_ai;
 mod grok;
 mod instagram;
 mod kling;
@@ -21,14 +23,49 @@ mod x_integration;
 const WORKSPACE_FILE: &str = "workspace.json";
 const MAX_ACCOUNTS: usize = 200;
 const MAX_FIELD_LENGTH: usize = 1_000;
+const MAX_VIDEOS: usize = 20_000;
+const MAX_CAPTION_LENGTH: usize = 4_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Workspace {
     business_name: String,
+    #[serde(default)]
+    brands: Vec<Brand>,
     accounts: Vec<Account>,
     #[serde(default)]
     channels: Vec<Channel>,
+    #[serde(default)]
+    categories: Vec<VideoCategory>,
+    #[serde(default)]
+    videos: Vec<Video>,
+}
+
+/// A kind of video inside a brand, e.g. "Rabbit".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VideoCategory {
+    id: String,
+    brand_id: String,
+    name: String,
+}
+
+/// One video of a category, posted to every social of its brand. `posted` lists the socials it is up on.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Video {
+    id: String,
+    brand_id: String,
+    category_id: String,
+    title: String,
+    #[serde(default)]
+    media_source: String,
+    #[serde(default)]
+    caption: String,
+    #[serde(default)]
+    posted: Vec<Platform>,
+    #[serde(default)]
+    created_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -39,6 +76,16 @@ struct Channel {
     name: String,
     handle: String,
     account_id: Option<String>,
+    notes: String,
+}
+
+/// A brand or category that owns one profile per social.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Brand {
+    id: String,
+    name: String,
+    #[serde(default)]
     notes: String,
 }
 
@@ -63,6 +110,9 @@ struct Account {
     image_path: String,
     #[serde(default)]
     birthday: String,
+    /// Older workspaces have none; the app assigns one by name when it loads them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    brand_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -85,8 +135,38 @@ enum AccountStatus {
 struct StorageLock(Mutex<()>);
 
 fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
-    if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS {
+    if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS || workspace.brands.len() > MAX_ACCOUNTS {
         return Err("The workspace is too large to save.".into());
+    }
+    let mut brand_ids = HashSet::new();
+    for brand in &workspace.brands {
+        if brand.id.trim().is_empty() || brand.name.trim().is_empty() || !brand_ids.insert(&brand.id)
+            || [&brand.id, &brand.name, &brand.notes].iter().any(|field| field.len() > MAX_FIELD_LENGTH) {
+            return Err("Each brand needs a unique ID, a name, and fields under 1,000 bytes.".into());
+        }
+    }
+    if workspace.accounts.iter().any(|account| account.brand_id.as_ref().is_some_and(|id| !brand_ids.contains(id))) {
+        return Err("An account belongs to a brand that does not exist.".into());
+    }
+    if workspace.categories.len() > MAX_ACCOUNTS * 10 || workspace.videos.len() > MAX_VIDEOS {
+        return Err("The workspace has too many categories or videos to save.".into());
+    }
+    let mut category_ids = HashSet::new();
+    for category in &workspace.categories {
+        if category.id.trim().is_empty() || category.name.trim().is_empty() || !category_ids.insert(&category.id)
+            || !brand_ids.contains(&category.brand_id)
+            || [&category.id, &category.name].iter().any(|field| field.len() > MAX_FIELD_LENGTH) {
+            return Err("Each category needs a unique ID, a name, and a brand.".into());
+        }
+    }
+    let mut video_ids = HashSet::new();
+    for video in &workspace.videos {
+        if video.id.trim().is_empty() || !video_ids.insert(&video.id)
+            || !workspace.categories.iter().any(|category| category.id == video.category_id && category.brand_id == video.brand_id)
+            || [&video.id, &video.title, &video.media_source].iter().any(|field| field.len() > MAX_FIELD_LENGTH)
+            || video.caption.len() > MAX_CAPTION_LENGTH {
+            return Err("Each video needs a unique ID and a category of its brand.".into());
+        }
     }
     let mut ids = HashSet::new();
     for account in &workspace.accounts {
@@ -251,12 +331,16 @@ pub fn run() {
             queue::choose_video_file,
             ollama::ollama_models,
             ollama::ollama_chat,
+            image_ai::image_ai_status,
+            image_ai::start_image_ai,
+            image_ai::generate_profile_image,
             email::email_connection,
             email::connect_email,
             email::disconnect_email,
             email::list_emails,
             email::read_email,
             gmail_session::open_gmail_sign_in,
+            gmail_session::open_gmail_signup,
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
             embedded::embed_platform_page,
@@ -271,8 +355,12 @@ pub fn run() {
             account_passwords::ensure_shared_password,
             account_passwords::reveal_account_password,
             account_passwords::delete_account_password,
+            backup::export_sign_ins,
+            backup::import_sign_ins,
             updater::check_for_update,
-            updater::install_update,
+            updater::prepare_update,
+            updater::install_prepared_update,
+            updater::restart_app,
             updater::update_progress,
             updater::take_update_result
         ])
@@ -298,6 +386,7 @@ mod tests {
             signup_email: String::new(),
             image_path: String::new(),
             birthday: String::new(),
+            brand_id: None,
         }
     }
 
@@ -305,8 +394,11 @@ mod tests {
     fn workspace_round_trips_and_rejects_duplicate_ids() {
         let mut workspace = Workspace {
             business_name: "Example LLC".into(),
+            brands: vec![],
             accounts: vec![account("one")],
             channels: vec![],
+            categories: vec![],
+            videos: vec![],
         };
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -330,6 +422,32 @@ mod tests {
         workspace.channels.push(Channel { id: "channel-1".into(), platform: Platform::Instagram, name: "Main".into(), handle: "main".into(), account_id: Some("account-1".into()), notes: String::new() });
         assert!(validate_workspace(&workspace).is_ok());
         workspace.channels[0].platform = Platform::Youtube;
+        assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn accounts_must_belong_to_a_saved_brand() {
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new() }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![] };
+        workspace.accounts[0].brand_id = Some("b".into());
+        let json = serde_json::to_string(&workspace).unwrap();
+        assert!(json.contains(r#""brandId":"b""#));
+        assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
+        assert!(validate_workspace(&workspace).is_ok());
+        workspace.accounts[0].brand_id = Some("missing".into());
+        assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn videos_must_be_in_a_category_of_their_brand() {
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![] };
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1 });
+        let json = serde_json::to_string(&workspace).unwrap();
+        assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
+        assert!(validate_workspace(&workspace).is_ok());
+        workspace.videos[0].brand_id = "other".into();
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.videos[0].brand_id = "b".into();
+        workspace.categories[0].brand_id = "missing".into();
         assert!(validate_workspace(&workspace).is_err());
     }
 
@@ -363,8 +481,11 @@ mod tests {
         let path = directory.join("workspace.json");
         let workspace = Workspace {
             business_name: "Example LLC".into(),
+            brands: vec![],
             accounts: vec![account("one")],
             channels: vec![],
+            categories: vec![],
+            videos: vec![],
         };
         write_workspace(&path, &workspace).unwrap();
         assert_eq!(read_workspace(&path).unwrap(), workspace);

@@ -35,4 +35,13 @@ describe('account credentials', () => {
     expect(profile.setAccountPassword).toHaveBeenCalledWith('a1', sample);
     expect(await screen.findByRole('button', { name: 'Show password' })).toBeInTheDocument();
   });
+  it('changes a saved password', async () => {
+    vi.mocked(profile.hasAccountPassword).mockResolvedValue(true);
+    const user = userEvent.setup();
+    render(<AccountCredentials account={account}/>);
+    await user.click(await screen.findByRole('button', { name: 'Change password' }));
+    await user.type(screen.getByLabelText('Save a password'), sample);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(profile.setAccountPassword).toHaveBeenCalledWith('a1', sample);
+  });
 });

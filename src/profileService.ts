@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import type { Account, Platform, PlatformAction } from './model';
+import type { Account, Platform, PlatformAction, Workspace } from './model';
 
 export type FormFields = Partial<Record<'email' | 'phone' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'fullName' | 'bio' | 'website' | 'verificationCode' | 'birthday', string>>;
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to use this.'); }
@@ -19,6 +19,8 @@ export type Bounds = { x: number; y: number; width: number; height: number };
 /** Shows a platform page inside the app window, over the given area, and returns its id for filling. */
 export async function embedPlatformPage(platform: Platform, action: PlatformAction, bounds: Bounds): Promise<string> { desktopOnly(); return invoke('embed_platform_page', { platform, action, bounds }); }
 export async function setEmbeddedBounds(label: string, bounds: Bounds): Promise<void> { desktopOnly(); return invoke('set_embedded_bounds', { label, bounds }); }
+/** Opens Google's sign-up in an app window for a new Gmail, and returns the window id for filling. */
+export async function openGmailSignup(): Promise<string> { desktopOnly(); return invoke('open_gmail_signup'); }
 export async function closeEmbeddedPage(): Promise<void> { if (!isTauri()) return; return invoke('close_embedded_page'); }
 export function formFieldsFor(account: Account, verificationCode?: string): FormFields {
   const name = account.displayName || account.label;
@@ -42,3 +44,8 @@ export async function loadImagePreview(path: string): Promise<string> { desktopO
 export async function setAccountPassword(accountId: string, password: string): Promise<void> { desktopOnly(); return invoke('set_account_password', { accountId, password }); }
 /** Gives all these accounts one shared password (reusing one already saved, or a new strong one). */
 export async function ensureSharedPassword(accountIds: string[]): Promise<void> { desktopOnly(); return invoke('ensure_shared_password', { accountIds }); }
+/** Saves an encrypted file with every username, email and password. Returns its name, or null if cancelled. */
+export async function exportSignIns(passphrase: string): Promise<string | null> { desktopOnly(); return invoke('export_sign_ins', { passphrase }); }
+export type RestoredSignIns = { workspace: Workspace; passwordsRestored: number; createdAt: number };
+/** Restores passwords from a backup file and returns its saved workspace, or null if cancelled. */
+export async function importSignIns(passphrase: string): Promise<RestoredSignIns | null> { desktopOnly(); return invoke('import_sign_ins', { passphrase }); }

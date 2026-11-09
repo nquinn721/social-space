@@ -303,10 +303,22 @@
           "markdownDescription": "Enables the ensure_shared_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the export_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-export-sign-ins",
+          "markdownDescription": "Enables the export_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Enables the fill_site_form command without any pre-configured scope.",
           "type": "string",
           "const": "allow-fill-site-form",
           "markdownDescription": "Enables the fill_site_form command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the generate_profile_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-generate-profile-image",
+          "markdownDescription": "Enables the generate_profile_image command without any pre-configured scope."
         },
         {
           "description": "Enables the generate_video command without any pre-configured scope.",
@@ -327,16 +339,28 @@
           "markdownDescription": "Enables the has_account_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the image_ai_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-image-ai-status",
+          "markdownDescription": "Enables the image_ai_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the import_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-import-sign-ins",
+          "markdownDescription": "Enables the import_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Enables the instagram_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-instagram-connection",
           "markdownDescription": "Enables the instagram_connection command without any pre-configured scope."
         },
         {
-          "description": "Enables the install_update command without any pre-configured scope.",
+          "description": "Enables the install_prepared_update command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-install-update",
-          "markdownDescription": "Enables the install_update command without any pre-configured scope."
+          "const": "allow-install-prepared-update",
+          "markdownDescription": "Enables the install_prepared_update command without any pre-configured scope."
         },
         {
           "description": "Enables the list_emails command without any pre-configured scope.",
@@ -393,6 +417,12 @@
           "markdownDescription": "Enables the open_gmail_sign_in command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_gmail_signup command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-gmail-signup",
+          "markdownDescription": "Enables the open_gmail_signup command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-kling",
@@ -429,6 +459,12 @@
           "markdownDescription": "Enables the post_to_x command without any pre-configured scope."
         },
         {
+          "description": "Enables the prepare_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-prepare-update",
+          "markdownDescription": "Enables the prepare_update command without any pre-configured scope."
+        },
+        {
           "description": "Enables the publish_instagram_reel command without any pre-configured scope.",
           "type": "string",
           "const": "allow-publish-instagram-reel",
@@ -451,6 +487,12 @@
           "type": "string",
           "const": "allow-rename-video-source",
           "markdownDescription": "Enables the rename_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the restart_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-restart-app",
+          "markdownDescription": "Enables the restart_app command without any pre-configured scope."
         },
         {
           "description": "Enables the reveal_account_password command without any pre-configured scope.",
@@ -481,6 +523,12 @@
           "type": "string",
           "const": "allow-set-embedded-bounds",
           "markdownDescription": "Enables the set_embedded_bounds command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_image_ai command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-image-ai",
+          "markdownDescription": "Enables the start_image_ai command without any pre-configured scope."
         },
         {
           "description": "Enables the take_update_result command without any pre-configured scope.",
@@ -627,10 +675,22 @@
           "markdownDescription": "Denies the ensure_shared_password command without any pre-configured scope."
         },
         {
+          "description": "Denies the export_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-export-sign-ins",
+          "markdownDescription": "Denies the export_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Denies the fill_site_form command without any pre-configured scope.",
           "type": "string",
           "const": "deny-fill-site-form",
           "markdownDescription": "Denies the fill_site_form command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the generate_profile_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-generate-profile-image",
+          "markdownDescription": "Denies the generate_profile_image command without any pre-configured scope."
         },
         {
           "description": "Denies the generate_video command without any pre-configured scope.",
@@ -651,16 +711,28 @@
           "markdownDescription": "Denies the has_account_password command without any pre-configured scope."
         },
         {
+          "description": "Denies the image_ai_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-image-ai-status",
+          "markdownDescription": "Denies the image_ai_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the import_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-import-sign-ins",
+          "markdownDescription": "Denies the import_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Denies the instagram_connection command without any pre-configured scope.",
           "type": "string",
           "const": "deny-instagram-connection",
           "markdownDescription": "Denies the instagram_connection command without any pre-configured scope."
         },
         {
-          "description": "Denies the install_update command without any pre-configured scope.",
+          "description": "Denies the install_prepared_update command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-install-update",
-          "markdownDescription": "Denies the install_update command without any pre-configured scope."
+          "const": "deny-install-prepared-update",
+          "markdownDescription": "Denies the install_prepared_update command without any pre-configured scope."
         },
         {
           "description": "Denies the list_emails command without any pre-configured scope.",
@@ -717,6 +789,12 @@
           "markdownDescription": "Denies the open_gmail_sign_in command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_gmail_signup command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-gmail-signup",
+          "markdownDescription": "Denies the open_gmail_signup command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-kling",
@@ -753,6 +831,12 @@
           "markdownDescription": "Denies the post_to_x command without any pre-configured scope."
         },
         {
+          "description": "Denies the prepare_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-prepare-update",
+          "markdownDescription": "Denies the prepare_update command without any pre-configured scope."
+        },
+        {
           "description": "Denies the publish_instagram_reel command without any pre-configured scope.",
           "type": "string",
           "const": "deny-publish-instagram-reel",
@@ -775,6 +859,12 @@
           "type": "string",
           "const": "deny-rename-video-source",
           "markdownDescription": "Denies the rename_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the restart_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-restart-app",
+          "markdownDescription": "Denies the restart_app command without any pre-configured scope."
         },
         {
           "description": "Denies the reveal_account_password command without any pre-configured scope.",
@@ -805,6 +895,12 @@
           "type": "string",
           "const": "deny-set-embedded-bounds",
           "markdownDescription": "Denies the set_embedded_bounds command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_image_ai command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-image-ai",
+          "markdownDescription": "Denies the start_image_ai command without any pre-configured scope."
         },
         {
           "description": "Denies the take_update_result command without any pre-configured scope.",

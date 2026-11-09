@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-import-sign-ins"
+description = "Enables the import_sign_ins command without any pre-configured scope."
+commands.allow = ["import_sign_ins"]
+
+[[permission]]
+identifier = "deny-import-sign-ins"
+description = "Denies the import_sign_ins command without any pre-configured scope."
+commands.deny = ["import_sign_ins"]

@@ -1,0 +1,34 @@
+/* Local AI profile picture generator, shown under a profile image picker. */
+.image-studio { margin-top: 10px; padding: 14px; border-radius: var(--radius); background: var(--splash-soft); border: 1px solid var(--accent-line); }
+.studio-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.studio-head h4 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--text); }
+.studio-head h4 svg { color: var(--pink); }
+.studio-sub { flex: 1; font-size: 12px; color: var(--text-3); }
+.image-studio .status-line { margin: 0 0 12px; }
+.image-studio .status-line .dot { font-size: 10px; }
+.studio-grid { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 16px; align-items: start; }
+.studio-controls label { margin-top: 0; }
+.studio-controls textarea { width: 100%; resize: vertical; }
+.studio-options { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.image-studio { container-type: inline-size; }
+.image-studio .segmented { flex-wrap: wrap; max-width: 100%; }
+.image-studio .segmented button { white-space: nowrap; }
+.image-studio .idea-row input { min-width: 0; }
+@container (max-width: 640px) { .studio-grid { grid-template-columns: 1fr; } .studio-result { max-width: 260px; } }
+.studio-options .segmented button:disabled { opacity: 0.4; cursor: not-allowed; }
+.studio-actions { display: flex; gap: 8px; margin-top: 12px; }
+.studio-refine { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-strong); }
+.studio-amount { margin-top: 8px; }
+.studio-working { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 12.5px; color: var(--accent-text); }
+.spin { animation: studio-spin 0.9s linear infinite; }
+@keyframes studio-spin { to { transform: rotate(360deg); } }
+.studio-result { display: flex; flex-direction: column; gap: 10px; }
+.studio-canvas { aspect-ratio: 1; border-radius: var(--radius); overflow: hidden; background: var(--surface-2); border: 1px dashed var(--border-strong); display: grid; place-items: center; text-align: center; font-size: 12px; color: var(--text-3); padding: 0; }
+.studio-canvas img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.studio-canvas.pending { animation: pulse 1.6s ease-in-out infinite; border-color: var(--accent-line); }
+.studio-use { width: 100%; justify-content: center; }
+.studio-history { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.studio-history button { padding: 0; border-radius: var(--radius-sm); overflow: hidden; border: 2px solid transparent; aspect-ratio: 1; background: var(--surface-2); }
+.studio-history button.selected { border-color: var(--pink); }
+.studio-history img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.profile-image .generate-button svg { color: var(--pink); }

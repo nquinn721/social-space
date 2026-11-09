@@ -2,9 +2,10 @@ import InstagramPublisher from './InstagramPublisher';
 import XPublisher from './XPublisher';
 import ChannelManagement from './ChannelManagement';
 import VideoQueue from './VideoQueue';
+import VideoLibrary from './VideoLibrary';
 import VideoStudio from './VideoStudio';
 import VideoSources from './VideoSources';
-import { UpdateBanner } from './AppUpdates';
+import { hasUpdate, UpdateBanner, UpdatesPage, useAppUpdates } from './AppUpdates';
 import InboxList from './InboxList';
 import CreateAccountWizard, { type WizardPrefill } from './CreateAccountWizard';
 import AccountDrawer from './AccountDrawer';
@@ -14,17 +15,18 @@ import AccountsPage from './pages/AccountsPage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
-import { AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
-import { EMPTY_WORKSPACE, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
+import { Film, AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, RotateCw, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
+import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
+import { loginText } from './brands';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { BrandMark, initialOf, PageHeader } from './ui';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   { label: 'Accounts', items: [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Accounts', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }] },
-  { label: 'Content', items: [{ id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
+  { label: 'Content', items: [{ id: 'library', label: 'Video library', icon: Film }, { id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
 ];
-const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Accounts', inbox: 'Inbox', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', settings: 'Settings' };
+const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Accounts', inbox: 'Inbox', library: 'Video library', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', updates: 'Updates', settings: 'Settings' };
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
@@ -38,6 +40,8 @@ function App() {
   const [businessName, setBusinessName] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [wizard, setWizard] = useState<Wizard | null>(null);
+  const updates = useAppUpdates();
+  const updateWaiting = hasUpdate(updates.status);
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
@@ -83,6 +87,10 @@ function App() {
   const editAccount = (account: Account) => { setEditingAccount(account); setShowAccount(true); };
   const createAccounts = (platforms?: Platform[], prefill?: WizardPrefill) => setWizard({ platforms: platforms ?? PLATFORMS.map((item) => item.id), prefill });
   /** Goes straight to the sign-up pages of accounts that are saved but not created yet. */
+  async function alreadyCreated(account: Account) {
+    const live = { ...account, status: 'active' as const };
+    if (await persist({ ...workspace, accounts: workspace.accounts.map((item) => item.id === account.id ? live : item) }, `Marked ${account.label} on ${getPlatform(account.platform).name} as live. Check the username and add its password.`)) editAccount(live);
+  }
   const signUp = (accounts: Account[]) => { setShowAccount(false); setEditingAccount(null); setWizard({ platforms: accounts.map((item) => item.platform), resume: accounts }); };
   function navigate(next: View, section?: string) {
     setView(next);
@@ -90,7 +98,7 @@ function App() {
     else document.documentElement.scrollTop = 0;
   }
   const navButton = ({ id, label, icon: Icon }: NavItem) => <button key={id} className={`nav-item ${view === id ? 'selected' : ''}`} aria-current={view === id ? "page" : undefined} aria-label={label} title={label} onClick={() => navigate(id)}>
-    <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.accounts.length > 0 && <span className="nav-badge">{workspace.accounts.length}</span>}
+    <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.accounts.length > 0 && <span className="nav-badge">{workspace.accounts.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
   </button>;
 
   return <div className="app-shell">
@@ -98,6 +106,7 @@ function App() {
       <div className="brand"><div className="brand-symbol"><span></span><span></span><span></span><span></span></div><div><strong>Social<span>space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation">{NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><div className="nav-label">{group.label}</div>{group.items.map(navButton)}</div>)}</nav>
       <div className="sidebar-bottom">
+        {navButton({ id: 'updates', label: updateWaiting ? 'Update available' : 'Updates', icon: RotateCw })}
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
         <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>Stored on this PC</small></div></div>
       </div>
@@ -111,23 +120,25 @@ function App() {
         </div>
       </header>
       <div className="page-content">
-        <UpdateBanner/>
+        {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onOpen={launch}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
+        {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
         {view === 'queue' && <><PageHeader eyebrow="Your content, lined up" title="Video queue" description="Plan videos for your channels in one place."/><VideoQueue workspace={workspace}/></>}
         {view === 'publishing' && <><PageHeader eyebrow="Ready when you are" title="Publishing" description="Create and publish in each platform's own tools, or post to X and Instagram from here."/><div className="info-banner"><ArrowDownLeft size={18}/><span>Publishing opens the platform in an app window. Sign in there to create or upload your content.</span></div><div className="publish-list">{PLATFORMS.map((platform) => <section className="publish-row" key={platform.id}><BrandMark platform={platform.id}/><div><h2>{platform.name}</h2><p>{platform.description}</p></div><button className="outline-button" disabled={busy} onClick={() => launch(platform.id, 'post')}>{platform.postLabel} <AppWindow size={15}/></button></section>)}</div><XPublisher/><InstagramPublisher/><div className="footnote">Scheduling and direct publishing to TikTok and YouTube are not connected yet. Platform availability and approvals vary.</div></>}
         {view === 'creative' && <><PageHeader eyebrow="From idea to something real" title="Creative tools" description="A home for the tools that help bring your content to life."/><VideoStudio onManageSources={() => navigate('sources')}/></>}
         {view === 'sources' && <><PageHeader eyebrow="Where your videos come from" title="Video sources" description="Connect AI video providers with your own API keys. Each key is verified with the provider and kept in Windows Credential Manager."/><VideoSources/></>}
+        {view === 'updates' && <UpdatesPage updates={updates}/>}
         {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded}/>}
       </div>
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
-    {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
-    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])}/>}
+    {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} existing={workspace.accounts} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
+    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined}/>}
   </div>;
 }
 export default App;

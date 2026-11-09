@@ -10,7 +10,7 @@ import type { Workspace } from '../model';
 vi.mock('./ollamaClient', async (original) => ({ ...(await original<typeof import('./ollamaClient')>()), chat: vi.fn(), listModels: vi.fn() }));
 vi.mock('../xService', () => ({ postToX: vi.fn() }));
 
-const workspace: Workspace = { businessName: 'Example LLC', accounts: [], channels: [] };
+const workspace: Workspace = { businessName: 'Example LLC', brands: [], accounts: [], channels: [] };
 const context = { getWorkspace: () => workspace, saveWorkspace: vi.fn(async (next: Workspace) => next), navigate: vi.fn() };
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(client.listModels).mockResolvedValue([]); });
 afterEach(cleanup);

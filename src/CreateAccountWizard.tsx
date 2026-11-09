@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, X as Close } from 'lucide-react';
+import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
+import { emailTag, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
-import { chooseImageFile, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
+import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
+import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
 export const DEFAULT_SIGNUP_EMAIL = 'softwings25@gmail.com';
 /** Details to start the form with, e.g. when adding an existing brand to more socials. */
-export type WizardPrefill = { label?: string; handle?: string } & AccountProfile;
+export type WizardPrefill = { label?: string; handle?: string; brandId?: string } & AccountProfile;
 type Step = 'details' | 'signup' | 'profile';
 const STEPS: { id: Step; label: string }[] = [{ id: 'details', label: 'Details' }, { id: 'signup', label: 'Sign up' }, { id: 'profile', label: 'Profile' }];
 type Outcome = 'created' | 'skipped';
+/** During sign-up the inbox checks often, so a new code is entered on the page within seconds. */
+const SIGNUP_INBOX_MS = 6_000;
+const SENDER_WORDS: Record<Platform, RegExp> = { instagram: /\binstagram\b/i, tiktok: /\btiktok\b/i, youtube: /\b(youtube|google)\b/i, x: /\bx(\.com)?\b|\btwitter\b/i };
+/** Whether an email looks like it came from this social, so its code goes to the right sign-up page. */
+export function isMailFrom(platform: Platform, mail: { from: string; subject: string }) { return SENDER_WORDS[platform].test(`${mail.from} ${mail.subject}`); }
 
 /** The tightest description limit among the chosen socials, so one description fits them all. */
 export function sharedBioLimit(platforms: Platform[]) {
@@ -27,8 +34,13 @@ function boundsOf(element: HTMLElement): Bounds {
   return { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height };
 }
 
-function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: string; busy: boolean; onPick: () => void }) {
-  return <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>;
+function ImagePicker({ path, preview, busy, onPick, onGenerated, suggestion, auto }: { path: string; preview: string; busy: boolean; onPick: () => void; onGenerated: (path: string) => void; suggestion: string; auto?: AutoImage }) {
+  const [studio, setStudio] = useState(Boolean(auto));
+  useEffect(() => { if (auto) setStudio(true); }, [auto?.key]);
+  return <>
+    <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button generate-button" disabled={busy} aria-expanded={studio} onClick={() => setStudio((open) => !open)}><Wand2 size={13}/> Generate</button><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>
+    {studio && <ProfileImageStudio key={auto?.key} suggestion={suggestion} auto={auto} onAutoUse={onGenerated} disabled={busy} onClose={() => setStudio(false)} onUse={(generated) => { onGenerated(generated); setStudio(false); }}/>}
+  </>;
 }
 
 /**
@@ -36,7 +48,7 @@ function ImagePicker({ path, preview, busy, onPick }: { path: string; preview: s
  * The social list comes from PLATFORMS, so a newly supported social is included automatically.
  * It only fills forms: Nate presses every button and solves any captcha himself.
  */
-export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill, resume }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill; resume?: Account[] }) {
+export default function CreateAccountWizard({ onSave, onClose, initialPlatforms, prefill, resume, existing = [] }: { onSave: (account: Account) => Promise<void>; onClose: () => void; initialPlatforms?: Platform[]; prefill?: WizardPrefill; resume?: Account[]; existing?: Account[] }) {
   const [step, setStep] = useState<Step>(resume?.length ? 'signup' : 'details');
   const [chosen, setChosen] = useState<Platform[]>(initialPlatforms ?? PLATFORMS.map((platform) => platform.id));
   const [idea, setIdea] = useState('');
@@ -47,6 +59,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [website, setWebsite] = useState(prefill?.website ?? '');
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
+  const [autoImage, setAutoImage] = useState<AutoImage>();
   const [birthday, setBirthday] = useState(prefill?.birthday ?? '');
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
@@ -62,6 +75,11 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const preview = useImagePreview(imagePath);
   const ordered = PLATFORMS.map((platform) => platform.id).filter((id) => chosen.includes(id));
   const tightest = sharedBioLimit(ordered);
+  // Left blank, the username and display name come from the account name, e.g. Massage With Mia → @massagewithmia.
+  const shownName = displayName.trim() || label.trim();
+  const shownHandle = normalizeHandle(handle) || (label.trim() ? emailTag(label) : '');
+  // Each social either adds this brand to a login that has room, or gets a new account with an unused email.
+  const plans = ordered.map((platform) => planPresence(existing, platform, label.trim() || handle || 'brand', signupEmail));
   const bioLength = bio.trim().length;
   const bioTooLong = bioLength > tightest.limit;
   const account = accounts[current];
@@ -115,7 +133,15 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const suggest = () => run(async () => {
     const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
     setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
-    setNote('Suggested by your local model. Edit anything you like.');
+    setAutoImage({ description: suggestion.imagePrompt || `${suggestion.name}, ${idea.trim()}`, style: suggestion.imageStyle, key: Date.now() });
+    setNote('Suggested by your local model, and a matching profile picture is on its way. Edit anything you like.');
+  });
+  // Optional: a separate Gmail for the brand. Plus-addresses are simpler, since their codes reach the connected inbox.
+  const makeGmail = () => run(async () => {
+    const id = await openGmailSignup();
+    const fields = { firstName: (displayName || label).trim(), username: emailTag(handle || label), birthday };
+    await fillSiteForm(id, Object.fromEntries(Object.entries(fields).filter(([, value]) => value)), { keepFilling: true });
+    setNote('Opened Google sign-up with the brand filled in. Finish it there, then put the new address in Sign-up email. Connect it under Settings to see its codes here.');
   });
   function toggle(platform: Platform) { setChosen((list) => list.includes(platform) ? list.filter((item) => item !== platform) : [...list, platform]); }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
@@ -125,7 +151,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     event.preventDefault();
     if (!label.trim() || !ordered.length || bioTooLong) return;
     void run(async () => {
-      const made = ordered.map((platform): Account => ({ ...createAccount(platform, label, handle, 'planned', ''), displayName: displayName.trim(), bio: bio.trim(), website: website.trim(), signupEmail: signupEmail.trim(), imagePath, birthday }));
+      const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, shownHandle, 'planned', ''), displayName: shownName, bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, birthday, ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
       for (const item of made) await onSave(item);
       setAccounts(made);
       await ensureSharedPassword(made.map((item) => item.id));
@@ -167,8 +193,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const created = accounts.filter((item) => outcomes[item.id] === 'created');
   const feedback = <>{note && <p className="success-message" role="status">{note}</p>}{error && <div className="error-message" role="alert">{error}</div>}</>;
   const closeButton = <button type="button" className="icon-button" onClick={onClose} aria-label="Close" disabled={busy}><Close size={18}/></button>;
-  const shownName = displayName.trim() || label.trim();
-  const shownHandle = normalizeHandle(handle);
+
 
   return <div className="modal-backdrop"><section className={`dialog wizard ${step === 'details' ? '' : 'site-open'}`} role="dialog" aria-modal="true" aria-labelledby="wizard-title">
     <aside className="wizard-rail">
@@ -195,21 +220,23 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               <label htmlFor="wizard-name">Account name</label>
               <input id="wizard-name" autoFocus required maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="e.g. Soft Wings Studio"/>
               <div className="field-row">
-                <div><label htmlFor="wizard-handle">Username you want <span>optional</span></label><input id="wizard-handle" maxLength={120} value={handle} onChange={(event) => setHandle(event.target.value)} placeholder="@softwings"/></div>
-                <div><label htmlFor="wizard-display">Display name <span>optional</span></label><input id="wizard-display" maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)}/></div>
+                <div><label htmlFor="wizard-handle">Username you want <span>optional</span></label><input id="wizard-handle" maxLength={120} value={handle} onChange={(event) => setHandle(event.target.value)} placeholder={label.trim() ? `@${emailTag(label)}` : '@softwings'}/></div>
+                <div><label htmlFor="wizard-display">Display name <span>optional</span></label><input id="wizard-display" maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={label.trim() || undefined}/></div>
               </div>
               <label htmlFor="wizard-bio">Profile description <span className={`bio-count ${bioTooLong ? 'over' : ''}`}>{bioLength}/{tightest.limit}{ordered.length > 1 ? ` (${getPlatform(tightest.platform).name} limit)` : ''}</span></label>
               <textarea id="wizard-bio" rows={3} maxLength={1000} value={bio} onChange={(event) => setBio(event.target.value)}/>
-              <div className="field-row">
-                <div><label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/></div>
-                <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
-              </div>
-              <div className="field-row">
-                <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
-                <div/>
-              </div>
+              <label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/>
+              <details className="signin-details">
+                <summary>Sign-in details <span>handled for you</span></summary>
+                <div className="field-row">
+                  <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
+                  <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
+                </div>
+                <p className="signin-hint">TikTok and X get their own address automatically, like you+brand@gmail.com, so no new inbox is needed. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
+                {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
+              </details>
               <label>Profile image <span>optional, you can add it later</span></label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()} auto={autoImage}/>
               {feedback}
             </div>
             <aside className="preview-card" aria-label="Profile preview">
@@ -224,7 +251,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             </aside>
           </div>
         </div>
-        <div className="wizard-foot"><span className="foot-note">Accounts are saved as planned until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
+        <div className="wizard-foot"><span className="foot-note">Profiles are saved as not created yet until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
       </form>}
 
       {step !== 'details' && <>
@@ -237,7 +264,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             {step === 'signup' && account && <>
               <ol className="signup-steps">
                 <li>New pages fill in automatically as you press Next.</li>
-                <li>When {name} emails a code to {account.signupEmail}, it shows up below. Press it to fill it on the page.</li>
+                <li>When {name} emails a code to {account.signupEmail}, it's entered on the page for you within seconds. You can also press a code below.</li>
                 <li>Solve any captcha or phone check yourself.</li>
               </ol>
               <section className="credentials copy-list" aria-label="Sign-up details">
@@ -249,12 +276,12 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               </section>
               <div className="wizard-actions"><button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button><button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
               {feedback}
-              <InboxList compact autoRefresh limit={8} onCode={(code) => void refill(code)}/>
+              <InboxList compact autoRefresh refreshMs={SIGNUP_INBOX_MS} limit={8} onCode={(code) => void refill(code)} onNewCode={(code, mail) => { if (isMailFrom(account.platform, mail)) void refill(code); }}/>
             </>}
             {step === 'profile' && <>
               <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
               <label>Profile image</label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
               {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> Fill {getPlatform(item.platform).name} profile <ChevronRight size={15}/></button>)}</div>}
               {feedback}
             </>}
