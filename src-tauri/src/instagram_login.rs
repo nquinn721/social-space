@@ -207,7 +207,10 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
     let _ = window.close();
     let code = outcome?;
     let token = exchange(&meta, &code).await?;
-    crate::instagram::connect_instagram(None, token).await
+    if token.trim().is_empty() || token.chars().any(char::is_whitespace) {
+        return Err("Instagram returned an invalid token.".into());
+    }
+    crate::instagram::store("", &token, crate::instagram::LoginKind::Instagram).await
 }
 
 #[cfg(test)]

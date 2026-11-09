@@ -408,7 +408,11 @@ pub async fn connect_instagram(
     if !valid_token(access_token) {
         return Err("Paste the whole access token from Meta, with no spaces.".into());
     }
-    let kind = LoginKind::for_token(access_token);
+    store(account_id, access_token, LoginKind::for_token(access_token)).await
+}
+
+/// Verifies and saves a token whose kind is already known, e.g. from Business Login for Instagram.
+pub(crate) async fn store(account_id: &str, access_token: &str, kind: LoginKind) -> Result<InstagramConnection, String> {
     let account = verify(kind, account_id, access_token).await?;
     save(&Credential {
         id: account.id.clone(),
