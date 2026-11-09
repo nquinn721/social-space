@@ -66,6 +66,24 @@ struct Video {
     posted: Vec<Platform>,
     #[serde(default)]
     created_at: u64,
+    /// Set while an AI video source is still making this video; cleared once the file is saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    generation: Option<Generation>,
+}
+
+/// An AI generation in progress for a library video.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Generation {
+    source_id: String,
+    source_name: String,
+    provider: video_sources::VideoProvider,
+    task_id: String,
+    prompt: String,
+    /// "working" or "failed".
+    status: String,
+    #[serde(default)]
+    message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -164,7 +182,10 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
         if video.id.trim().is_empty() || !video_ids.insert(&video.id)
             || !workspace.categories.iter().any(|category| category.id == video.category_id && category.brand_id == video.brand_id)
             || [&video.id, &video.title, &video.media_source].iter().any(|field| field.len() > MAX_FIELD_LENGTH)
-            || video.caption.len() > MAX_CAPTION_LENGTH {
+            || video.caption.len() > MAX_CAPTION_LENGTH
+            || video.generation.as_ref().is_some_and(|g| !matches!(g.status.as_str(), "working" | "failed")
+                || [&g.source_id, &g.source_name, &g.task_id, &g.message].iter().any(|field| field.len() > MAX_FIELD_LENGTH)
+                || g.prompt.len() > MAX_CAPTION_LENGTH) {
             return Err("Each video needs a unique ID and a category of its brand.".into());
         }
     }
@@ -316,6 +337,7 @@ pub fn run() {
             video_gen::generate_video,
             video_gen::get_video,
             video_gen::open_video,
+            video_gen::save_generated_video,
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
@@ -440,7 +462,7 @@ mod tests {
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
         let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![] };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1 });
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());
@@ -449,6 +471,20 @@ mod tests {
         workspace.videos[0].brand_id = "b".into();
         workspace.categories[0].brand_id = "missing".into();
         assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn videos_can_carry_an_ai_generation_in_progress() {
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![] };
+        let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
+        workspace.videos.push(serde_json::from_value(json).unwrap());
+        assert!(validate_workspace(&workspace).is_ok());
+        let saved = serde_json::to_value(&workspace.videos[0]).unwrap();
+        assert_eq!(saved["generation"]["taskId"], "t1");
+        workspace.videos[0].generation.as_mut().unwrap().status = "done".into();
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.videos[0].generation = None;
+        assert!(serde_json::to_value(&workspace.videos[0]).unwrap().get("generation").is_none());
     }
 
     #[test]

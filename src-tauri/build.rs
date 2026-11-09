@@ -15,6 +15,7 @@ fn main() {
         "generate_video",
         "get_video",
         "open_video",
+        "save_generated_video",
         "connect_x",
         "x_connection",
         "disconnect_x",

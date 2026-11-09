@@ -90,9 +90,119 @@ pub async fn open_video(app: AppHandle, sources: State<'_, SourcesLock>, source_
     crate::browser::open_remote(&app, &url, false)
 }
 
+/// Largest generated video we will download. Provider clips are a few MB; this only stops a runaway response.
+const MAX_DOWNLOAD_BYTES: u64 = 500 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+const MAX_NAME_CHARS: usize = 80;
+
+/// Turns a brand, category or title into a safe Windows file or folder name.
+pub(crate) fn safe_name(value: &str, fallback: &str) -> String {
+    let cleaned: String = value
+        .chars()
+        .map(|c| if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') { ' ' } else { c })
+        .collect();
+    let name: String = cleaned.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(MAX_NAME_CHARS).collect();
+    let name = name.trim_end_matches(['.', ' ']).to_string();
+    let reserved = ["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "LPT1", "LPT2", "LPT3"];
+    if name.is_empty() || reserved.contains(&name.to_ascii_uppercase().as_str()) {
+        fallback.to_string()
+    } else {
+        name
+    }
+}
+
+/// `dir/name.mp4`, or `dir/name (2).mp4` and so on when that file already exists.
+fn unique_path(dir: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let mut path = dir.join(format!("{name}.mp4"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{name} ({n}).mp4"));
+        n += 1;
+    }
+    path
+}
+
+/// Downloads a finished video into `Videos\SocialSpace\<brand>\<category>` and returns the file path.
+#[tauri::command]
+pub async fn save_generated_video(
+    app: AppHandle,
+    sources: State<'_, SourcesLock>,
+    source_id: String,
+    task_id: String,
+    brand: String,
+    category: String,
+    title: String,
+) -> Result<String, String> {
+    use std::io::Write;
+    use tauri::Manager;
+    let task = fetch(&app, &sources, &source_id, &task_id).await?;
+    let url = task.video_url.ok_or("This video is not ready yet.")?;
+    let dir = app
+        .path()
+        .video_dir()
+        .map_err(|_| "Could not find your Videos folder.".to_string())?
+        .join("SocialSpace")
+        .join(safe_name(&brand, "Brand"))
+        .join(safe_name(&category, "Category"));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    let client = reqwest::Client::builder()
+        .https_only(true)
+        .timeout(DOWNLOAD_TIMEOUT)
+        .build()
+        .map_err(|_| "Could not start the download.".to_string())?;
+    let mut response = client.get(&url).send().await.map_err(|_| "Could not download the video. Try again.".to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("The provider returned HTTP {} for the video file. The link may have expired.", response.status()));
+    }
+    let path = unique_path(&dir, &safe_name(&title, "AI video"));
+    let partial = path.with_extension("mp4.part");
+    let result: Result<(), String> = async {
+        let mut file = std::fs::File::create(&partial).map_err(|e| format!("Could not save the video: {e}"))?;
+        let mut written: u64 = 0;
+        while let Some(chunk) = response.chunk().await.map_err(|_| "The download was interrupted. Try again.".to_string())? {
+            written += chunk.len() as u64;
+            if written > MAX_DOWNLOAD_BYTES {
+                return Err("The video file is too large to save.".into());
+            }
+            file.write_all(&chunk).map_err(|e| format!("Could not save the video: {e}"))?;
+        }
+        if written == 0 {
+            return Err("The provider sent an empty video file.".into());
+        }
+        Ok(())
+    }
+    .await;
+    if let Err(error) = result {
+        let _ = std::fs::remove_file(&partial);
+        return Err(error);
+    }
+    std::fs::rename(&partial, &path).map_err(|e| format!("Could not save the video: {e}"))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn safe_name_strips_path_characters_and_reserved_names() {
+        assert_eq!(safe_name("Silly/Rabbit: \"ep 1\"?", "x"), "Silly Rabbit ep 1");
+        assert_eq!(safe_name("  ..  ", "Fallback"), "Fallback");
+        assert_eq!(safe_name("con", "Fallback"), "Fallback");
+        assert_eq!(safe_name("trailing dots...", "x"), "trailing dots");
+        assert_eq!(safe_name(&"a".repeat(200), "x").len(), MAX_NAME_CHARS);
+    }
+
+    #[test]
+    fn unique_path_numbers_existing_files() {
+        let dir = std::env::temp_dir().join(format!("socialspace-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = unique_path(&dir, "clip");
+        assert!(first.ends_with("clip.mp4"));
+        std::fs::write(&first, b"x").unwrap();
+        assert!(unique_path(&dir, "clip").ends_with("clip (2).mp4"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn generation_guard_rejects_duplicate_and_releases_on_drop() {
