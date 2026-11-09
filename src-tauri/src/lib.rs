@@ -288,7 +288,7 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         // Instagram moved name and username editing to Accounts Center.
         (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
         (Platform::Instagram, "developer") => {
-            Some("https://developers.facebook.com/products/instagram/")
+            Some("https://developers.facebook.com/apps/")
         }
         (Platform::Tiktok, "create") => Some("https://www.tiktok.com/signup"),
         (Platform::Tiktok, "manage") => Some("https://www.tiktok.com/setting"),

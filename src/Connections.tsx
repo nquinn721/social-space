@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Clapperboard, Link2, Mail, RefreshCw } from 'lucide-react';
 import { connectGmailSession, emailConnection, openGmailSignIn } from './emailService';
-import { connectInstagramApp, INSTAGRAM_REDIRECT_URI, instagramConnection, saveInstagramApp } from './instagramService';
+import { connectInstagramApp, instagramConnection, saveInstagramApp } from './instagramService';
+import InstagramAppSetup from './InstagramAppSetup';
 import { xConnection } from './xService';
 import { listVideoSources } from './videoSourcesService';
 import { normalizeHandle, type Account, type Platform, type View } from './model';
@@ -62,8 +63,6 @@ export default function Connections({ onNavigate, accounts = [] }: { onNavigate:
   const instagramProfiles = accounts.filter((account) => account.platform === 'instagram' && account.status === 'active');
   const [igProfile, setIgProfile] = useState('');
   const [setup, setSetup] = useState(false);
-  const [appId, setAppId] = useState('');
-  const [appSecret, setAppSecret] = useState('');
   async function connectInstagram() {
     if (working) return;
     const profile = instagramProfiles.find((account) => account.id === igProfile) ?? instagramProfiles[0];
@@ -76,11 +75,10 @@ export default function Connections({ onNavigate, accounts = [] }: { onNavigate:
       if (text === 'SETUP_NEEDED') { setSetup(true); setNote(''); } else setNote(text);
     } finally { setWorking(false); }
   }
-  async function saveApp(event: React.FormEvent) {
-    event.preventDefault();
+  async function saveApp(appId: string, appSecret: string) {
     if (working) return;
     setWorking(true); setNote('');
-    try { await saveInstagramApp(appId, appSecret); setAppSecret(''); setWorking(false); await connectInstagram(); }
+    try { await saveInstagramApp(appId, appSecret); setWorking(false); await connectInstagram(); }
     catch (reason) { setNote(errorText(reason)); setWorking(false); }
   }
   const rows: Row[] = [
@@ -101,13 +99,7 @@ export default function Connections({ onNavigate, accounts = [] }: { onNavigate:
       <button type="button" className={row.connected ? 'ghost-button small-button' : 'primary-button small-button'} disabled={working} onClick={!row.connected && row.connect ? row.connect : row.go}>{row.connected ? 'Manage' : 'Connect'}</button>
     </div>)}</div>
     {instagramProfiles.length > 1 && !state.instagram && <label className="connection-pick">Instagram profile to connect <select value={igProfile || instagramProfiles[0].id} onChange={(event) => setIgProfile(event.target.value)}>{instagramProfiles.map((account) => <option key={account.id} value={account.id}>@{account.handle}</option>)}</select></label>}
-    {setup && <form className="card backup-form" onSubmit={saveApp} aria-label="Set up Instagram once">
-      <strong>One-time setup for Instagram</strong>
-      <small>Instagram only lets apps connect through a Meta app. In developers.facebook.com, open your app, add Instagram → API setup with Instagram login, and copy the Instagram App ID and Instagram App Secret. Under Business login settings, add this redirect address: <code>{INSTAGRAM_REDIRECT_URI}</code>. After this, Connect is one click.</small>
-      <div className="field-row"><div><label htmlFor="ig-app-id">Instagram App ID</label><input id="ig-app-id" inputMode="numeric" autoComplete="off" value={appId} onChange={(event) => setAppId(event.target.value)}/></div>
-        <div><label htmlFor="ig-app-secret">Instagram App Secret</label><input id="ig-app-secret" type="password" autoComplete="off" value={appSecret} onChange={(event) => setAppSecret(event.target.value)}/></div></div>
-      <div className="inline-add"><button className="primary-button small-button" disabled={working || !appId.trim() || !appSecret.trim()}>Save and connect</button><button type="button" className="ghost-button small-button" onClick={() => setSetup(false)}>Cancel</button></div>
-    </form>}
+    {setup && <InstagramAppSetup working={working} onSave={saveApp} onCancel={() => setSetup(false)}/>}
     {note && <p className="success-message" role="status">{note}</p>}
   </section>;
 }
