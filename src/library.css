@@ -58,3 +58,12 @@
 @media (hover: none) { .library-video-actions .icon-button { opacity: 1; } }
 .library-video .spin, .library-panel .spin { animation: library-spin 0.9s linear infinite; }
 @keyframes library-spin { to { transform: rotate(360deg); } }
+.library-play { border: 0; cursor: pointer; background: var(--accent-soft); color: var(--accent-text); }
+.library-play:hover { background: var(--accent); color: #fff; }
+.library-video-title { display: block; max-width: 100%; padding: 0; background: none; text-align: left; font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.library-video-title:hover { color: var(--accent-text); }
+.library-player { flex-basis: 100%; padding: 4px 0 2px 44px; }
+.library-player video { display: block; max-width: 100%; max-height: 420px; border-radius: var(--radius); background: #000; }
+.library-player-loading { display: grid; place-items: center; width: 240px; height: 140px; border-radius: var(--radius); background: var(--surface-3); color: var(--text-3); }
+.library-player-buttons { display: flex; gap: 6px; margin-top: 8px; }
+@media (max-width: 700px) { .library-player { padding-left: 0; } }

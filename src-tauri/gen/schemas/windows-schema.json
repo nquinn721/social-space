@@ -459,6 +459,12 @@
           "markdownDescription": "Enables the open_video command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_video_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-video-file",
+          "markdownDescription": "Enables the open_video_file command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_video_provider_keys command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-video-provider-keys",
@@ -481,6 +487,12 @@
           "type": "string",
           "const": "allow-prepare-update",
           "markdownDescription": "Enables the prepare_update command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the preview_video_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-preview-video-file",
+          "markdownDescription": "Enables the preview_video_file command without any pre-configured scope."
         },
         {
           "description": "Enables the publish_instagram_photo command without any pre-configured scope.",
@@ -873,6 +885,12 @@
           "markdownDescription": "Denies the open_video command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_video_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-video-file",
+          "markdownDescription": "Denies the open_video_file command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_video_provider_keys command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-video-provider-keys",
@@ -895,6 +913,12 @@
           "type": "string",
           "const": "deny-prepare-update",
           "markdownDescription": "Denies the prepare_update command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the preview_video_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-preview-video-file",
+          "markdownDescription": "Denies the preview_video_file command without any pre-configured scope."
         },
         {
           "description": "Denies the publish_instagram_photo command without any pre-configured scope.",

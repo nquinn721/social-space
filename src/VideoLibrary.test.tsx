@@ -8,6 +8,13 @@ import type { Account, Video, Workspace } from './model';
 import * as sources from './videoSourcesService';
 
 vi.mock('./queueService', () => ({ chooseVideoFile: vi.fn() }));
+vi.mock('./videoFileService', () => ({
+  isLocalVideo: (path: string) => /^[a-z]:/i.test(path),
+  videoPreviewUrl: vi.fn(async () => 'http://asset.localhost/bunny.mp4'),
+  openVideoFile: vi.fn(async () => {}),
+  showVideoInFolder: vi.fn(async () => {}),
+}));
+import * as files from './videoFileService';
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({
   DESKTOP_ONLY: 'desktop only',
@@ -113,6 +120,20 @@ describe('video library', () => {
     const second = setup({ ...base, videos: [bunny, making] });
     await act(async () => {});
     expect(second.onSave.mock.calls[0][0].videos!.find((video) => video.id === 'v2')!.generation).toMatchObject({ status: 'failed', message: 'Out of credits' });
+  });
+
+  it('plays a saved video in the library and opens it in the player or its folder', async () => {
+    const { user } = setup();
+    const row = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(row).getByRole('button', { name: 'Play Bunny hop' }));
+    expect(files.videoPreviewUrl).toHaveBeenCalledWith(bunny.mediaSource);
+    expect(await within(row).findByLabelText('Bunny hop', { selector: 'video' })).toHaveAttribute('src', 'http://asset.localhost/bunny.mp4');
+    await user.click(within(row).getByRole('button', { name: /Open in player/ }));
+    expect(files.openVideoFile).toHaveBeenCalledWith(bunny.mediaSource);
+    await user.click(within(row).getByRole('button', { name: /Show in folder/ }));
+    expect(files.showVideoInFolder).toHaveBeenCalledWith(bunny.mediaSource);
+    await user.click(within(row).getByRole('button', { name: 'Hide Bunny hop' }));
+    expect(within(row).queryByLabelText('Bunny hop', { selector: 'video' })).not.toBeInTheDocument();
   });
 
   it('shortens long prompts into a title', () => {

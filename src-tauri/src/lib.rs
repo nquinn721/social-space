@@ -17,6 +17,7 @@ mod kling;
 mod ollama;
 mod queue;
 mod updater;
+mod video_files;
 mod video_gen;
 mod video_sources;
 mod x_integration;
@@ -288,7 +289,7 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         // Instagram moved name and username editing to Accounts Center.
         (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
         (Platform::Instagram, "developer") => {
-            Some("https://developers.facebook.com/products/instagram/")
+            Some("https://developers.facebook.com/apps/")
         }
         (Platform::Tiktok, "create") => Some("https://www.tiktok.com/signup"),
         (Platform::Tiktok, "manage") => Some("https://www.tiktok.com/setting"),
@@ -341,6 +342,8 @@ pub fn run() {
             video_gen::get_video,
             video_gen::open_video,
             video_gen::save_generated_video,
+            video_files::preview_video_file,
+            video_files::open_video_file,
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
