@@ -450,6 +450,12 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .publish-row h2 { font-size: 14px; font-weight: 600; }
 .publish-row p { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
 .x-publisher, .instagram-publisher { margin-top: 16px; }
+.instagram-setup ol { margin: 8px 0 12px; padding-left: 20px; display: grid; gap: 6px; color: var(--text-2); }
+.instagram-setup code { font-size: 12px; }
+.instagram-kinds { margin: 8px 0 4px; flex-wrap: wrap; }
+.instagram-publisher .file-row { display: flex; gap: 8px; }
+.instagram-publisher .file-row input { flex: 1; min-width: 0; }
+.instagram-publisher .field-hint { font-size: 12px; color: var(--text-3); margin-top: 6px; }
 .kling-card { display: flex; overflow: hidden; min-height: 240px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
 .kling-art { width: 32%; min-width: 180px; background: radial-gradient(circle at 50% 45%, #1c1c1c, #000 70%); display: grid; place-items: center; border-right: 1px solid var(--border); }
 .kling-art img { width: 96px; height: 96px; border-radius: 22px; }

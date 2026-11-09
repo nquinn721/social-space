@@ -263,6 +263,8 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Instagram, "create") => Some("https://www.instagram.com/accounts/emailsignup/"),
         (Platform::Instagram, "manage") => Some("https://www.instagram.com/accounts/edit/"),
         (Platform::Instagram, "post") => Some("https://www.instagram.com/"),
+        // Instagram moved name and username editing to Accounts Center.
+        (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
         (Platform::Instagram, "developer") => {
             Some("https://developers.facebook.com/products/instagram/")
         }
@@ -324,6 +326,9 @@ pub fn run() {
             instagram::instagram_connection,
             instagram::disconnect_instagram,
             instagram::publish_instagram_reel,
+            instagram::publish_instagram_photo,
+            instagram::publish_instagram_reel_file,
+            instagram::choose_instagram_video,
             queue::list_queue,
             queue::add_queue_job,
             queue::complete_queue_job,

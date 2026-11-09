@@ -5,15 +5,16 @@ export type FormFields = Partial<Record<'email' | 'phone' | 'username' | 'firstN
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to use this.'); }
 /** Opens a platform page in an app window and returns the window id. */
 export async function openPlatformWindow(platform: Platform, action: PlatformAction): Promise<string> { desktopOnly(); return invoke('open_platform_action', { platform, action }); }
-export type FillOptions = { imagePath?: string; accountId?: string; includePassword?: boolean; keepFilling?: boolean };
+export type FillOptions = { imagePath?: string; accountId?: string; includePassword?: boolean; keepFilling?: boolean; replace?: boolean };
 /**
  * Pre-fills the visible form in that window. It never submits; the user does.
  * The saved password is looked up in Rust, so it never passes through here.
  * keepFilling also fills later steps and pages of the same sign-up flow.
+ * replace overwrites what the page already shows (each field once), for editing an existing profile.
  */
 export async function fillSiteForm(windowLabel: string, fields: FormFields, options: FillOptions = {}): Promise<void> {
   desktopOnly();
-  return invoke('fill_site_form', { windowLabel, fields, imagePath: options.imagePath || null, accountId: options.accountId ?? null, includePassword: options.includePassword ?? false, keepFilling: options.keepFilling ?? false });
+  return invoke('fill_site_form', { windowLabel, fields, imagePath: options.imagePath || null, accountId: options.accountId ?? null, includePassword: options.includePassword ?? false, keepFilling: options.keepFilling ?? false, replace: options.replace ?? false });
 }
 export type Bounds = { x: number; y: number; width: number; height: number };
 /** Shows a platform page inside the app window, over the given area, and returns its id for filling. */
