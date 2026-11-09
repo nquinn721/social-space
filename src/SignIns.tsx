@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Copy, DatabaseBackup, Eye, EyeOff, KeyRound, Pencil, Upload } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Workspace } from './model';
 import { mergeRestored } from './brands';
-import { exportSignIns, hasAccountPassword, importSignIns, revealAccountPassword, setAccountPassword } from './profileService';
+import { exportSignIns, hasAccountPassword, importSignIns, onPasswordSaved, revealAccountPassword, setAccountPassword } from './profileService';
 import { BrandMark, errorText } from './ui';
 
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -15,7 +15,11 @@ export function PasswordCell({ account }: { account: Account }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [note, setNote] = useState('');
-  useEffect(() => { hasAccountPassword(account.id).then(setSaved).catch(() => setSaved(false)); }, [account.id]);
+  useEffect(() => {
+    const check = () => { hasAccountPassword(account.id).then(setSaved).catch(() => setSaved(false)); setValue(''); setShown(false); };
+    check();
+    return onPasswordSaved(account.id, check);
+  }, [account.id]);
   async function load() { if (value) return value; const next = await revealAccountPassword(account.id); setValue(next); return next; }
   async function act(action: () => Promise<void>) { setNote(''); try { await action(); } catch (reason) { setNote(errorText(reason)); } }
   function save(event: FormEvent) {

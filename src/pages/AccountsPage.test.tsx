@@ -6,7 +6,7 @@ import AccountsPage, { groupByBrand } from './AccountsPage';
 import { migrateWorkspace } from '../brands';
 import type { Account, Workspace } from '../model';
 
-vi.mock('../profileService', () => ({ hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
+vi.mock('../profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
 afterEach(cleanup);
 const account = (id: string, platform: Account['platform'], label: string, status: Account['status'] = 'planned'): Account => ({ id, platform, label, handle: 'softwings', status, notes: '', bio: 'Wings.', signupEmail: 'softwings25@gmail.com' });
 const accounts = [account('1', 'x', 'Soft Wings'), account('2', 'instagram', 'soft wings ', 'active'), { ...account('3', 'youtube', 'Clip Lab'), handle: 'cliplab' }, { ...account('4', 'instagram', 'Clip Lab'), handle: 'cliplab' }];
@@ -60,6 +60,18 @@ describe('brands page', () => {
     const user = await openBrand('Soft Wings');
     await user.click(screen.getByRole('button', { name: 'I already made it' }));
     expect(onAlreadyCreated).toHaveBeenCalledWith(expect.objectContaining({ id: '1', platform: 'x' }));
+  });
+
+  it('deletes a profile that was never created, and a whole brand', async () => {
+    const onRemoveAccount = vi.fn();
+    const onRemoveBrand = vi.fn();
+    renderPage({ onRemoveAccount, onRemoveBrand });
+    const user = await openBrand('Soft Wings');
+    expect(screen.queryByRole('button', { name: 'Delete Instagram profile' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Delete X profile' }));
+    expect(onRemoveAccount).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));
+    await user.click(screen.getByRole('button', { name: 'Delete Soft Wings' }));
+    expect(onRemoveBrand).toHaveBeenCalledWith(expect.objectContaining({ name: 'Soft Wings' }));
   });
 
   it('offers the missing socials pre-filled with the brand details', async () => {

@@ -16,7 +16,7 @@ import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
 import { Film, AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, RotateCw, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
-import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Platform, type PlatformAction, type View, type Workspace } from './model';
+import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText } from './brands';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { BrandMark, initialOf, PageHeader } from './ui';
@@ -79,9 +79,19 @@ function App() {
     const channels = workspace.channels.map((channel) => channel.accountId === account.id && channel.platform !== account.platform ? { ...channel, accountId: null } : channel);
     if (await persist({ ...workspace, accounts, channels }, exists ? 'Account details saved.' : 'Account added to your workspace.')) { setShowAccount(false); setEditingAccount(null); }
   }
+  async function removeBrand(brand: Brand) {
+    const profiles = workspace.accounts.filter((account) => account.brandId === brand.id);
+    const live = profiles.filter((account) => account.status === 'active');
+    const warning = live.length ? ` Its ${live.length} live ${live.length === 1 ? 'profile stays' : 'profiles stay'} on the socials, but the saved username and password here are deleted too.` : '';
+    if (!window.confirm(`Delete ${brand.name} and its ${profiles.length} ${profiles.length === 1 ? 'profile' : 'profiles'} from the app?${warning}`)) return;
+    const ids = new Set(profiles.map((account) => account.id));
+    if (await persist({ ...workspace, brands: workspace.brands.filter((item) => item.id !== brand.id), accounts: workspace.accounts.filter((account) => !ids.has(account.id)), categories: (workspace.categories ?? []).filter((category) => category.brandId !== brand.id), videos: (workspace.videos ?? []).filter((video) => video.brandId !== brand.id), channels: workspace.channels.map((channel) => channel.accountId && ids.has(channel.accountId) ? { ...channel, accountId: null } : channel) }, `Deleted ${brand.name}.`)) {
+      for (const id of ids) void deleteAccountPassword(id).catch(() => undefined);
+    }
+  }
   async function removeAccount(account: Account) {
-    if (!window.confirm(`Remove ${account.label} from this workspace? This will not delete the platform account.`)) return;
-    if (await persist({ ...workspace, accounts: workspace.accounts.filter((item) => item.id !== account.id), channels: workspace.channels.map((channel) => channel.accountId === account.id ? { ...channel, accountId: null } : channel) }, 'Account removed from this workspace.')) { setShowAccount(false); setEditingAccount(null); void deleteAccountPassword(account.id).catch(() => undefined); }
+    if (!window.confirm(`Delete the ${getPlatform(account.platform).name} profile of ${account.label} from the app? ${account.status === 'active' ? 'The account stays on the social, but its saved password here is deleted.' : 'Nothing exists on the social yet, so nothing is lost there.'}`)) return;
+    if (await persist({ ...workspace, accounts: workspace.accounts.filter((item) => item.id !== account.id), channels: workspace.channels.map((channel) => channel.accountId === account.id ? { ...channel, accountId: null } : channel) }, `Deleted the ${getPlatform(account.platform).name} profile of ${account.label}.`)) { setShowAccount(false); setEditingAccount(null); void deleteAccountPassword(account.id).catch(() => undefined); }
   }
   const addAccount = () => { setEditingAccount(null); setShowAccount(true); };
   const editAccount = (account: Account) => { setEditingAccount(account); setShowAccount(true); };
@@ -123,7 +133,7 @@ function App() {
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onOpenLibrary={() => navigate('library')}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onOpenLibrary={() => navigate('library')} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}

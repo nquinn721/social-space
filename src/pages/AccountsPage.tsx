@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AppWindow, ArrowLeft, ChevronRight, Plus, Search, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
+import { AppWindow, ArrowLeft, ChevronRight, Plus, Search, Trash2, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type Workspace } from '../model';
 import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
@@ -22,6 +22,10 @@ type Props = {
   /** Saves a workspace rebuilt from a sign-in backup. */
   onRestore?: (next: Workspace, message: string) => Promise<boolean | undefined>;
   onOpenLibrary?: () => void;
+  /** Removes a profile from the app (asks first). It never deletes anything on the social. */
+  onRemoveAccount?: (account: Account) => void;
+  /** Removes a brand with all its profiles and videos from the app (asks first). */
+  onRemoveBrand?: (brand: Brand) => void;
 };
 type BrandGroup = { key: string; brand: Brand; accounts: Account[] };
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -33,7 +37,7 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand }: Props) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<'brands' | 'sign-ins'>('brands');
   const [openId, setOpenId] = useState<string | null>(null);
@@ -83,6 +87,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
             </button>
             {!live && onSignUp && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => onSignUp([account])}><AppWindow size={14}/> Create on {name}</button>}
             {!live && onAlreadyCreated && <button className="ghost-button small-button already-made" disabled={!loaded || busy} onClick={() => onAlreadyCreated(account)}>I already made it</button>}
+            {!live && onRemoveAccount && <button className="icon-button remove-profile" aria-label={`Delete ${name} profile`} title="Delete this profile from the app" disabled={!loaded || busy} onClick={() => onRemoveAccount(account)}><Trash2 size={15}/></button>}
           </div>;
         })}</div>
         {missing.length > 0 && <div className="add-platforms"><span>Add a profile on</span>{missing.map((platform) => {
@@ -95,6 +100,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         <p className="brand-videos-summary">{videos.length} {videos.length === 1 ? 'video' : 'videos'} in {categories.length} {categories.length === 1 ? 'category' : 'categories'}{categories.length ? `: ${categories.map((category) => category.name).join(', ')}` : ''}</p>
       </section>
       <SignIns workspace={{ ...workspace, accounts }} busy={busy} onEdit={onEditAccount} onRestore={async () => false} showBackup={false}/>
+      {onRemoveBrand && <div className="danger-zone"><button type="button" className="remove-button" disabled={!loaded || busy} onClick={() => onRemoveBrand(brand)}><Trash2 size={14}/> Delete {brand.name}</button><small>{accounts.some((account) => account.status === 'active') ? 'Live profiles stay on the socials; only their saved details here are removed.' : 'Removes the brand, its profiles and its videos from the app.'}</small></div>}
     </>;
   }
 

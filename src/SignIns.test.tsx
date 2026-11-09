@@ -7,7 +7,7 @@ import { mergeRestored } from './brands';
 import * as profile from './profileService';
 import type { Account, Workspace } from './model';
 
-vi.mock('./profileService', () => ({ hasAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
+vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
 const secret = ['pass', 'word', '42'].join('-');
 const account = (id: string, platform: Account['platform'], handle: string): Account => ({ id, platform, label: 'Mia', handle, status: 'active', notes: '', signupEmail: 'softwings25@gmail.com', brandId: 'mia' });
 const workspace: Workspace = { businessName: '', channels: [], brands: [{ id: 'mia', name: 'Massage With Mia', notes: '' }], accounts: [account('ig', 'instagram', 'softwings'), account('tt', 'tiktok', 'massagewithmia')] };

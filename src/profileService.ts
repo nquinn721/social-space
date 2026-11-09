@@ -41,7 +41,19 @@ export function findCode(text: string): string | null {
 }
 export async function chooseImageFile(): Promise<string | null> { desktopOnly(); return invoke('choose_image_file'); }
 export async function loadImagePreview(path: string): Promise<string> { desktopOnly(); return invoke('load_image_preview', { path }); }
-export async function setAccountPassword(accountId: string, password: string): Promise<void> { desktopOnly(); return invoke('set_account_password', { accountId, password }); }
+/** Fired after a password is saved, so every place showing that account's password updates at once. */
+export const PASSWORD_SAVED_EVENT = 'account-password-saved';
+export async function setAccountPassword(accountId: string, password: string): Promise<void> {
+  desktopOnly();
+  await invoke('set_account_password', { accountId, password });
+  window.dispatchEvent(new CustomEvent(PASSWORD_SAVED_EVENT, { detail: accountId }));
+}
+/** Calls back when a password is saved for this account anywhere in the app. */
+export function onPasswordSaved(accountId: string, callback: () => void) {
+  const listener = (event: Event) => { if ((event as CustomEvent<string>).detail === accountId) callback(); };
+  window.addEventListener(PASSWORD_SAVED_EVENT, listener);
+  return () => window.removeEventListener(PASSWORD_SAVED_EVENT, listener);
+}
 /** Gives all these accounts one shared password (reusing one already saved, or a new strong one). */
 export async function ensureSharedPassword(accountIds: string[]): Promise<void> { desktopOnly(); return invoke('ensure_shared_password', { accountIds }); }
 /** Saves an encrypted file with every username, email and password. Returns its name, or null if cancelled. */

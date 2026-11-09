@@ -61,3 +61,6 @@
 .brand-videos { margin: 14px 0; }
 .brand-videos-summary { padding: 0 18px 14px; font-size: 13px; color: var(--text-2); }
 .brand-tile.new { border-style: dashed; color: var(--text-2); }
+.account-row-wrap .remove-profile { margin-right: 12px; flex-shrink: 0; color: var(--text-3); }
+.danger-zone { display: flex; align-items: center; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
+.danger-zone small { color: var(--text-3); font-size: 12px; }

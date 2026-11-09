@@ -6,7 +6,7 @@ import AccountCredentials from './AccountCredentials';
 import * as profile from './profileService';
 import type { Account } from './model';
 
-vi.mock('./profileService', () => ({ hasAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn() }));
+vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn() }));
 const sample = ['sample', 'value'].join('-');
 const account: Account = { id: 'a1', platform: 'x', label: 'Soft Wings', handle: 'softwings', status: 'active', notes: '', signupEmail: 'softwings25@gmail.com' };
 beforeEach(() => vi.resetAllMocks());
