@@ -358,7 +358,9 @@ pub fn run() {
             backup::export_sign_ins,
             backup::import_sign_ins,
             updater::check_for_update,
-            updater::install_update,
+            updater::prepare_update,
+            updater::install_prepared_update,
+            updater::restart_app,
             updater::update_progress,
             updater::take_update_result
         ])

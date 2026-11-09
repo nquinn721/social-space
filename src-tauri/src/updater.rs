@@ -2,10 +2,14 @@
 //!
 //! The app is built and installed from a git clone on this machine, so the build
 //! records which commit it came from and which folder it was built in. Checking
-//! for an update fetches `origin/main` in that folder. Installing runs entirely in the
-//! background with no console windows: fetch and check out origin/main (detached), `npm install`, `tauri build`, then a hidden
-//! helper installs the new build silently once the app exits and starts it again. The
-//! UI polls `update_progress`, and the restarted app reads `take_update_result`.
+//! for an update fetches `origin/main` in that folder. Updating has two steps, each one
+//! confirmed on the Updates page:
+//! 1. `prepare_update` builds in the background with no console windows: fetch and check out
+//!    origin/main (detached), `npm install`, `tauri build`. The finished installer is recorded
+//!    with its commit and SHA-256 so the app reports the update as ready.
+//! 2. `install_prepared_update` verifies that installer again, then a hidden helper installs it
+//!    silently once the app exits and starts it again.
+//! The UI polls `update_progress`, and the restarted app reads `take_update_result`.
 
 use std::{
     fs,
@@ -29,6 +33,11 @@ const MAX_LISTED_COMMITS: &str = "20";
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateStatus {
+    /// "available" (main has new commits), "ready" (they are built and waiting to install) or "up_to_date".
+    state: &'static str,
+    running_version: String,
+    source_dir: String,
+    prepared: Option<PreparedUpdate>,
     installed_commit: String,
     latest_commit: Option<String>,
     update_available: bool,
@@ -103,7 +112,31 @@ fn local_changes_reason(porcelain: &str) -> Option<String> {
     ))
 }
 
-fn check(dir: &Path) -> Result<UpdateStatus, String> {
+/// A build of main that finished and is waiting to be installed.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedUpdate {
+    commit: String,
+    installer: String,
+    sha256: String,
+    /// Seconds since the Unix epoch.
+    built_at: u64,
+}
+
+fn update_state(update_available: bool, prepared_matches: bool) -> &'static str {
+    match (update_available, prepared_matches) {
+        (false, _) => "up_to_date",
+        (true, true) => "ready",
+        (true, false) => "available",
+    }
+}
+
+/// A prepared build only counts while it is still the newest main and its installer is still there.
+fn prepared_for(prepared: Option<PreparedUpdate>, latest: &str) -> Option<PreparedUpdate> {
+    prepared.filter(|item| item.commit == latest && Path::new(&item.installer).is_file())
+}
+
+fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<UpdateStatus, String> {
     let installed = BUILD_COMMIT.to_string();
     git(dir, &["fetch", "--quiet", "origin", BRANCH])?;
     let latest = git(dir, &["rev-parse", &format!("origin/{BRANCH}")])?;
@@ -126,12 +159,27 @@ fn check(dir: &Path) -> Result<UpdateStatus, String> {
     } else {
         None
     };
-    Ok(UpdateStatus { installed_commit: installed, latest_commit: Some(latest), update_available, new_commits, blocked_reason })
+    let prepared = if update_available { prepared_for(prepared, &latest) } else { None };
+    Ok(UpdateStatus {
+        state: update_state(update_available, prepared.is_some()),
+        running_version: version.to_string(),
+        source_dir: dir.display().to_string(),
+        prepared,
+        installed_commit: installed,
+        latest_commit: Some(latest),
+        update_available,
+        new_commits,
+        blocked_reason,
+    })
+}
+
+fn check_app(app: &AppHandle) -> Result<UpdateStatus, String> {
+    check(&source_dir()?, &app.package_info().version.to_string(), read_prepared(app))
 }
 
 #[tauri::command]
-pub async fn check_for_update() -> Result<UpdateStatus, String> {
-    tauri::async_runtime::spawn_blocking(|| check(&source_dir()?))
+pub async fn check_for_update(app: AppHandle) -> Result<UpdateStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || check_app(&app))
         .await
         .map_err(|error| format!("Update check stopped: {error}"))?
 }
@@ -139,7 +187,7 @@ pub async fn check_for_update() -> Result<UpdateStatus, String> {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateProgress {
-    /// "idle", "running", "restarting" or "failed".
+    /// "idle", "running" (building), "ready" (built, waiting to install), "restarting" or "failed".
     state: &'static str,
     step: u8,
     total_steps: u8,
@@ -165,8 +213,9 @@ pub struct UpdateResult {
     succeeded: bool,
 }
 
-const TOTAL_STEPS: u8 = 4;
+const TOTAL_STEPS: u8 = 3;
 const RESULT_FILE: &str = "last-update.json";
+const PREPARED_FILE: &str = "prepared-update.json";
 static PROGRESS: Mutex<Option<UpdateProgress>> = Mutex::new(None);
 
 fn progress() -> UpdateProgress {
@@ -270,23 +319,62 @@ fn newest_installer(dir: &Path, since: SystemTime) -> Option<PathBuf> {
         .map(|(_, path)| path)
 }
 
-fn result_path(app: &AppHandle) -> Result<PathBuf, String> {
+fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
-        .map(|dir| dir.join(RESULT_FILE))
+        .map(|dir| dir.join(name))
         .map_err(|error| format!("Could not locate app data: {error}"))
 }
 
-fn run_update(app: &AppHandle, dir: &Path) -> Result<(), String> {
-    let log_path = std::env::temp_dir().join("socialspace-update.log");
-    let log = Arc::new(Mutex::new(fs::File::create(&log_path).map_err(|error| format!("Could not create the update log: {error}"))?));
+fn result_path(app: &AppHandle) -> Result<PathBuf, String> {
+    data_file(app, RESULT_FILE)
+}
+
+fn write_data(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::write(path, bytes).map_err(|error| format!("Could not save {}: {error}", path.display()))
+}
+
+fn read_prepared(app: &AppHandle) -> Option<PreparedUpdate> {
+    let contents = fs::read(data_file(app, PREPARED_FILE).ok()?).ok()?;
+    serde_json::from_slice(&contents).ok()
+}
+
+fn sha256_of(path: &Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    let mut file = fs::File::open(path).map_err(|error| format!("Could not read the installer: {error}"))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).map_err(|error| format!("Could not read the installer: {error}"))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn log_path() -> PathBuf {
+    std::env::temp_dir().join("socialspace-update.log")
+}
+
+/// Builds the reviewed main commit and records the installer. Nothing is installed yet.
+fn build_update(app: &AppHandle, dir: &Path, expected_commit: &str) -> Result<(), String> {
+    let log = Arc::new(Mutex::new(fs::File::create(log_path()).map_err(|error| format!("Could not create the update log: {error}"))?));
     let started = SystemTime::now();
 
     begin_step(1, "Getting the latest changes");
     run_logged(dir, "git", &["fetch", "origin", BRANCH], &log)?;
-    // Detached, so it works in a worktree even while `main` is checked out somewhere else.
-    run_logged(dir, "git", &["checkout", "--detach", &format!("origin/{BRANCH}")], &log)?;
+    // Check out exactly the reviewed commit, detached, so it also works in a worktree while
+    // `main` is checked out somewhere else.
+    run_logged(dir, "git", &["checkout", "--detach", expected_commit], &log)?;
     let new_commit = git(dir, &["rev-parse", "HEAD"])?;
+    if new_commit != expected_commit {
+        return Err(format!("The source folder is on {new_commit}, not the reviewed commit {expected_commit}."));
+    }
 
     begin_step(2, "Installing dependencies");
     run_logged(dir, NPM, &["install", "--no-audit", "--no-fund"], &log)?;
@@ -295,18 +383,10 @@ fn run_update(app: &AppHandle, dir: &Path) -> Result<(), String> {
     run_logged(dir, NPM, &["run", "tauri", "build"], &log)?;
     let installer = newest_installer(dir, started).ok_or("The build finished but no new installer was found.")?;
 
-    begin_step(4, "Installing and restarting");
-    let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: new_commit, succeeded: false };
-    let path = result_path(app)?;
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    fs::write(&path, serde_json::to_vec(&result).unwrap_or_default()).map_err(|error| format!("Could not record the update: {error}"))?;
-    launch_installer(&installer)?;
-    set_progress(|progress| progress.state = "restarting");
-    // Give the window a moment to show "restarting" before the installer replaces the app.
-    std::thread::sleep(Duration::from_millis(1500));
-    app.exit(0);
+    let built_at = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or_default();
+    let prepared = PreparedUpdate { commit: new_commit, sha256: sha256_of(&installer)?, installer: installer.display().to_string(), built_at };
+    write_data(&data_file(app, PREPARED_FILE)?, &serde_json::to_vec(&prepared).unwrap_or_default())?;
+    set_progress(|progress| progress.state = "ready");
     Ok(())
 }
 
@@ -341,36 +421,92 @@ const NPM: &str = "npm.cmd";
 #[cfg(not(windows))]
 const NPM: &str = "npm";
 
-/// Starts the update in the background. Progress is read with `update_progress`.
-#[tauri::command]
-pub async fn install_update(app: AppHandle) -> Result<(), String> {
-    {
-        let mut guard = PROGRESS.lock().map_err(|_| "Update state is unavailable.")?;
-        let current = guard.get_or_insert_with(UpdateProgress::default);
-        if matches!(current.state, "running" | "restarting") {
-            return Err("An update is already running.".into());
-        }
-        *current = UpdateProgress { state: "running", label: "Checking for changes".into(), ..UpdateProgress::default() };
+fn claim_progress(label: &str) -> Result<(), String> {
+    let mut guard = PROGRESS.lock().map_err(|_| "Update state is unavailable.")?;
+    let current = guard.get_or_insert_with(UpdateProgress::default);
+    if matches!(current.state, "running" | "restarting") {
+        return Err("An update is already running.".into());
     }
+    *current = UpdateProgress { state: "running", label: label.into(), ..UpdateProgress::default() };
+    Ok(())
+}
+
+fn fail_progress(error: String) {
+    set_progress(|progress| {
+        progress.state = "failed";
+        progress.error = Some(format!("{error} Full log: {}", log_path().display()));
+    });
+}
+
+fn is_commit(value: &str) -> bool {
+    value.len() == 40 && value.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Builds the main commit the user reviewed, in the background. Progress is read with
+/// `update_progress`, which reports "ready" when the installer is waiting.
+#[tauri::command]
+pub async fn prepare_update(app: AppHandle, expected_commit: String) -> Result<(), String> {
+    if !is_commit(&expected_commit) {
+        return Err("The update commit could not be verified.".into());
+    }
+    claim_progress("Checking for changes")?;
     std::thread::spawn(move || {
         let outcome = source_dir().and_then(|dir| {
-            let status = check(&dir)?;
+            let status = check(&dir, "", None)?;
             if !status.update_available {
                 return Err("SocialSpace is already up to date.".into());
             }
             if let Some(reason) = status.blocked_reason {
                 return Err(reason);
             }
-            run_update(&app, &dir)
+            if status.latest_commit.as_deref() != Some(expected_commit.as_str()) {
+                return Err("Main changed since you reviewed the update. Check again and review the new changes.".into());
+            }
+            build_update(&app, &dir, &expected_commit)
         });
         if let Err(error) = outcome {
-            set_progress(|progress| {
-                progress.state = "failed";
-                progress.error = Some(format!("{error} Full log: {}", std::env::temp_dir().join("socialspace-update.log").display()));
-            });
+            fail_progress(error);
         }
     });
     Ok(())
+}
+
+/// Verifies the prepared installer again, then closes the app, installs it silently and restarts.
+#[tauri::command]
+pub async fn install_prepared_update(app: AppHandle) -> Result<(), String> {
+    let prepared = read_prepared(&app).ok_or("No update is ready to install. Build it first.")?;
+    let installer = PathBuf::from(&prepared.installer);
+    if !installer.is_file() {
+        return Err("The prepared installer is gone. Build the update again.".into());
+    }
+    if sha256_of(&installer)? != prepared.sha256 {
+        return Err("The prepared installer changed after it was built. Build the update again.".into());
+    }
+    claim_progress("Installing and restarting")?;
+    let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: prepared.commit, succeeded: false };
+    let outcome = result_path(&app)
+        .and_then(|path| write_data(&path, &serde_json::to_vec(&result).unwrap_or_default()))
+        .and_then(|_| launch_installer(&installer));
+    if let Err(error) = outcome {
+        fail_progress(error.clone());
+        return Err(error);
+    }
+    if let Ok(path) = data_file(&app, PREPARED_FILE) {
+        let _ = fs::remove_file(path);
+    }
+    set_progress(|progress| progress.state = "restarting");
+    std::thread::spawn(move || {
+        // Give the window a moment to show "restarting" before the installer replaces the app.
+        std::thread::sleep(Duration::from_millis(1500));
+        app.exit(0);
+    });
+    Ok(())
+}
+
+/// Restarts the running app. This does not install anything.
+#[tauri::command]
+pub fn restart_app(app: AppHandle) {
+    app.restart()
 }
 
 #[tauri::command]
@@ -423,6 +559,38 @@ mod tests {
         assert_eq!(clean_output_line("\u{1b}[32m    Compiling\u{1b}[0m tauri v2.8.0"), "Compiling tauri v2.8.0");
         assert_eq!(clean_output_line("old progress\rnew progress  "), "new progress");
         assert_eq!(clean_output_line(&"x".repeat(500)).len(), 200);
+    }
+
+    #[test]
+    fn a_built_update_is_ready_only_for_the_newest_main() {
+        assert_eq!(update_state(false, false), "up_to_date");
+        assert_eq!(update_state(true, false), "available");
+        assert_eq!(update_state(true, true), "ready");
+
+        let dir = tempfile::tempdir().unwrap();
+        let installer = dir.path().join("SocialSpace-setup.exe");
+        fs::write(&installer, b"installer").unwrap();
+        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: String::new(), built_at: 1 };
+        assert!(prepared_for(Some(prepared.clone()), &"b".repeat(40)).is_some());
+        assert!(prepared_for(Some(prepared.clone()), &"c".repeat(40)).is_none(), "main moved on since the build");
+        fs::remove_file(&installer).unwrap();
+        assert!(prepared_for(Some(prepared), &"b".repeat(40)).is_none(), "installer was deleted");
+    }
+
+    #[test]
+    fn only_full_commit_hashes_are_built() {
+        assert!(is_commit(&"a1".repeat(20)));
+        assert!(!is_commit("a1b2c3d"));
+        assert!(!is_commit(&"z".repeat(40)));
+        assert!(!is_commit("origin/main; rm -rf"));
+    }
+
+    #[test]
+    fn installers_are_fingerprinted() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("setup.exe");
+        fs::write(&file, b"abc").unwrap();
+        assert_eq!(sha256_of(&file).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     }
 
     #[test]

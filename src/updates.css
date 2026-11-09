@@ -23,3 +23,21 @@
 .update-bar{height:5px;border-radius:99px;background:var(--surface-3);overflow:hidden}
 .update-bar span{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .4s ease}
 .update-settings .update-progress{margin:0 0 16px}
+
+/* Updates page */
+.update-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.update-panel .update-facts dd{overflow-wrap:anywhere}
+.update-ready{padding:10px 12px;border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--text);border-radius:var(--radius-sm);font-size:13.5px;line-height:1.5;margin:0 0 12px}
+.update-panel .update-note{color:var(--text-2);font-size:13.5px;margin:0 0 12px}
+.update-panel .update-error{color:var(--danger);font-size:13.5px;margin:0 0 12px}
+.update-panel .update-progress{margin:0 0 16px}
+.update-review{margin-top:16px;padding:14px 16px;border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2)}
+.update-review p{color:var(--text-2);font-size:13.5px;line-height:1.55;margin:6px 0 12px}
+.update-review .primary-button{margin-top:0}
+.update-panel .update-actions .primary-button{margin-top:0}
+.update-footnote{color:var(--text-3);font-size:12.5px;margin:16px 0 0}
+.update-banner .small-button{min-height:30px}
+.spin{animation:update-spin 1s linear infinite}
+@keyframes update-spin{to{transform:rotate(360deg)}}
+.nav-item .update-dot{margin-left:auto;width:8px;height:8px;flex:none;border-radius:99px;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+@media (max-width: 900px){.nav-item .update-dot{position:absolute;top:7px;right:7px;margin:0}}

@@ -57,7 +57,9 @@ fn main() {
         "export_sign_ins",
         "import_sign_ins",
         "check_for_update",
-        "install_update",
+        "prepare_update",
+        "install_prepared_update",
+        "restart_app",
         "update_progress",
         "take_update_result",
     ];

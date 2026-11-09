@@ -20,6 +20,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('workspace account management', () => {
+  it('always has an Updates page in the sidebar', async () => {
+    vi.mocked(service.loadWorkspace).mockResolvedValue({ businessName: '', brands: [], accounts: [], channels: [] });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Updates' }));
+    expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart SocialSpace' })).toBeInTheDocument();
+  });
+
   it('adds an account while preserving the existing workspace', async () => {
     vi.mocked(service.loadWorkspace).mockResolvedValue({ businessName: 'Example LLC', brands: [], accounts: [], channels: [] });
     const user = userEvent.setup();

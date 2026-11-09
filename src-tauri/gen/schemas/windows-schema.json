@@ -357,10 +357,10 @@
           "markdownDescription": "Enables the instagram_connection command without any pre-configured scope."
         },
         {
-          "description": "Enables the install_update command without any pre-configured scope.",
+          "description": "Enables the install_prepared_update command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-install-update",
-          "markdownDescription": "Enables the install_update command without any pre-configured scope."
+          "const": "allow-install-prepared-update",
+          "markdownDescription": "Enables the install_prepared_update command without any pre-configured scope."
         },
         {
           "description": "Enables the list_emails command without any pre-configured scope.",
@@ -459,6 +459,12 @@
           "markdownDescription": "Enables the post_to_x command without any pre-configured scope."
         },
         {
+          "description": "Enables the prepare_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-prepare-update",
+          "markdownDescription": "Enables the prepare_update command without any pre-configured scope."
+        },
+        {
           "description": "Enables the publish_instagram_reel command without any pre-configured scope.",
           "type": "string",
           "const": "allow-publish-instagram-reel",
@@ -481,6 +487,12 @@
           "type": "string",
           "const": "allow-rename-video-source",
           "markdownDescription": "Enables the rename_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the restart_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-restart-app",
+          "markdownDescription": "Enables the restart_app command without any pre-configured scope."
         },
         {
           "description": "Enables the reveal_account_password command without any pre-configured scope.",
@@ -717,10 +729,10 @@
           "markdownDescription": "Denies the instagram_connection command without any pre-configured scope."
         },
         {
-          "description": "Denies the install_update command without any pre-configured scope.",
+          "description": "Denies the install_prepared_update command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-install-update",
-          "markdownDescription": "Denies the install_update command without any pre-configured scope."
+          "const": "deny-install-prepared-update",
+          "markdownDescription": "Denies the install_prepared_update command without any pre-configured scope."
         },
         {
           "description": "Denies the list_emails command without any pre-configured scope.",
@@ -819,6 +831,12 @@
           "markdownDescription": "Denies the post_to_x command without any pre-configured scope."
         },
         {
+          "description": "Denies the prepare_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-prepare-update",
+          "markdownDescription": "Denies the prepare_update command without any pre-configured scope."
+        },
+        {
           "description": "Denies the publish_instagram_reel command without any pre-configured scope.",
           "type": "string",
           "const": "deny-publish-instagram-reel",
@@ -841,6 +859,12 @@
           "type": "string",
           "const": "deny-rename-video-source",
           "markdownDescription": "Denies the rename_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the restart_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-restart-app",
+          "markdownDescription": "Denies the restart_app command without any pre-configured scope."
         },
         {
           "description": "Denies the reveal_account_password command without any pre-configured scope.",

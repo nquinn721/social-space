@@ -1,18 +1,26 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { UpdateBanner, UpdateSettings } from './AppUpdates';
+import { hasUpdate, UpdateBanner, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
 import * as updates from './updateService';
 
-vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), installUpdate: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn() }));
+vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn() }));
 
+const MAIN = 'b'.repeat(40);
 const available: updates.UpdateStatus = {
-  installedCommit: 'aaaaaaa1111111', latestCommit: 'bbbbbbb2222222', updateAvailable: true,
-  newCommits: ['bbbbbbb Add chat assistant', 'ccccccc Fix queue'], blockedReason: null,
+  state: 'available', runningVersion: '0.1.0', sourceDir: 'D:\\Projects\\SocialManager-release', prepared: null,
+  installedCommit: 'a'.repeat(40), latestCommit: MAIN, updateAvailable: true,
+  newCommits: ['bbbbbbb Add video library', 'ccccccc Fix queue'], blockedReason: null,
 };
+const ready: updates.UpdateStatus = { ...available, state: 'ready', prepared: { commit: MAIN, installer: 'C:\\setup.exe', sha256: 'f'.repeat(64), builtAt: 1 } };
+const upToDate: updates.UpdateStatus = { ...available, state: 'up_to_date', installedCommit: MAIN, updateAvailable: false, newCommits: [] };
+const idle: updates.UpdateProgress = { state: 'idle', step: 0, totalSteps: 3, label: '', detail: '', error: null };
 
-const idle: updates.UpdateProgress = { state: 'idle', step: 0, totalSteps: 4, label: '', detail: '', error: null };
+function fake(overrides: Partial<AppUpdates> = {}): AppUpdates {
+  return { status: available, progress: idle, checking: false, error: '', check: vi.fn().mockResolvedValue(undefined), followProgress: vi.fn().mockResolvedValue(undefined), ...overrides };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(updates.updateProgress).mockResolvedValue(idle);
@@ -20,69 +28,117 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('app updates', () => {
-  it('stays hidden when the app is up to date', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, latestCommit: available.installedCommit, updateAvailable: false, newCommits: [] });
-    const { container } = render(<UpdateBanner/>);
-    await vi.waitFor(() => expect(updates.checkForUpdate).toHaveBeenCalled());
+describe('update checks', () => {
+  it('checks main at startup and again on the interval', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
+      const { result } = renderHook(() => useAppUpdates(1000));
+      await act(async () => { await Promise.resolve(); });
+      expect(result.current.status).toEqual(available);
+      await act(async () => { vi.advanceTimersByTime(1000); await Promise.resolve(); });
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('only offers an update that is not blocked', () => {
+    expect(hasUpdate(available)).toBe(true);
+    expect(hasUpdate(ready)).toBe(true);
+    expect(hasUpdate(upToDate)).toBe(false);
+    expect(hasUpdate({ ...available, blockedReason: 'Uncommitted changes.' })).toBe(false);
+    expect(hasUpdate(null)).toBe(false);
+  });
+});
+
+describe('update banner', () => {
+  it('stays hidden when the app is up to date', () => {
+    const { container } = render(<UpdateBanner updates={fake({ status: upToDate })} onOpen={vi.fn()}/>);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('runs the update in the background and shows its progress in the app', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
-    vi.mocked(updates.installUpdate).mockResolvedValue();
-    const user = userEvent.setup();
-    render(<UpdateBanner/>);
-    const button = await screen.findByRole('button', { name: 'Update now' });
-    vi.mocked(updates.updateProgress).mockResolvedValue({ state: 'running', step: 3, totalSteps: 4, label: 'Building the new version', detail: 'Compiling tauri v2.8.0', error: null });
-    await user.click(button);
-    expect(updates.installUpdate).toHaveBeenCalledOnce();
-    expect(await screen.findByText('Updating SocialSpace · Step 3 of 4: Building the new version…')).toBeInTheDocument();
-    expect(screen.getByText('Compiling tauri v2.8.0')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '63');
+  it('points to the Updates page when main has changes', async () => {
+    const open = vi.fn();
+    render(<UpdateBanner updates={fake()} onOpen={open}/>);
+    expect(screen.getByText('2 new changes on main for SocialSpace.')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'View update' }));
+    expect(open).toHaveBeenCalledOnce();
   });
 
-  it('shows a failed update with a retry', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
-    vi.mocked(updates.updateProgress).mockResolvedValue({ ...idle, state: 'failed', error: "'npm run tauri build' failed." });
-    render(<UpdateBanner/>);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Update failed');
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  it('follows a running build', () => {
+    render(<UpdateBanner updates={fake({ progress: { state: 'running', step: 3, totalSteps: 3, label: 'Building the new version', detail: 'Compiling tauri v2.8.0', error: null } })} onOpen={vi.fn()}/>);
+    expect(screen.getByText('Building the update · Step 3 of 3: Building the new version…')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '83');
   });
 
   it('confirms completion after restarting into the new version', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, installedCommit: 'bbbbbbb2222222', updateAvailable: false, newCommits: [] });
-    vi.mocked(updates.takeUpdateResult).mockResolvedValue({ fromCommit: 'aaaaaaa1111111', toCommit: 'bbbbbbb2222222', succeeded: true });
-    const user = userEvent.setup();
-    render(<UpdateBanner/>);
+    vi.mocked(updates.takeUpdateResult).mockResolvedValue({ fromCommit: 'a'.repeat(40), toCommit: MAIN, succeeded: true });
+    render(<UpdateBanner updates={fake({ status: upToDate })} onOpen={vi.fn()}/>);
     expect(await screen.findByText('SocialSpace is updated to bbbbbbb.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Dismiss update' }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Dismiss update' }));
     expect(screen.queryByText(/is updated/)).not.toBeInTheDocument();
   });
+});
 
-  it('explains why an update is blocked instead of offering it', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, blockedReason: 'The source folder has uncommitted changes (src/App.tsx).' });
-    render(<UpdateBanner/>);
-    expect(await screen.findByText(/uncommitted changes/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Update now' })).not.toBeInTheDocument();
+describe('Updates page', () => {
+  it('shows the running build, what is new on main and where it builds from', () => {
+    render(<UpdatesPage updates={fake()}/>);
+    expect(screen.getByText('SocialSpace 0.1.0, build aaaaaaa')).toBeInTheDocument();
+    expect(screen.getByText('D:\\Projects\\SocialManager-release')).toBeInTheDocument();
+    expect(screen.getByText('bbbbbbb Add video library')).toBeInTheDocument();
   });
 
-  it('checks on demand from settings and lists incoming changes', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
-    const user = userEvent.setup();
-    render(<UpdateSettings/>);
-    expect(updates.checkForUpdate).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Check for updates' }));
-    expect(await screen.findByText('bbbbbbb Add chat assistant')).toBeInTheDocument();
-    expect(screen.getByText('aaaaaaa')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Update now' })).toBeEnabled();
+  it('says so when up to date and offers no update', () => {
+    render(<UpdatesPage updates={fake({ status: upToDate })}/>);
+    expect(screen.getByText('SocialSpace is up to date with main.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update SocialSpace' })).toBeDisabled();
   });
 
-  it('shows the error when the check fails', async () => {
-    vi.mocked(updates.checkForUpdate).mockRejectedValue('git fetch origin main failed: offline');
+  it('builds only the main commit that was reviewed', async () => {
+    vi.mocked(updates.prepareUpdate).mockResolvedValue();
     const user = userEvent.setup();
-    render(<UpdateSettings/>);
+    const state = fake();
+    render(<UpdatesPage updates={state}/>);
+    await user.click(screen.getByRole('button', { name: 'Update SocialSpace' }));
+    expect(screen.getByText('Build the available update?')).toBeInTheDocument();
+    expect(updates.prepareUpdate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Build update' }));
+    expect(updates.prepareUpdate).toHaveBeenCalledWith(MAIN);
+    expect(state.followProgress).toHaveBeenCalled();
+  });
+
+  it('asks before installing a built update and restarting', async () => {
+    vi.mocked(updates.installPreparedUpdate).mockResolvedValue();
+    const user = userEvent.setup();
+    render(<UpdatesPage updates={fake({ status: ready })}/>);
+    expect(screen.getByText(/ready to install/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Install update' }));
+    expect(updates.installPreparedUpdate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Install and restart' }));
+    expect(updates.installPreparedUpdate).toHaveBeenCalledOnce();
+  });
+
+  it('opens the install step when a build finishes on the page', () => {
+    const running = fake({ progress: { ...idle, state: 'running', step: 3, label: 'Building the new version' } });
+    const { rerender } = render(<UpdatesPage updates={running}/>);
+    rerender(<UpdatesPage updates={fake({ status: ready, progress: { ...idle, state: 'ready' } })}/>);
+    expect(screen.getByText('Install this update?')).toBeInTheDocument();
+  });
+
+  it('explains why an update is blocked or failed', () => {
+    render(<UpdatesPage updates={fake({ status: { ...available, blockedReason: 'The source folder has uncommitted changes (src/App.tsx).' }, progress: { ...idle, state: 'failed', error: "'npm run tauri build' failed." } })}/>);
+    expect(screen.getByText(/uncommitted changes/)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('npm run tauri build');
+    expect(screen.getByRole('button', { name: 'Update SocialSpace' })).toBeDisabled();
+  });
+
+  it('checks again on demand and restarts without installing', async () => {
+    const user = userEvent.setup();
+    const state = fake();
+    render(<UpdatesPage updates={state}/>);
     await user.click(screen.getByRole('button', { name: 'Check for updates' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('offline');
+    expect(state.check).toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Restart SocialSpace' }));
+    expect(updates.restartApp).toHaveBeenCalledOnce();
+    expect(updates.installPreparedUpdate).not.toHaveBeenCalled();
   });
 });
