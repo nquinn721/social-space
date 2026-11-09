@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { AppWindow, ArrowLeft, ChevronRight, Plus, Search, Trash2, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
-import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type Workspace } from '../model';
+import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from '../model';
 import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
+import Connections, { postingConnected, useConnectionState } from '../Connections';
 import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
 
 type Props = {
@@ -22,6 +23,8 @@ type Props = {
   /** Saves a workspace rebuilt from a sign-in backup. */
   onRestore?: (next: Workspace, message: string) => Promise<boolean | undefined>;
   onOpenLibrary?: () => void;
+  /** Goes to where a connection is set up (inbox, posting, video makers). */
+  onNavigate?: (view: View, section?: string) => void;
   /** Removes a profile from the app (asks first). It never deletes anything on the social. */
   onRemoveAccount?: (account: Account) => void;
   /** Removes a brand with all its profiles and videos from the app (asks first). */
@@ -37,9 +40,10 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand, onNavigate }: Props) {
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<'brands' | 'sign-ins'>('brands');
+  const [tab, setTab] = useState<'brands' | 'sign-ins' | 'connections'>('brands');
+  const connections = useConnectionState();
   const [openId, setOpenId] = useState<string | null>(null);
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
@@ -55,7 +59,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
     <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
   </>;
-  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button></div>;
+  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button>{onNavigate && <button type="button" role="tab" aria-selected={tab === 'connections'} aria-pressed={tab === 'connections'} onClick={() => setTab('connections')}>Connections</button>}</div>;
 
   if (open && tab === 'brands') {
     const { brand, accounts } = open;
@@ -81,7 +85,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
           return <div key={account.id} className="account-row-wrap">
             <button className="account-row" onClick={() => onEditAccount(account)}>
               <BrandMark platform={account.platform}/>
-              <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}</div>
+              <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}{live && (account.platform === 'instagram' || account.platform === 'x') && <small className={postingConnected(account, connections.state) ? 'row-connected' : 'row-unconnected'}>{connections.loading ? 'Checking posting…' : postingConnected(account, connections.state) ? 'App can post here' : 'Not connected for posting'}</small>}</div>
               <span className={`pill ${account.status}`}><span className="dot"/>{live ? 'Live' : 'Not created yet'}</span>
               <ChevronRight size={16}/>
             </button>
@@ -107,7 +111,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   return <>
     <PageHeader eyebrow="Your brands" title="Brands" description="Each brand gets one profile on every social. Open a brand to create its profiles, see its sign-ins and its videos." actions={actions}/>
     {tabs}
-    {tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
+    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
       <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>
