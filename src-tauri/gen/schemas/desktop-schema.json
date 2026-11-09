@@ -501,6 +501,12 @@
           "markdownDescription": "Enables the reveal_account_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_generated_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-generated-video",
+          "markdownDescription": "Enables the save_generated_video command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-workspace",
@@ -871,6 +877,12 @@
           "type": "string",
           "const": "deny-reveal-account-password",
           "markdownDescription": "Denies the reveal_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_generated_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-generated-video",
+          "markdownDescription": "Denies the save_generated_video command without any pre-configured scope."
         },
         {
           "description": "Denies the save_workspace command without any pre-configured scope.",
