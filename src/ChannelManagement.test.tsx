@@ -6,7 +6,7 @@ import ChannelManagement, { ChannelOverview } from './ChannelManagement';
 import type { Workspace } from './model';
 
 const workspace: Workspace = {
-  businessName: 'Example LLC',
+  businessName: 'Example LLC', brands: [],
   accounts: [{ id: 'yt-account', platform: 'youtube', label: 'Business account', handle: 'business', status: 'active', notes: '' }, { id: 'x-account', platform: 'x', label: 'X account', handle: 'studio', status: 'active', notes: '' }],
   channels: [],
 };

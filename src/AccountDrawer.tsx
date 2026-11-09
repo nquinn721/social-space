@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AppWindow, ImagePlus, Sparkles, UserRound, Wand2, X as Close } from 'lucide-react';
+import { AppWindow, ImagePlus, Sparkles, UserPlus, UserRound, Wand2, X as Close } from 'lucide-react';
 import AccountCredentials from './AccountCredentials';
 import ProfileImageStudio from './ProfileImageStudio';
-import { BIO_LIMITS, createAccount, getPlatform, PLATFORMS, type Account, type Platform } from './model';
+import { BIO_LIMITS, createAccount, normalizeHandle, getPlatform, PLATFORMS, type Account, type Platform } from './model';
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
 
-type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void> };
+type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void; loginNote?: string };
 
 /** Side panel to add an account or see and edit one, with its sign-in details on top. */
-export default function AccountDrawer({ account, busy, onClose, onSave, onRemove }: Props) {
+export default function AccountDrawer({ account, busy, onClose, onSave, onRemove, onSignUp, loginNote }: Props) {
   const [platform, setPlatform] = useState<Platform>(account?.platform ?? 'instagram');
   const [label, setLabel] = useState(account?.label ?? '');
   const [handle, setHandle] = useState(account?.handle ?? '');
@@ -42,7 +42,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
   const openManage = () => run(async () => { if (account) { await openPlatformWindow(account.platform, 'manage'); setNote(`Opened ${getPlatform(account.platform).name}.`); } });
   const fillProfile = () => run(async () => {
     if (!account) return;
-    const current = { ...account, displayName, bio, website, imagePath };
+    const current = { ...account, handle: normalizeHandle(handle), displayName, bio, website, imagePath };
     const id = await openPlatformWindow(account.platform, 'manage');
     await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, keepFilling: true });
     setNote(`Opened ${getPlatform(account.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
@@ -61,14 +61,16 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
       <header className="drawer-head">
         {account ? <BrandMark platform={account.platform}/> : <span className="platform-mark x"><UserRound size={18}/></span>}
         <div><h2 id="drawer-title">{title}</h2><p>{account ? `${account.label} on ${getPlatform(account.platform).name}` : "Save an account you already have. This won't sign in or create anything."}</p></div>
-        {account && <span className={`pill ${account.status}`}><span className="dot"/>{account.status === 'active' ? 'Live' : 'Planned'}</span>}
+        {account && <span className={`pill ${account.status}`}><span className="dot"/>{account.status === 'active' ? 'Live' : 'Not created yet'}</span>}
         <button className="icon-button" onClick={onClose} aria-label="Close" disabled={disabled}><Close size={18}/></button>
       </header>
       <div className="drawer-body">
         {account && <div className="drawer-section">
           <AccountCredentials account={account}/>
+          {loginNote && <p className="login-note">{loginNote}</p>}
           <div className="drawer-actions">
-            <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> Open {getPlatform(account.platform).name}</button>
+            {account.status === 'planned' && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}><UserPlus size={14}/> Create on {getPlatform(account.platform).name}</button>}
+            <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> {account.status === 'planned' ? 'Sign in' : 'Open'} {getPlatform(account.platform).name}</button>
             <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillProfile()}><Sparkles size={14}/> Fill profile on {getPlatform(account.platform).name}</button>
           </div>
           {note && <p className="success-message" role="status">{note}</p>}
@@ -78,7 +80,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
             <h3>Account</h3>
             <div className="field-row">
               <div><label htmlFor="platform">Platform</label><select id="platform" value={platform} onChange={(event) => setPlatform(event.target.value as Platform)}>{PLATFORMS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
-              <div><label htmlFor="status">Status</label><select id="status" value={status} onChange={(event) => setStatus(event.target.value as Account['status'])}><option value="planned">Planned</option><option value="active">In use</option></select></div>
+              <div><label htmlFor="status">Status</label><select id="status" value={status} onChange={(event) => setStatus(event.target.value as Account['status'])}><option value="planned">Not created yet</option><option value="active">Live on the social</option></select></div>
             </div>
             <label htmlFor="label">Account name</label><input id="label" autoFocus={!account} value={label} maxLength={120} onChange={(event) => setLabel(event.target.value)} placeholder="e.g. Soft Wings Studio" required/>
             <label htmlFor="handle">Handle <span>optional</span></label><input id="handle" value={handle} maxLength={120} onChange={(event) => setHandle(event.target.value)} placeholder="@yourbusiness"/>

@@ -451,9 +451,8 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .publish-row p { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
 .x-publisher, .instagram-publisher { margin-top: 16px; }
 .kling-card { display: flex; overflow: hidden; min-height: 240px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); }
-.kling-art { width: 32%; min-width: 180px; background: radial-gradient(circle at 38% 40%, #8f72d8, #3f3168 45%, #1b1828 85%); display: grid; place-items: center; position: relative; color: #efe6ff; }
-.kling-art svg { width: 64px; height: 64px; stroke-width: 1; }
-.kling-art span { position: absolute; top: 30%; right: 22%; font-size: 24px; color: #ff9cc4; }
+.kling-art { width: 32%; min-width: 180px; background: radial-gradient(circle at 50% 45%, #1c1c1c, #000 70%); display: grid; place-items: center; border-right: 1px solid var(--border); }
+.kling-art img { width: 96px; height: 96px; border-radius: 22px; }
 .kling-content { padding: 28px; max-width: 560px; }
 .tool-label { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; color: var(--accent-text); }
 .kling-content h2 { font-size: 22px; margin: 8px 0; }
@@ -556,3 +555,18 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .dialog.wizard { box-shadow: 0 0 0 1px rgba(139, 92, 255, 0.15), 0 30px 100px rgba(0, 0, 0, 0.7), 0 0 80px rgba(139, 92, 255, 0.12); }
 .update-banner { background: var(--splash-soft) !important; border-color: var(--accent-line) !important; }
 .limit-list li.over .limit-bar span { background: var(--danger); }
+
+/* Wizard with the site shown inside it */
+.wizard.site-open { width: calc(100vw - 24px); height: calc(100vh - 24px); max-width: none; max-height: none; grid-template-columns: 190px minmax(0, 1fr); animation: none; }
+.modal-backdrop:has(.wizard.site-open) { padding: 12px; }
+.site-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; padding: 12px 16px; }
+.site-frame { min-height: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; display: grid; place-items: center; overflow: hidden; }
+.site-frame span { color: #555; font-size: 13.5px; padding: 16px; text-align: center; }
+.site-side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.site-side .copy-list, .site-side .wizard-actions { margin-top: 0; }
+@media (max-width: 1100px) { .wizard.site-open { grid-template-columns: 1fr; } .site-stage { grid-template-columns: minmax(0, 1fr) 280px; } }
+
+/* Gmail sign-in, shown wherever the inbox is not connected yet */
+.gmail-connect { display: grid; gap: 10px; }
+.inbox.empty .gmail-connect { padding: 12px; }
+.gmail-connect p { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0; }

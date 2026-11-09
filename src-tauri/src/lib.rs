@@ -3,29 +3,69 @@ use std::{collections::HashSet, fs, io::Write, path::Path, sync::Mutex};
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 mod account_passwords;
+mod backup;
 mod autofill;
 mod browser;
 mod email;
+mod embedded;
 mod gmail_session;
 mod image_ai;
+mod grok;
 mod instagram;
 mod kling;
 mod ollama;
 mod queue;
 mod updater;
+mod video_gen;
+mod video_sources;
 mod x_integration;
 
 const WORKSPACE_FILE: &str = "workspace.json";
 const MAX_ACCOUNTS: usize = 200;
 const MAX_FIELD_LENGTH: usize = 1_000;
+const MAX_VIDEOS: usize = 20_000;
+const MAX_CAPTION_LENGTH: usize = 4_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Workspace {
     business_name: String,
+    #[serde(default)]
+    brands: Vec<Brand>,
     accounts: Vec<Account>,
     #[serde(default)]
     channels: Vec<Channel>,
+    #[serde(default)]
+    categories: Vec<VideoCategory>,
+    #[serde(default)]
+    videos: Vec<Video>,
+}
+
+/// A kind of video inside a brand, e.g. "Rabbit".
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VideoCategory {
+    id: String,
+    brand_id: String,
+    name: String,
+}
+
+/// One video of a category, posted to every social of its brand. `posted` lists the socials it is up on.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Video {
+    id: String,
+    brand_id: String,
+    category_id: String,
+    title: String,
+    #[serde(default)]
+    media_source: String,
+    #[serde(default)]
+    caption: String,
+    #[serde(default)]
+    posted: Vec<Platform>,
+    #[serde(default)]
+    created_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -36,6 +76,16 @@ struct Channel {
     name: String,
     handle: String,
     account_id: Option<String>,
+    notes: String,
+}
+
+/// A brand or category that owns one profile per social.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Brand {
+    id: String,
+    name: String,
+    #[serde(default)]
     notes: String,
 }
 
@@ -58,6 +108,11 @@ struct Account {
     signup_email: String,
     #[serde(default)]
     image_path: String,
+    #[serde(default)]
+    birthday: String,
+    /// Older workspaces have none; the app assigns one by name when it loads them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    brand_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -80,14 +135,44 @@ enum AccountStatus {
 struct StorageLock(Mutex<()>);
 
 fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
-    if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS {
+    if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS || workspace.brands.len() > MAX_ACCOUNTS {
         return Err("The workspace is too large to save.".into());
+    }
+    let mut brand_ids = HashSet::new();
+    for brand in &workspace.brands {
+        if brand.id.trim().is_empty() || brand.name.trim().is_empty() || !brand_ids.insert(&brand.id)
+            || [&brand.id, &brand.name, &brand.notes].iter().any(|field| field.len() > MAX_FIELD_LENGTH) {
+            return Err("Each brand needs a unique ID, a name, and fields under 1,000 bytes.".into());
+        }
+    }
+    if workspace.accounts.iter().any(|account| account.brand_id.as_ref().is_some_and(|id| !brand_ids.contains(id))) {
+        return Err("An account belongs to a brand that does not exist.".into());
+    }
+    if workspace.categories.len() > MAX_ACCOUNTS * 10 || workspace.videos.len() > MAX_VIDEOS {
+        return Err("The workspace has too many categories or videos to save.".into());
+    }
+    let mut category_ids = HashSet::new();
+    for category in &workspace.categories {
+        if category.id.trim().is_empty() || category.name.trim().is_empty() || !category_ids.insert(&category.id)
+            || !brand_ids.contains(&category.brand_id)
+            || [&category.id, &category.name].iter().any(|field| field.len() > MAX_FIELD_LENGTH) {
+            return Err("Each category needs a unique ID, a name, and a brand.".into());
+        }
+    }
+    let mut video_ids = HashSet::new();
+    for video in &workspace.videos {
+        if video.id.trim().is_empty() || !video_ids.insert(&video.id)
+            || !workspace.categories.iter().any(|category| category.id == video.category_id && category.brand_id == video.brand_id)
+            || [&video.id, &video.title, &video.media_source].iter().any(|field| field.len() > MAX_FIELD_LENGTH)
+            || video.caption.len() > MAX_CAPTION_LENGTH {
+            return Err("Each video needs a unique ID and a category of its brand.".into());
+        }
     }
     let mut ids = HashSet::new();
     for account in &workspace.accounts {
         if account.id.trim().is_empty()
             || !ids.insert(&account.id)
-            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path]
+            || [&account.id, &account.label, &account.handle, &account.notes, &account.display_name, &account.bio, &account.website, &account.signup_email, &account.image_path, &account.birthday]
                 .iter()
                 .any(|field| field.len() > MAX_FIELD_LENGTH)
         {
@@ -208,29 +293,29 @@ async fn open_kling(app: tauri::AppHandle) -> Result<(), String> {
     browser::open_remote(&app, "https://klingai.com/", false)
 }
 
-#[tauri::command]
-async fn open_kling_developer(app: tauri::AppHandle) -> Result<(), String> {
-    browser::open_remote(&app, "https://kling.ai/dev/api-key", false)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(StorageLock::default())
-        .manage(kling::GenerateLock::default())
+        .manage(video_gen::GenerateLock::default())
+        .manage(video_sources::SourcesLock::default())
         .setup(|app| { queue::start_scheduler(app.handle().clone()); Ok(()) })
         .invoke_handler(tauri::generate_handler![
             load_workspace,
             save_workspace,
             open_platform_action,
             open_kling,
-            open_kling_developer,
-            kling::kling_key_status,
-            kling::save_kling_key,
-            kling::remove_kling_key,
-            kling::generate_kling_video,
-            kling::get_kling_video,
-            kling::open_kling_video,
+            video_sources::list_video_sources,
+            video_sources::set_active_video_source,
+            video_sources::open_video_provider_site,
+            video_sources::add_video_source,
+            video_sources::check_video_source,
+            video_sources::rename_video_source,
+            video_sources::remove_video_source,
+            video_sources::open_video_provider_keys,
+            video_gen::generate_video,
+            video_gen::get_video,
+            video_gen::open_video,
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
@@ -255,8 +340,12 @@ pub fn run() {
             email::list_emails,
             email::read_email,
             gmail_session::open_gmail_sign_in,
+            gmail_session::open_gmail_signup,
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
+            embedded::embed_platform_page,
+            embedded::set_embedded_bounds,
+            embedded::close_embedded_page,
             autofill::fill_site_form,
             autofill::choose_image_file,
             autofill::load_image_preview,
@@ -266,8 +355,12 @@ pub fn run() {
             account_passwords::ensure_shared_password,
             account_passwords::reveal_account_password,
             account_passwords::delete_account_password,
+            backup::export_sign_ins,
+            backup::import_sign_ins,
             updater::check_for_update,
-            updater::install_update
+            updater::install_update,
+            updater::update_progress,
+            updater::take_update_result
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Manager");
@@ -290,6 +383,8 @@ mod tests {
             website: String::new(),
             signup_email: String::new(),
             image_path: String::new(),
+            birthday: String::new(),
+            brand_id: None,
         }
     }
 
@@ -297,8 +392,11 @@ mod tests {
     fn workspace_round_trips_and_rejects_duplicate_ids() {
         let mut workspace = Workspace {
             business_name: "Example LLC".into(),
+            brands: vec![],
             accounts: vec![account("one")],
             channels: vec![],
+            categories: vec![],
+            videos: vec![],
         };
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -322,6 +420,32 @@ mod tests {
         workspace.channels.push(Channel { id: "channel-1".into(), platform: Platform::Instagram, name: "Main".into(), handle: "main".into(), account_id: Some("account-1".into()), notes: String::new() });
         assert!(validate_workspace(&workspace).is_ok());
         workspace.channels[0].platform = Platform::Youtube;
+        assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn accounts_must_belong_to_a_saved_brand() {
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new() }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![] };
+        workspace.accounts[0].brand_id = Some("b".into());
+        let json = serde_json::to_string(&workspace).unwrap();
+        assert!(json.contains(r#""brandId":"b""#));
+        assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
+        assert!(validate_workspace(&workspace).is_ok());
+        workspace.accounts[0].brand_id = Some("missing".into());
+        assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn videos_must_be_in_a_category_of_their_brand() {
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![] };
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1 });
+        let json = serde_json::to_string(&workspace).unwrap();
+        assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
+        assert!(validate_workspace(&workspace).is_ok());
+        workspace.videos[0].brand_id = "other".into();
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.videos[0].brand_id = "b".into();
+        workspace.categories[0].brand_id = "missing".into();
         assert!(validate_workspace(&workspace).is_err());
     }
 
@@ -355,8 +479,11 @@ mod tests {
         let path = directory.join("workspace.json");
         let workspace = Workspace {
             business_name: "Example LLC".into(),
+            brands: vec![],
             accounts: vec![account("one")],
             channels: vec![],
+            categories: vec![],
+            videos: vec![],
         };
         write_workspace(&path, &workspace).unwrap();
         assert_eq!(read_workspace(&path).unwrap(), workspace);
@@ -369,5 +496,47 @@ mod tests {
         assert!(write_workspace(&path, &invalid).is_err());
         assert_eq!(read_workspace(&path).unwrap(), updated);
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    /// On Windows a window built inside a sync command deadlocks WebView2 and
+    /// shows a blank white window, so every command that opens one is async.
+    #[test]
+    fn window_opening_commands_are_async() {
+        let sources = [
+            include_str!("lib.rs"),
+            include_str!("gmail_session.rs"),
+            include_str!("embedded.rs"),
+            include_str!("autofill.rs"),
+        ];
+        let opens = ["open_remote", "make_window", "WebviewWindowBuilder"];
+        for source in sources {
+            for (index, _) in source.match_indices(concat!("#[tauri::", "command]")) {
+                let rest = &source[index..];
+                let signature = &rest[..rest.find('{').unwrap()];
+                let body_end = rest.find("\n}").unwrap_or(rest.len());
+                let body = &rest[..body_end];
+                if opens.iter().any(|open| body.contains(open)) {
+                    assert!(signature.contains("async fn"), "a command that opens a window must be async: {signature}");
+                }
+            }
+        }
+    }
+
+    /// A command registered in the handler but missing from build.rs or the
+    /// capability is rejected at runtime in the installed app.
+    #[test]
+    fn every_registered_command_is_allowed() {
+        let source = include_str!("lib.rs");
+        let start = source.find(concat!("generate_handler", "![")).unwrap();
+        let handler = &source[start..];
+        let handler = &handler[handler.find('[').unwrap() + 1..handler.find(']').unwrap()];
+        let build = include_str!("../build.rs");
+        let capability = include_str!("../capabilities/default.json");
+        for command in handler.split(',').map(|item| item.trim()).filter(|item| !item.is_empty()) {
+            let name = command.rsplit("::").next().unwrap();
+            assert!(build.contains(&format!("\"{name}\"")), "{name} is missing from build.rs");
+            let permission = format!("\"allow-{}\"", name.replace('_', "-"));
+            assert!(capability.contains(&permission), "{name} is missing from capabilities/default.json");
+        }
     }
 }

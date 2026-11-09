@@ -59,7 +59,8 @@ export function fitDescription(text: string, limit: number): string {
 
 /** Asks the local model for an account name, username, display name, description and picture idea. */
 export async function suggestProfile(idea: string, limit: number, socials: string[]): Promise<ProfileSuggestion> {
-  const settings = loadSettings();
+  // Thinking first gives much more creative names on small models; it takes a few more seconds.
+  const settings = { ...loadSettings(), think: true };
   const messages: ChatMessage[] = [
     { role: 'system', content: PROFILE_GUIDE },
     { role: 'user', content: EXAMPLE_IDEA },

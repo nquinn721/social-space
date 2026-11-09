@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-check-video-source"
+description = "Enables the check_video_source command without any pre-configured scope."
+commands.allow = ["check_video_source"]
+
+[[permission]]
+identifier = "deny-check-video-source"
+description = "Denies the check_video_source command without any pre-configured scope."
+commands.deny = ["check_video_source"]

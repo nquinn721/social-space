@@ -3,6 +3,7 @@ import { AppWindow, ArrowLeft, Check, Copy, Inbox, Mail, RefreshCw } from 'lucid
 import { emailConnection, listEmails, openGmailMessage, readEmail, type EmailConnection, type EmailMessage, type EmailSummary } from './emailService';
 import { findCode } from './profileService';
 import { errorText } from './ui';
+import GmailConnect from './GmailConnect';
 
 /** How often the inbox checks for new mail while it's on screen. */
 const AUTO_REFRESH_MS = 20_000;
@@ -15,10 +16,14 @@ type Props = {
   onCode?: (code: string) => void;
   /** Keep checking for new mail while shown. */
   autoRefresh?: boolean;
+  /** How often auto refresh checks, in ms. */
+  refreshMs?: number;
+  /** Called once for each email with a code in its subject that arrives while the list is shown. */
+  onNewCode?: (code: string, email: EmailSummary) => void;
 };
 
 /** Newest inbox emails with verification codes pulled out so they can be copied or filled in. */
-export default function InboxList({ limit = 10, compact = false, onCode, autoRefresh = false }: Props) {
+export default function InboxList({ limit = 10, compact = false, onCode, autoRefresh = false, refreshMs = AUTO_REFRESH_MS, onNewCode }: Props) {
   const [connection, setConnection] = useState<EmailConnection | null | undefined>(undefined);
   const [emails, setEmails] = useState<EmailSummary[]>([]);
   const [open, setOpen] = useState<EmailMessage | null>(null);
@@ -26,6 +31,10 @@ export default function InboxList({ limit = 10, compact = false, onCode, autoRef
   const [error, setError] = useState('');
   const [copied, setCopied] = useState('');
   const loading = useRef(false);
+  // Mail already there when the list opens is old; only mail that arrives later counts as new.
+  const seen = useRef<Set<number> | null>(null);
+  const newCode = useRef(onNewCode);
+  newCode.current = onNewCode;
 
   const refresh = useCallback(async (quiet = false) => {
     if (loading.current) return;
@@ -34,16 +43,27 @@ export default function InboxList({ limit = 10, compact = false, onCode, autoRef
     try {
       const current = await emailConnection();
       setConnection(current);
-      if (current) setEmails(await listEmails({ limit }));
+      if (current) {
+        const list = await listEmails({ limit });
+        setEmails(list);
+        const first = seen.current === null;
+        seen.current ??= new Set();
+        for (const email of list) {
+          if (seen.current.has(email.uid)) continue;
+          seen.current.add(email.uid);
+          const found = findCode(email.subject);
+          if (!first && found) newCode.current?.(found, email);
+        }
+      }
     } catch (reason) { if (!quiet) setError(errorText(reason, 'The request failed.')); setConnection((value) => value ?? null); }
     finally { loading.current = false; if (!quiet) setBusy(false); }
   }, [limit]);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     if (!autoRefresh) return;
-    const timer = window.setInterval(() => void refresh(true), AUTO_REFRESH_MS);
+    const timer = window.setInterval(() => void refresh(true), refreshMs);
     return () => window.clearInterval(timer);
-  }, [autoRefresh, refresh]);
+  }, [autoRefresh, refresh, refreshMs]);
 
   async function show(uid: number) {
     setBusy(true); setError('');
@@ -54,7 +74,11 @@ export default function InboxList({ limit = 10, compact = false, onCode, autoRef
   }
   const code = open ? findCode(`${open.subject}\n${open.body}`) : null;
 
-  if (connection === null) return <div className="inbox empty">{error ? <div className="error-message" role="alert">{error}</div> : <p>Connect your email in Settings → Email inbox to see verification codes here.</p>}</div>;
+  if (connection === null) return <div className="inbox empty">
+    <div className="inbox-head"><Mail size={16}/><strong>Verification codes</strong></div>
+    {error && <div className="error-message" role="alert">{error}</div>}
+    <GmailConnect compact={compact} onConnected={(value) => { setError(''); setConnection(value); void refresh(); }}/>
+  </div>;
 
   const reader = open && <div className="inbox-message">
     {compact && <button type="button" className="text-button" onClick={() => setOpen(null)}><ArrowLeft size={14}/> Back to inbox</button>}
