@@ -5,7 +5,7 @@ import VideoQueue from './VideoQueue';
 import VideoLibrary from './VideoLibrary';
 import VideoStudio from './VideoStudio';
 import VideoSources from './VideoSources';
-import { hasUpdate, UpdateBanner, UpdatesPage, useAppUpdates } from './AppUpdates';
+import { hasUpdate, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates } from './AppUpdates';
 import InboxList from './InboxList';
 import CreateAccountWizard, { type WizardPrefill } from './CreateAccountWizard';
 import AccountDrawer from './AccountDrawer';
@@ -41,7 +41,7 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [wizard, setWizard] = useState<Wizard | null>(null);
   const updates = useAppUpdates();
-  const updateWaiting = hasUpdate(updates.status);
+  const updateWaiting = hasUpdate(updates.status) || updates.progress?.state === 'running';
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
@@ -106,7 +106,7 @@ function App() {
       <div className="brand"><div className="brand-symbol"><span></span><span></span><span></span><span></span></div><div><strong>Social<span>space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation">{NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><div className="nav-label">{group.label}</div>{group.items.map(navButton)}</div>)}</nav>
       <div className="sidebar-bottom">
-        {navButton({ id: 'updates', label: updateWaiting ? 'Update available' : 'Updates', icon: RotateCw })}
+        {navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
         <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>Stored on this PC</small></div></div>
       </div>
