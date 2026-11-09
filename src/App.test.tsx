@@ -34,7 +34,7 @@ describe('workspace account management', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const add = screen.getByRole('button', { name: 'Add an account' });
+    const add = screen.getByRole('button', { name: 'Add an existing account' });
     await waitFor(() => expect(add).toBeEnabled());
     await user.click(add);
     const dialog = screen.getByRole('dialog', { name: 'Add an account' });
@@ -53,9 +53,8 @@ describe('workspace account management', () => {
     });
     expect(await screen.findByRole('status')).toHaveTextContent('Account added to your workspace.');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Accounts' }));
-    expect(screen.getByText('Example Channel')).toBeInTheDocument();
-    expect(screen.getByText('Live')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Brands' }));
+    expect(screen.getByRole('button', { name: 'Open Example Channel' })).toHaveTextContent('1 of 1 live');
   });
 
   it('keeps account and settings saves disabled when loading fails', async () => {
@@ -64,9 +63,9 @@ describe('workspace account management', () => {
     render(<App />);
 
     expect(await screen.findByRole('status')).toHaveTextContent('Could not load your workspace.');
-    expect(screen.getByRole('button', { name: 'Add an account' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Accounts' }));
-    expect(screen.getByRole('button', { name: 'Add an account' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add an existing account' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Brands' }));
+    expect(screen.getAllByRole('button', { name: 'Add an existing account' })[0]).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Settings' }));
     await user.type(screen.getByLabelText('Business or LLC name'), 'New name');
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();

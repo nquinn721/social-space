@@ -46,10 +46,10 @@ function CopyText({ text, label }: { text: string; label: string }) {
   return <span className="copy-text"><span>{text}</span><button type="button" className="icon-button" aria-label={`Copy ${label}`} onClick={() => void navigator.clipboard.writeText(text).then(() => setCopied(true)).catch(() => undefined)}>{copied ? '✓' : <Copy size={14}/>}</button></span>;
 }
 
-type Props = { workspace: Workspace; busy: boolean; onEdit: (account: Account) => void; onRestore: (next: Workspace, message: string) => Promise<boolean | undefined> };
+type Props = { workspace: Workspace; busy: boolean; onEdit: (account: Account) => void; onRestore: (next: Workspace, message: string) => Promise<boolean | undefined>; showBackup?: boolean };
 
 /** Every account's username, email and password in one place, with an encrypted backup. */
-export default function SignIns({ workspace, busy, onEdit, onRestore }: Props) {
+export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup = true }: Props) {
   const [mode, setMode] = useState<'backup' | 'restore' | null>(null);
   const [passphrase, setPassphrase] = useState('');
   const [working, setWorking] = useState(false);
@@ -78,11 +78,11 @@ export default function SignIns({ workspace, busy, onEdit, onRestore }: Props) {
 
   return <section className="sign-ins" aria-label="Sign-ins">
     <div className="sign-ins-head">
-      <div><h2><KeyRound size={16}/> Sign-ins</h2><p>Every account's username, email and password. Passwords are kept in Windows Credential Manager on this PC.</p></div>
-      <div className="heading-buttons">
+      <div><h2><KeyRound size={16}/> Sign-ins</h2><p>{showBackup ? "Every account's username, email and password. Passwords are kept in Windows Credential Manager on this PC." : 'Username, email and password for each profile.'}</p></div>
+      {showBackup && <div className="heading-buttons">
         <button type="button" className="primary-button small-button" disabled={working} onClick={() => { setMode('backup'); setError(''); }}><DatabaseBackup size={14}/> Back up sign-ins</button>
         <button type="button" className="outline-button small-button" disabled={working} onClick={() => { setMode('restore'); setError(''); }}><Upload size={14}/> Restore</button>
-      </div>
+      </div>}
     </div>
     {mode && <form className="card backup-form" onSubmit={submit}>
       <label htmlFor="backup-passphrase">{mode === 'backup' ? 'Choose a passphrase to lock the backup file' : 'Passphrase of the backup file'}</label>

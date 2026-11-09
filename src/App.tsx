@@ -23,10 +23,10 @@ import { BrandMark, initialOf, PageHeader } from './ui';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
-  { label: 'Accounts', items: [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Accounts', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }] },
+  { label: 'Workspace', items: [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }] },
   { label: 'Content', items: [{ id: 'library', label: 'Video library', icon: Film }, { id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
 ];
-const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Accounts', inbox: 'Inbox', library: 'Video library', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', updates: 'Updates', settings: 'Settings' };
+const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', inbox: 'Inbox', library: 'Video library', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', updates: 'Updates', settings: 'Settings' };
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
@@ -98,7 +98,7 @@ function App() {
     else document.documentElement.scrollTop = 0;
   }
   const navButton = ({ id, label, icon: Icon }: NavItem) => <button key={id} className={`nav-item ${view === id ? 'selected' : ''}`} aria-current={view === id ? "page" : undefined} aria-label={label} title={label} onClick={() => navigate(id)}>
-    <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.accounts.length > 0 && <span className="nav-badge">{workspace.accounts.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
+    <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.brands.length > 0 && <span className="nav-badge">{workspace.brands.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
   </button>;
 
   return <div className="app-shell">
@@ -123,7 +123,7 @@ function App() {
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onOpenLibrary={() => navigate('library')}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
