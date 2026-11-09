@@ -26,7 +26,7 @@ describe('workspace account management', () => {
     render(<App />);
     await user.click(screen.getByRole('button', { name: 'Updates' }));
     expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Restart SocialSpace' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restart without updating' })).toBeInTheDocument();
   });
 
   it('adds an account while preserving the existing workspace', async () => {

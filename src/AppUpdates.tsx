@@ -27,9 +27,17 @@ export type AppUpdates = {
   error: string;
   check: (quiet?: boolean) => Promise<void>;
   followProgress: () => Promise<void>;
+  /** Builds the newest main now; it also starts on its own when main has changes. */
+  buildNow: () => Promise<void>;
+  /** Installs the built update over the current version and restarts. */
+  restartToUpdate: () => Promise<void>;
 };
 
-/** Checks main at startup and every few minutes, and follows a running build until it finishes. */
+/**
+ * Checks main at startup and every few minutes. When main has new commits it builds them in the
+ * background on its own (once per commit, so a failed build is not retried in a loop), and the
+ * app then offers one "Restart to update" that installs over the old version.
+ */
 export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [progress, setProgress] = useState<UpdateProgress | null>(null);
@@ -39,6 +47,9 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const pollTimer = useRef<number | undefined>(undefined);
   const mounted = useRef(true);
   const progressRef = useRef<UpdateProgress | null>(null);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const autoBuilt = useRef<string | null>(null);
+  const acting = useRef(false);
 
   const check = useCallback(async (quiet = false) => {
     if (checkingRef.current) return;
@@ -57,7 +68,7 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
     // A build that just finished changes the status from available to ready.
     if (progressRef.current?.state === 'running' && next?.state === 'ready') void check(true);
     progressRef.current = next;
-    setProgress(next);
+    setProgress(next); setProgressLoaded(true);
     if (isActive(next)) pollTimer.current = window.setTimeout(() => void followProgress(), PROGRESS_POLL_MS);
   }, [check]);
 
@@ -69,7 +80,32 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
     return () => { mounted.current = false; window.clearInterval(timer); window.clearTimeout(pollTimer.current); };
   }, [check, followProgress, intervalMs]);
 
-  return { status, progress, checking, error, check, followProgress };
+  const startBuild = useCallback(async (commit: string) => {
+    if (acting.current) return;
+    acting.current = true; setError('');
+    try { await prepareUpdate(commit); await followProgress(); }
+    catch (reason) { setError(errorText(reason)); }
+    finally { acting.current = false; }
+  }, [followProgress]);
+
+  // Build new commits on main automatically, so an update is ready by the time anyone looks.
+  const waiting = status?.state === 'available' && !status.blockedReason ? status.latestCommit : null;
+  useEffect(() => {
+    if (!waiting || !progressLoaded || isActive(progressRef.current) || autoBuilt.current === waiting) return;
+    autoBuilt.current = waiting;
+    void startBuild(waiting);
+  }, [waiting, progressLoaded, startBuild]);
+
+  const buildNow = useCallback(async () => { if (waiting) { autoBuilt.current = waiting; await startBuild(waiting); } }, [waiting, startBuild]);
+  const restartToUpdate = useCallback(async () => {
+    if (acting.current) return;
+    acting.current = true; setError('');
+    try { await installPreparedUpdate(); await followProgress(); }
+    catch (reason) { setError(errorText(reason)); }
+    finally { acting.current = false; }
+  }, [followProgress]);
+
+  return { status, progress, checking, error, check, followProgress, buildNow, restartToUpdate };
 }
 
 function ProgressView({ progress }: { progress: UpdateProgress }) {
@@ -90,9 +126,16 @@ function useUpdateResult() {
   return [result, () => setResult(null)] as const;
 }
 
-/** A slim notice at the top of every page: the outcome after a restart, a running build, or an update waiting. */
+/** Label for the sidebar entry: what the update is doing right now. */
+export function updateNavLabel(updates: Pick<AppUpdates, 'status' | 'progress'>): string {
+  if (updates.progress?.state === 'running') return 'Building update…';
+  if (updates.status?.state === 'ready' && !updates.status.blockedReason) return 'Update ready';
+  return 'Updates';
+}
+
+/** A slim notice at the top of every page: the outcome after a restart, or an update ready to install. */
 export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen: () => void }) {
-  const { status, progress } = updates;
+  const { status, progress, restartToUpdate } = updates;
   const [result, clearResult] = useUpdateResult();
   const [dismissed, setDismissed] = useState<string | null>(null);
   if (result) {
@@ -103,55 +146,35 @@ export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen:
       <button className="update-dismiss" onClick={clearResult} aria-label="Dismiss update"><Close size={16}/></button>
     </div>;
   }
-  if (progress && isActive(progress)) return <div role="status" className="update-banner"><Download size={17}/><ProgressView progress={progress}/><button className="outline-button small-button" onClick={onOpen}>View</button></div>;
-  if (progress?.state === 'failed') return <div role="alert" className="update-banner failed"><Download size={17}/><span>The update didn't finish.</span><button className="outline-button small-button" onClick={onOpen}>See why</button></div>;
-  if (!status || !hasUpdate(status) || dismissed === status.latestCommit) return null;
+  if (progress?.state === 'restarting') return <div role="status" className="update-banner"><Download size={17}/><ProgressView progress={progress}/></div>;
+  if (progress?.state === 'failed') return <div role="alert" className="update-banner failed"><Download size={17}/><span>The update didn't build.</span><button className="outline-button small-button" onClick={onOpen}>See why</button></div>;
+  // Building happens quietly; the sidebar shows it. The banner only asks once it is ready.
+  if (status?.state !== 'ready' || status.blockedReason || dismissed === status.latestCommit) return null;
   return <div role="status" className="update-banner">
     <Download size={17}/>
-    <span>{status.state === 'ready' ? 'An update is built and ready to install.' : `${changeCount(status)} on main for SocialSpace.`}</span>
-    <button className="primary-button small-button" onClick={onOpen}>{status.state === 'ready' ? 'Install update' : 'View update'}</button>
+    <span>{`Update ready: ${changeCount(status).toLowerCase()} from main. Restart to install it.`}</span>
+    <button className="primary-button small-button" onClick={() => void restartToUpdate()}>Restart to update</button>
     <button className="update-dismiss" onClick={() => setDismissed(status.latestCommit)} aria-label="Dismiss update"><Close size={16}/></button>
   </div>;
 }
 
-/** The Updates page: what is installed, what is new on main, and the build then install-and-restart steps. */
+/** The Updates page: what is installed, what is new on main, and the build or install in progress. */
 export function UpdatesPage({ updates }: { updates: AppUpdates }) {
-  const { status, progress, checking, error, check, followProgress } = updates;
-  const [reviewingBuild, setReviewingBuild] = useState('');
-  const [reviewingInstall, setReviewingInstall] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [actionError, setActionError] = useState('');
-  const guard = useRef(false);
-  const lastProgress = useRef(progress?.state);
-
-  // When a build finishes while this page is open, ask to install it right away.
-  useEffect(() => {
-    if (lastProgress.current === 'running' && progress?.state === 'ready') setReviewingInstall(true);
-    lastProgress.current = progress?.state;
-  }, [progress?.state]);
-
+  const { status, progress, checking, error, check, buildNow, restartToUpdate } = updates;
+  const [restarting, setRestarting] = useState(false);
   const building = isActive(progress);
-  const busy = checking || starting || building;
+  const busy = checking || building || restarting;
+  const ready = status?.state === 'ready' && !status.blockedReason;
+  const failed = progress?.state === 'failed';
 
-  async function act(action: () => Promise<void>) {
-    if (guard.current) return;
-    guard.current = true; setStarting(true); setActionError('');
-    try { await action(); }
-    catch (reason) { setActionError(errorText(reason)); }
-    finally { guard.current = false; setStarting(false); }
-  }
-  const build = () => act(async () => { const commit = reviewingBuild; setReviewingBuild(''); setReviewingInstall(false); await prepareUpdate(commit); await followProgress(); });
-  const install = () => act(async () => { await installPreparedUpdate(); setReviewingInstall(false); await followProgress(); });
-  const restart = () => act(restartApp);
-  function startUpdate() {
-    setActionError('');
-    if (status?.state === 'ready') setReviewingInstall(true);
-    else if (status?.state === 'available' && status.latestCommit) setReviewingBuild(status.latestCommit);
+  async function restart() {
+    if (restarting) return;
+    setRestarting(true);
+    try { await restartApp(); } finally { setRestarting(false); }
   }
 
-  const canUpdate = hasUpdate(status) && !busy;
   return <>
-    <PageHeader eyebrow="Keep SocialSpace current" title="Updates" description="SocialSpace updates from the main branch: it builds the newest version on this PC, then installs it and restarts when you say so."/>
+    <PageHeader eyebrow="Keep SocialSpace current" title="Updates" description="When something new lands on main, SocialSpace builds it in the background. Restart to update installs it over this version and opens the new one."/>
     <section className="settings-card update-panel" aria-labelledby="update-heading">
       <div className="update-heading"><h2 id="update-heading"><RotateCw size={17}/> Changes on main</h2><button type="button" className="icon-button" disabled={busy} onClick={() => void check()} aria-label="Check for updates" title="Check for updates"><RefreshCw size={16} className={checking ? 'spin' : undefined}/></button></div>
       {!status ? <p className="update-note">{checking ? 'Checking for updates…' : 'Update status is not available yet.'}</p> : <>
@@ -160,30 +183,21 @@ export function UpdatesPage({ updates }: { updates: AppUpdates }) {
           <dt>Latest on main</dt><dd>{short(status.latestCommit)}</dd>
           <dt>Source folder</dt><dd>{status.sourceDir}</dd>
         </dl>
-        {status.state === 'ready' && status.prepared ? <p className="update-ready">Update built from commit <strong>{short(status.prepared.commit)}</strong> and ready to install.</p>
-          : status.state === 'available' ? <p className="update-ready">{changeCount(status)} available from main commit <strong>{short(status.latestCommit)}</strong>.</p>
+        {ready && status.prepared ? <p className="update-ready">Update ready: commit <strong>{short(status.prepared.commit)}</strong> is built. Restart to install it.</p>
+          : status.state === 'available' && building ? <p className="update-ready">Building {changeCount(status).toLowerCase()} from main commit <strong>{short(status.latestCommit)}</strong> in the background.</p>
+          : status.state === 'available' ? <p className="update-ready">{changeCount(status)} on main commit <strong>{short(status.latestCommit)}</strong>.</p>
           : <p className="update-note">SocialSpace is up to date with main.</p>}
         {status.updateAvailable && status.newCommits.length > 0 && <ul className="update-commits" aria-label="Changes in this update">{status.newCommits.map((commit) => <li key={commit}>{commit}</li>)}</ul>}
         {status.blockedReason && <p className="update-error">{status.blockedReason}</p>}
       </>}
       {building && progress && <ProgressView progress={progress}/>}
-      {progress?.state === 'failed' && <p className="update-error" role="alert">The update didn't finish: {progress.error}</p>}
-      {(actionError || error) && <p className="update-error" role="alert">{actionError || `Could not check for updates: ${error}`}</p>}
+      {failed && <p className="update-error" role="alert">The update didn't build: {progress?.error}</p>}
+      {error && <p className="update-error" role="alert">{error}</p>}
       <div className="update-actions">
-        <button type="button" className="primary-button" disabled={!canUpdate} onClick={startUpdate}><Download size={15}/>{status?.state === 'ready' ? 'Install update' : 'Update SocialSpace'}</button>
-        <button type="button" className="outline-button" disabled={busy} onClick={() => void restart()}><RotateCw size={15}/> Restart SocialSpace</button>
+        {ready ? <button type="button" className="primary-button" disabled={busy} onClick={() => void restartToUpdate()}><Download size={15}/> Restart to update</button>
+          : status?.state === 'available' && !status.blockedReason && !building && <button type="button" className="primary-button" disabled={busy} onClick={() => void buildNow()}><Download size={15}/>{failed ? 'Try the build again' : 'Build now'}</button>}
+        <button type="button" className="outline-button" disabled={busy} onClick={() => void restart()}><RotateCw size={15}/> Restart without updating</button>
       </div>
-      {reviewingBuild && status?.state === 'available' && status.latestCommit === reviewingBuild && <div className="update-review">
-        <strong>Build the available update?</strong>
-        <p>SocialSpace will get main commit {short(reviewingBuild)}, install its dependencies and build it on this PC in the background. You can keep working; it asks before installing and restarting.</p>
-        <div className="update-actions"><button type="button" className="primary-button" disabled={busy} onClick={() => void build()}>Build update</button><button type="button" className="outline-button" disabled={busy} onClick={() => setReviewingBuild('')}>Cancel</button></div>
-      </div>}
-      {reviewingInstall && status?.state === 'ready' && status.prepared && <div className="update-review">
-        <strong>Install this update?</strong>
-        <p>Commit {short(status.prepared.commit)} will be installed. SocialSpace will close and restart; anything in progress, like a sign-up page, will stop.</p>
-        <div className="update-actions"><button type="button" className="primary-button" disabled={busy} onClick={() => void install()}>Install and restart</button><button type="button" className="outline-button" disabled={busy} onClick={() => setReviewingInstall(false)}>Cancel</button></div>
-      </div>}
-      <p className="update-footnote">Restarting alone does not install an update.</p>
     </section>
   </>;
 }

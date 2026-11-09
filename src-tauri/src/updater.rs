@@ -309,7 +309,7 @@ fn run_logged(dir: &Path, program: &str, args: &[&str], log: &Arc<Mutex<fs::File
 }
 
 fn newest_installer(dir: &Path, since: SystemTime) -> Option<PathBuf> {
-    fs::read_dir(dir.join("src-tauri/target/release/bundle/nsis"))
+    fs::read_dir(installer_dir(dir))
         .ok()?
         .filter_map(Result::ok)
         .filter(|entry| entry.file_name().to_string_lossy().ends_with("-setup.exe"))
@@ -361,6 +361,21 @@ fn log_path() -> PathBuf {
     std::env::temp_dir().join("socialspace-update.log")
 }
 
+fn installer_dir(dir: &Path) -> PathBuf {
+    dir.join("src-tauri/target/release/bundle/nsis")
+}
+
+/// Old installers pile up with every build; only the one being built is needed. Installing itself
+/// overwrites the app in place, so no old copy of the app is left behind.
+fn remove_old_installers(dir: &Path) {
+    let Ok(entries) = fs::read_dir(installer_dir(dir)) else { return };
+    for entry in entries.filter_map(Result::ok) {
+        if entry.file_name().to_string_lossy().ends_with("-setup.exe") {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Builds the reviewed main commit and records the installer. Nothing is installed yet.
 fn build_update(app: &AppHandle, dir: &Path, expected_commit: &str) -> Result<(), String> {
     let log = Arc::new(Mutex::new(fs::File::create(log_path()).map_err(|error| format!("Could not create the update log: {error}"))?));
@@ -380,6 +395,7 @@ fn build_update(app: &AppHandle, dir: &Path, expected_commit: &str) -> Result<()
     run_logged(dir, NPM, &["install", "--no-audit", "--no-fund"], &log)?;
 
     begin_step(3, "Building the new version");
+    remove_old_installers(dir);
     run_logged(dir, NPM, &["run", "tauri", "build"], &log)?;
     let installer = newest_installer(dir, started).ok_or("The build finished but no new installer was found.")?;
 
@@ -591,6 +607,18 @@ mod tests {
         let file = dir.path().join("setup.exe");
         fs::write(&file, b"abc").unwrap();
         assert_eq!(sha256_of(&file).unwrap(), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    #[test]
+    fn old_installers_are_removed_before_a_build() {
+        let dir = tempfile::tempdir().unwrap();
+        let nsis = installer_dir(dir.path());
+        fs::create_dir_all(&nsis).unwrap();
+        fs::write(nsis.join("Social Manager_0.1.0_x64-setup.exe"), b"old").unwrap();
+        fs::write(nsis.join("notes.txt"), b"keep").unwrap();
+        remove_old_installers(dir.path());
+        assert!(!nsis.join("Social Manager_0.1.0_x64-setup.exe").exists());
+        assert!(nsis.join("notes.txt").exists());
     }
 
     #[test]
