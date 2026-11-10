@@ -77,16 +77,29 @@ fn main() {
         "export_sign_ins",
         "import_sign_ins",
         "check_for_update",
+        "update_management",
         "prepare_update",
         "install_prepared_update",
         "restart_app",
         "update_progress",
         "take_update_result",
     ];
+    require_stamping_script();
     record_build_source();
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(commands));
     tauri_build::try_build(attributes).expect("failed to build Tauri application");
+}
+
+/// A release is built only by `npm run tauri:build` (scripts/tauri-build.mjs), which checks the tree
+/// is a clean main and stamps its commit. `cargo test` and `tauri dev` build the debug profile.
+fn require_stamping_script() {
+    const STAMP_ENV: &str = "SOCIALSPACE_BUILD_STAMPED";
+    println!("cargo:rerun-if-env-changed={STAMP_ENV}");
+    let release = std::env::var("PROFILE").is_ok_and(|profile| profile == "release");
+    if release && std::env::var(STAMP_ENV).is_err() {
+        panic!("Build releases with `npm run tauri:build`: it checks the tree is a clean main and stamps its commit.");
+    }
 }
 
 /// Bakes the source commit and repository into the binary so the app can update itself from main.

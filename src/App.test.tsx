@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import * as service from './service';
+import * as updateService from './updateService';
 import type { Workspace } from './model';
 
 vi.mock('./service', () => ({
@@ -13,9 +14,12 @@ vi.mock('./service', () => ({
   openKling: vi.fn(),
 }));
 
+vi.mock('./updateService', async (original) => ({ ...(await original<typeof import('./updateService')>()), updateManagement: vi.fn() }));
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(service.saveWorkspace).mockImplementation(async (workspace: Workspace) => workspace);
+  vi.mocked(updateService.updateManagement).mockResolvedValue({ managedBy: null });
 });
 afterEach(cleanup);
 
@@ -27,6 +31,16 @@ describe('workspace account management', () => {
     await user.click(screen.getByRole('button', { name: 'Updates' }));
     expect(screen.getByRole('heading', { name: 'Updates' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Restart without updating' })).toBeInTheDocument();
+  });
+
+  it('hides its Updates page while Ava manages updates and says so in Settings', async () => {
+    vi.mocked(updateService.updateManagement).mockResolvedValue({ managedBy: 'Ava' });
+    vi.mocked(service.loadWorkspace).mockResolvedValue({ businessName: '', brands: [], accounts: [], channels: [] });
+    const user = userEvent.setup();
+    render(<App />);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Updates' })).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByText('Updates managed by Ava.')).toBeInTheDocument();
   });
 
   it('adds an account while preserving the existing workspace', async () => {

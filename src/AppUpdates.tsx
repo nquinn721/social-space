@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, RefreshCw, RotateCw, X as Close } from 'lucide-react';
-import { checkForUpdate, installPreparedUpdate, prepareUpdate, restartApp, takeUpdateResult, updateProgress, type UpdateProgress, type UpdateResult, type UpdateStatus } from './updateService';
+import { checkForUpdate, installPreparedUpdate, prepareUpdate, restartApp, takeUpdateResult, updateManagement, updateProgress, type UpdateProgress, type UpdateResult, type UpdateStatus } from './updateService';
 import { PageHeader } from './ui';
 import './updates.css';
 
@@ -21,6 +21,8 @@ export function hasUpdate(status: UpdateStatus | null): boolean {
 }
 
 export type AppUpdates = {
+  /** "Ava" while the Ava hub manages updates: then the app never checks, builds or offers updates itself. */
+  managedBy?: string | null;
   status: UpdateStatus | null;
   progress: UpdateProgress | null;
   checking: boolean;
@@ -36,7 +38,8 @@ export type AppUpdates = {
 /**
  * Checks main at startup and every few minutes. When main has new commits it builds them in the
  * background on its own (once per commit, so a failed build is not retried in a loop), and the
- * app then offers one "Restart to update" that installs over the old version.
+ * app then offers one "Restart to update" that installs over the old version. In managed mode
+ * (the Ava hub keeps the app up to date) it does none of that.
  */
 export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -50,6 +53,16 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const [progressLoaded, setProgressLoaded] = useState(false);
   const autoBuilt = useRef<string | null>(null);
   const acting = useRef(false);
+  // undefined until known, so a managed app never starts a check first.
+  const [managedBy, setManagedBy] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve(updateManagement())
+      .then((management) => { if (live) setManagedBy(management?.managedBy ?? null); })
+      .catch(() => { if (live) setManagedBy(null); });
+    return () => { live = false; };
+  }, []);
+  const selfUpdating = managedBy === null;
 
   const check = useCallback(async (quiet = false) => {
     if (checkingRef.current) return;
@@ -74,11 +87,12 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
 
   useEffect(() => {
     mounted.current = true;
+    if (!selfUpdating) return () => { mounted.current = false; };
     void check(true);
     void followProgress();
     const timer = window.setInterval(() => void check(true), intervalMs);
     return () => { mounted.current = false; window.clearInterval(timer); window.clearTimeout(pollTimer.current); };
-  }, [check, followProgress, intervalMs]);
+  }, [check, followProgress, intervalMs, selfUpdating]);
 
   const startBuild = useCallback(async (commit: string) => {
     if (acting.current) return;
@@ -105,7 +119,7 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
     finally { acting.current = false; }
   }, [followProgress]);
 
-  return { status, progress, checking, error, check, followProgress, buildNow, restartToUpdate };
+  return { managedBy, status, progress, checking, error, check, followProgress, buildNow, restartToUpdate };
 }
 
 function ProgressView({ progress }: { progress: UpdateProgress }) {
@@ -139,13 +153,15 @@ export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen:
   const [result, clearResult] = useUpdateResult();
   const [dismissed, setDismissed] = useState<string | null>(null);
   if (result) {
+    // Also after an update Ava installed: a one-time note, not a prompt.
     return <div role="status" className={`update-banner ${result.succeeded ? 'done' : 'failed'}`}>
       {result.succeeded ? <CheckCircle2 size={17}/> : <Download size={17}/>}
       <span>{result.succeeded ? `SocialSpace is updated to ${short(result.toCommit)}.` : `The update to ${short(result.toCommit)} didn't install. You're still on ${short(result.fromCommit)}.`}</span>
-      {!result.succeeded && <button className="outline-button small-button" onClick={onOpen}>Open Updates</button>}
+      {!result.succeeded && !updates.managedBy && <button className="outline-button small-button" onClick={onOpen}>Open Updates</button>}
       <button className="update-dismiss" onClick={clearResult} aria-label="Dismiss update"><Close size={16}/></button>
     </div>;
   }
+  if (updates.managedBy) return null;
   if (progress?.state === 'restarting') return <div role="status" className="update-banner"><Download size={17}/><ProgressView progress={progress}/></div>;
   if (progress?.state === 'failed') return <div role="alert" className="update-banner failed"><Download size={17}/><span>The update didn't build.</span><button className="outline-button small-button" onClick={onOpen}>See why</button></div>;
   // Building happens quietly; the sidebar shows it. The banner only asks once it is ready.

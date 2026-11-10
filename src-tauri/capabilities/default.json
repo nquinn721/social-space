@@ -88,6 +88,7 @@
     "allow-install-prepared-update",
     "allow-restart-app",
     "allow-update-progress",
-    "allow-take-update-result"
+    "allow-take-update-result",
+    "allow-update-management"
   ]
 }

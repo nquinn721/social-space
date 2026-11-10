@@ -41,7 +41,8 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [wizard, setWizard] = useState<Wizard | null>(null);
   const updates = useAppUpdates();
-  const updateWaiting = hasUpdate(updates.status) || updates.progress?.state === 'running';
+  const updatesManaged = Boolean(updates.managedBy);
+  const updateWaiting = !updatesManaged && (hasUpdate(updates.status) || updates.progress?.state === 'running');
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
@@ -116,7 +117,7 @@ function App() {
       <div className="brand"><img className="brand-symbol" src={appIcon} alt=""/><div><strong>Social <span>Space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation">{NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><div className="nav-label">{group.label}</div>{group.items.map(navButton)}</div>)}</nav>
       <div className="sidebar-bottom">
-        {navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
+        {!updatesManaged && navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
         <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>Stored on this PC</small></div></div>
       </div>
@@ -141,8 +142,8 @@ function App() {
         {view === 'publishing' && <><PageHeader eyebrow="Ready when you are" title="Publishing" description="Create and publish in each platform's own tools, or post to X and Instagram from here."/><div className="info-banner"><ArrowDownLeft size={18}/><span>Publishing opens the platform in an app window. Sign in there to create or upload your content.</span></div><div className="publish-list">{PLATFORMS.map((platform) => <section className="publish-row" key={platform.id}><BrandMark platform={platform.id}/><div><h2>{platform.name}</h2><p>{platform.description}</p></div><button className="outline-button" disabled={busy} onClick={() => launch(platform.id, 'post')}>{platform.postLabel} <AppWindow size={15}/></button></section>)}</div><PostAs accounts={workspace.accounts} brands={workspace.brands}/><div className="footnote">Scheduling and direct publishing to TikTok and YouTube are not connected yet. Platform availability and approvals vary.</div></>}
         {view === 'creative' && <><PageHeader eyebrow="From idea to something real" title="Creative tools" description="A home for the tools that help bring your content to life."/><VideoStudio onManageSources={() => navigate('sources')}/></>}
         {view === 'sources' && <><PageHeader eyebrow="Where your videos come from" title="Video sources" description="Connect AI video providers with your own API keys. Each key is verified with the provider and kept in Windows Credential Manager."/><VideoSources/></>}
-        {view === 'updates' && <UpdatesPage updates={updates}/>}
-        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded}/>}
+        {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
+        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy}/>}
       </div>
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>

@@ -9,6 +9,7 @@ mod browser;
 mod email;
 mod embedded;
 mod gmail_session;
+mod hub;
 mod image_ai;
 mod grok;
 mod dev_apps;
@@ -323,8 +324,12 @@ async fn open_kling(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // `--update check|apply --json` is for the Ava hub: answer on stdout and exit, no window.
+    // `--version --json` and `--update check|apply|rollback --json` are for the Ava hub: answer on
+    // stdout and exit, no window. `--hub` alone is a normal launch in managed mode (see hub.rs).
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Ok(exe) = std::env::current_exe() {
+        hub::remove_aside(&exe);
+    }
     if let Some(request) = updater::parse_cli(&args) {
         std::process::exit(updater::run_cli(request));
     }
@@ -415,7 +420,8 @@ pub fn run() {
             updater::install_prepared_update,
             updater::restart_app,
             updater::update_progress,
-            updater::take_update_result
+            updater::take_update_result,
+            hub::update_management
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Space");

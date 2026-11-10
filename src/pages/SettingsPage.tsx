@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck } from 'lucide-react';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/ollamaClient';
 import { PageHeader } from '../ui';
 
-type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean };
+type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null };
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
@@ -41,9 +41,9 @@ function AssistantSettingsCard() {
   </section>;
 }
 
-export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded }: Props) {
+export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy }: Props) {
   return <>
-    <PageHeader eyebrow="Make it yours" title="Settings" description="Your workspace, inbox, video sources and assistant. App updates have their own page."/>
+    <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">{SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }}><Icon size={16}/>{label}</a>)}</nav>
       <div className="settings-stack">
@@ -61,6 +61,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <VideoSources/>
         </section>
         <AssistantSettingsCard/>
+        {updatesManagedBy && <section className="settings-card" id="updates"><h2><RotateCw size={17}/> Updates</h2><p className="footnote">Updates managed by {updatesManagedBy}.</p></section>}
         <div className="privacy-note"><ShieldCheck size={18}/><span>Your workspace is stored on this PC. Passwords live in Windows Credential Manager and are only shown when you ask.</span></div>
       </div>
     </div>

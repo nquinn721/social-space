@@ -2,7 +2,8 @@
   "id": "social-space",
   "name": "Social Space",
   "kind": "external",
-  "version": "0.2.0",
+  "version": "0.2.1",
+  "identifier": "com.socialmanager.desktop",
   "versionFiles": [
     "package.json",
     "package-lock.json",
@@ -13,9 +14,11 @@
   "test": "npm ci && npm run typecheck && npm test && cd src-tauri && cargo test --locked",
   "build": "npm ci && npm run tauri:build",
   "artifact": "src-tauri/target/release/bundle/nsis/Social Space_{version}_x64-setup.exe",
-  "launch": "%LOCALAPPDATA%\\Social Space\\social-manager.exe",
+  "launch": "%LOCALAPPDATA%\\Social Space\\social-manager.exe --hub",
   "update": {
+    "version": "social-manager.exe --version --json",
     "check": "social-manager.exe --update check --json",
-    "apply": "social-manager.exe --update apply --json"
+    "apply": "social-manager.exe --update apply --json",
+    "rollback": "social-manager.exe --update rollback --json"
   }
 }

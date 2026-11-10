@@ -76,6 +76,51 @@ fn hidden(command: &mut Command) -> &mut Command {
     command
 }
 
+/// Hides the console window of a helper program (git, npm, reg, the app checking itself).
+pub(crate) fn hide_window(command: &mut Command) -> &mut Command {
+    hidden(command)
+}
+
+/// The fetch behind a check: long enough for a slow connection, short enough that `--update check`
+/// answers within the hub's 30 seconds even offline.
+const FETCH_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// `git fetch` with a time limit; a hung network counts as offline.
+fn git_with_timeout(dir: &Path, args: &[&str], timeout: Duration) -> Result<(), String> {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(dir).args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
+    let mut child = hidden(&mut command)
+        .spawn()
+        .map_err(|error| format!("Could not run git ({error}). Install Git for Windows and make sure it is on PATH."))?;
+    let mut stderr = child.stderr.take();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(stream) = stderr.as_mut() {
+            let _ = stream.read_to_string(&mut text);
+        }
+        text
+    });
+    let began = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if began.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("git {} took longer than {} s", args.join(" "), timeout.as_secs()));
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(error) => return Err(format!("Could not wait for git: {error}")),
+        }
+    };
+    let stderr = reader.join().unwrap_or_default();
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("git {} failed: {}", args.join(" "), stderr.trim()))
+    }
+}
+
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let mut command = Command::new("git");
     command.arg("-C").arg(dir).args(args).stdin(Stdio::null());
@@ -107,26 +152,18 @@ fn needs_update(installed: &str, latest: &str, main_is_in_build: bool) -> bool {
     installed != latest && !main_is_in_build
 }
 
-/// Which ref counts as "main": the freshly fetched one, or the local branch when offline.
-fn target_ref(fetched: bool) -> &'static str {
-    if fetched {
-        REMOTE_BRANCH
-    } else {
-        BRANCH
-    }
+/// Why a check that could not reach GitHub is blocked. A release is a push to `main` on GitHub,
+/// so without the fetch there is no telling whether an update exists.
+fn offline_reason(error: &str) -> String {
+    format!("Could not reach GitHub to check for updates (offline?). {error}")
 }
 
-/// Fetches main and returns the ref to build. Without a network the local `main` is used.
+/// Fetches main and returns the ref to build (`origin/main`). Offline, the check is blocked.
 fn fetch_main(dir: &Path) -> Result<&'static str, String> {
-    let fetch = git(dir, &["fetch", "--quiet", "origin", BRANCH]);
-    let reference = target_ref(fetch.is_ok());
-    match git(dir, &["rev-parse", "--verify", "--quiet", &format!("{reference}^{{commit}}")]) {
-        Ok(_) => Ok(reference),
-        Err(_) => Err(match fetch {
-            Err(error) => format!("Could not fetch {BRANCH} and there is no local {BRANCH} to fall back to. {error}"),
-            Ok(_) => format!("{reference} does not exist in {}.", dir.display()),
-        }),
-    }
+    git_with_timeout(dir, &["fetch", "--quiet", "origin", BRANCH], FETCH_TIMEOUT).map_err(|error| offline_reason(&error))?;
+    git(dir, &["rev-parse", "--verify", "--quiet", &format!("{REMOTE_BRANCH}^{{commit}}")])
+        .map(|_| REMOTE_BRANCH)
+        .map_err(|_| format!("{REMOTE_BRANCH} does not exist in {}.", dir.display()))
 }
 
 /// The `"version"` of a tauri.conf.json.
@@ -154,6 +191,11 @@ pub struct PreparedUpdate {
     sha256: String,
     /// Seconds since the Unix epoch.
     built_at: u64,
+    /// The built program itself, which a headless install swaps in (see hub.rs). Older records lack it.
+    #[serde(default)]
+    app_exe: Option<String>,
+    #[serde(default)]
+    app_sha256: Option<String>,
 }
 
 fn update_state(update_available: bool, prepared_matches: bool) -> &'static str {
@@ -418,6 +460,11 @@ fn log_path() -> PathBuf {
     std::env::temp_dir().join("socialspace-update.log")
 }
 
+/// The program `tauri build` produced; the installer carries exactly this file.
+fn built_program(dir: &Path) -> Option<PathBuf> {
+    Some(dir.join("src-tauri/target/release").join(crate::hub::EXE_NAME)).filter(|path| path.is_file())
+}
+
 fn installer_dir(dir: &Path) -> PathBuf {
     dir.join("src-tauri/target/release/bundle/nsis")
 }
@@ -521,6 +568,8 @@ fn build_update(paths: &UpdatePaths, source: &Path, expected_commit: &str) -> Re
 
     begin_step(2, "Installing dependencies");
     run_logged(&build, NPM, &["install", "--no-audit", "--no-fund"], &[], &log)?;
+    // npm may rewrite the lockfile; the stamping build script only builds a clean main.
+    run_logged(&build, "git", &["checkout", "--", "package-lock.json"], &[], &log)?;
 
     begin_step(3, "Building the new version");
     remove_old_installers(&build);
@@ -530,7 +579,16 @@ fn build_update(paths: &UpdatePaths, source: &Path, expected_commit: &str) -> Re
     let installer = newest_installer(&build, started).ok_or("The build finished but no new installer was found.")?;
 
     let built_at = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or_default();
-    let prepared = PreparedUpdate { commit: expected_commit.to_string(), sha256: sha256_of(&installer)?, installer: installer.display().to_string(), built_at };
+    let app_exe = built_program(&build);
+    let app_sha256 = app_exe.as_deref().map(sha256_of).transpose()?;
+    let prepared = PreparedUpdate {
+        commit: expected_commit.to_string(),
+        sha256: sha256_of(&installer)?,
+        installer: installer.display().to_string(),
+        built_at,
+        app_exe: app_exe.map(|path| path.display().to_string()),
+        app_sha256,
+    };
     write_data(&paths.data_file(PREPARED_FILE), &serde_json::to_vec(&prepared).unwrap_or_default())?;
     set_progress(|progress| progress.state = "ready");
     Ok(prepared)
@@ -735,13 +793,24 @@ pub fn take_update_result(app: AppHandle) -> Option<UpdateResult> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Headless command line for the Ava hub.
+// Headless command line for the Ava hub (its update contract; see hub.rs for the pieces).
+//
+//   social-manager.exe --version --json         {"id", "version", "commit"}
+//   social-manager.exe --update check --json    state up_to_date | available | ready | blocked
+//   social-manager.exe --update apply --json    installed | up_to_date (exit 0), failed (exit 1,
+//                                               the previous version stays), blocked (exit 2, nothing
+//                                               changed: another copy is open, offline, ...)
+//   social-manager.exe --update rollback --json rolled_back (0), failed (1) or blocked (2)
+//
+// Nothing here opens a window or restarts the app.
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CliAction {
     Check,
     Apply,
+    Rollback,
+    Version,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -750,9 +819,21 @@ pub struct CliRequest {
     pub json: bool,
 }
 
-/// `--update check|apply [--json]` (also `--update=check`). `None` means a normal launch.
+const USAGE: &str = "Usage: --update check|apply|rollback [--json], or --version [--json]";
+
+/// `--update check|apply|rollback [--json]` (also `--update=check`) or `--version [--json]`.
+/// `None` means a normal launch (`--hub` alone is a normal launch in managed mode).
 pub fn parse_cli(args: &[String]) -> Option<Result<CliRequest, String>> {
-    let position = args.iter().position(|arg| arg == "--update" || arg.starts_with("--update="))?;
+    let Some(position) = args.iter().position(|arg| arg == "--update" || arg.starts_with("--update=")) else {
+        if !args.iter().any(|arg| arg == "--version") {
+            return None;
+        }
+        let json = args.iter().any(|arg| arg == "--json");
+        return Some(match args.iter().find(|arg| !matches!(arg.as_str(), "--version" | "--json" | "--hub")) {
+            Some(other) => Err(format!("Unknown argument '{other}'. {USAGE}")),
+            None => Ok(CliRequest { action: CliAction::Version, json }),
+        });
+    };
     Some((|| {
         let mut action = None;
         let mut json = false;
@@ -766,20 +847,20 @@ pub fn parse_cli(args: &[String]) -> Option<Result<CliRequest, String>> {
             action = Some(match word.as_str() {
                 "check" => CliAction::Check,
                 "apply" => CliAction::Apply,
-                other => return Err(format!("Unknown update action '{other}'. Use --update check or --update apply.")),
+                "rollback" => CliAction::Rollback,
+                other => return Err(format!("Unknown update action '{other}'. {USAGE}")),
             });
         }
         let mut skipped_action = inline.is_some();
         while let Some(arg) = rest.next() {
             match arg {
                 "--json" => json = true,
+                "--hub" => {}
                 word if !skipped_action && Some(word) == action_word.as_deref() => skipped_action = true,
-                other => return Err(format!("Unknown argument '{other}'. Usage: --update check|apply [--json]")),
+                other => return Err(format!("Unknown argument '{other}'. {USAGE}")),
             }
         }
-        action
-            .map(|action| CliRequest { action, json })
-            .ok_or_else(|| "Missing update action. Usage: --update check|apply [--json]".to_string())
+        action.map(|action| CliRequest { action, json }).ok_or_else(|| format!("Missing update action. {USAGE}"))
     })())
 }
 
@@ -787,26 +868,34 @@ pub fn parse_cli(args: &[String]) -> Option<Result<CliRequest, String>> {
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CliReport {
-    /// "up_to_date", "available", "ready", "blocked", or "installing" (apply started the installer).
+    /// check: "up_to_date", "available", "ready" or "blocked". apply: "installed", "up_to_date",
+    /// "failed" or "blocked". rollback: "rolled_back", "failed" or "blocked".
     pub state: &'static str,
+    /// The version installed now (after an apply or rollback that worked, the new one).
+    pub current: String,
+    /// The version on main, when known.
+    pub latest: Option<String>,
+    pub notes: Vec<String>,
+    pub reason: Option<String>,
+    // The same facts under the names the first hub release read.
     pub version: String,
     pub latest_version: Option<String>,
     pub commit: String,
     pub latest_commit: Option<String>,
-    pub notes: Vec<String>,
-    pub reason: Option<String>,
 }
 
 impl CliReport {
     fn blocked(reason: String) -> Self {
         Self {
             state: "blocked",
+            current: APP_VERSION.into(),
+            latest: None,
+            notes: Vec::new(),
+            reason: Some(reason),
             version: APP_VERSION.into(),
             latest_version: None,
             commit: BUILD_COMMIT.into(),
             latest_commit: None,
-            notes: Vec::new(),
-            reason: Some(reason),
         }
     }
 
@@ -815,7 +904,26 @@ impl CliReport {
         self.reason = Some(reason);
         self
     }
+
+    fn failed(mut self, reason: String) -> Self {
+        self.state = "failed";
+        self.reason = Some(reason);
+        self
+    }
+
+    /// Exit code for apply and rollback: 0 done, 1 failed (previous version kept), 2 refused.
+    pub fn exit_code(&self) -> i32 {
+        match self.state {
+            "blocked" => EXIT_BLOCKED,
+            "failed" => EXIT_FAILED,
+            _ => EXIT_OK,
+        }
+    }
 }
+
+pub const EXIT_OK: i32 = 0;
+pub const EXIT_FAILED: i32 = 1;
+pub const EXIT_BLOCKED: i32 = 2;
 
 /// Turns a check into the hub's shape: anything that stops an update is "blocked" with a reason.
 fn report_from_check(result: Result<UpdateStatus, String>) -> CliReport {
@@ -823,12 +931,14 @@ fn report_from_check(result: Result<UpdateStatus, String>) -> CliReport {
         Err(reason) => CliReport::blocked(reason),
         Ok(status) => CliReport {
             state: if status.blocked_reason.is_some() { "blocked" } else { status.state },
+            current: status.running_version.clone(),
+            latest: status.latest_version.clone(),
+            notes: status.new_commits,
+            reason: status.blocked_reason,
             version: status.running_version,
             latest_version: status.latest_version,
             commit: status.installed_commit,
             latest_commit: status.latest_commit,
-            notes: status.new_commits,
-            reason: status.blocked_reason,
         },
     }
 }
@@ -858,6 +968,50 @@ fn other_copy_running() -> Result<bool, String> {
     Ok(!other_pids(&String::from_utf8_lossy(&output.stdout), std::process::id()).is_empty())
 }
 
+const OPEN_REASON: &str = "Social Space is open. Close it, then update.";
+
+/// The installed program this command runs as, or why a headless install must not touch it.
+fn installed_program() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|error| format!("Could not find the app: {error}"))?;
+    if !crate::hub::is_installed_copy(&exe) {
+        return Err(format!("{} is not an installed Social Space (no uninstall.exe next to it), so it is never replaced.", exe.display()));
+    }
+    Ok(exe)
+}
+
+fn previous_dir(paths: &UpdatePaths) -> PathBuf {
+    paths.local_data_dir.join("updates").join("previous")
+}
+
+/// The version running now, which an install or rollback keeps as the previous one.
+fn running_as_previous() -> crate::hub::Previous {
+    crate::hub::Previous { version: APP_VERSION.into(), commit: BUILD_COMMIT.into() }
+}
+
+/// After a swap: keep "Apps & features" in step and let the next launch say it was updated.
+fn after_swap(paths: &UpdatePaths, program: &Path, installed: &crate::hub::VersionInfo) {
+    if let Some(dir) = program.parent() {
+        crate::hub::record_installed_version(dir, &installed.version);
+    }
+    let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: installed.commit.clone(), succeeded: false };
+    let _ = write_data(&paths.data_file(RESULT_FILE), &serde_json::to_vec(&result).unwrap_or_default());
+}
+
+/// Verifies the built program against its record, then swaps it in (keeping this version).
+fn install_built(paths: &UpdatePaths, program: &Path, prepared: &PreparedUpdate) -> Result<crate::hub::VersionInfo, String> {
+    let built = prepared.app_exe.as_deref().map(PathBuf::from).ok_or("The prepared update has no program to install. Build it again.")?;
+    if prepared.app_sha256.as_deref() != Some(sha256_of(&built)?.as_str()) {
+        return Err("The built program changed after it was built. Build the update again.".into());
+    }
+    let installed = std::cell::RefCell::new(None);
+    crate::hub::install_keeping_previous(program, &built, &previous_dir(paths), &running_as_previous(), &|exe| {
+        *installed.borrow_mut() = Some(crate::hub::verify_program(exe, &prepared.commit)?);
+        Ok(())
+    })?;
+    let _ = fs::remove_file(paths.data_file(PREPARED_FILE));
+    installed.into_inner().ok_or_else(|| "The new program was not checked.".to_string())
+}
+
 fn apply(paths: &UpdatePaths) -> CliReport {
     let source = match source_dir() {
         Ok(dir) => dir,
@@ -869,27 +1023,71 @@ fn apply(paths: &UpdatePaths) -> CliReport {
     if !matches!(report.state, "available" | "ready") {
         return report;
     }
+    let program = match installed_program() {
+        Ok(program) => program,
+        Err(reason) => return report.with_blocked(reason),
+    };
     match other_copy_running() {
         Ok(false) => {}
-        Ok(true) => return report.with_blocked("Social Space is open. Close it, then apply the update.".into()),
+        Ok(true) => return report.with_blocked(OPEN_REASON.into()),
         Err(reason) => return report.with_blocked(reason),
     }
-    if status.state != "ready" {
-        let Some(latest) = status.latest_commit.clone() else { return report.with_blocked("Main could not be resolved.".into()) };
-        if let Err(reason) = buildable(&status, &latest).and_then(|_| build_update(paths, &source, &latest)) {
-            return report.with_blocked(format!("{reason} Full log: {}", log_path().display()));
+    crate::hub::remove_aside(&program);
+    let Some(latest) = status.latest_commit.clone() else { return report.with_blocked("Main could not be resolved.".into()) };
+    let prepared = match read_prepared(paths).filter(|prepared| status.state == "ready" && prepared.commit == latest && prepared.app_exe.is_some()) {
+        Some(prepared) => prepared,
+        None => match buildable(&status, &latest).and_then(|_| build_update(paths, &source, &latest)) {
+            Ok(prepared) => prepared,
+            Err(reason) => return report.failed(format!("The update did not build, so nothing changed. {reason} Full log: {}", log_path().display())),
+        },
+    };
+    match install_built(paths, &program, &prepared) {
+        Ok(installed) => {
+            after_swap(paths, &program, &installed);
+            CliReport { state: "installed", current: installed.version.clone(), version: installed.version, ..report }
         }
+        Err(reason) => report.failed(format!("The update was not installed; Social Space {APP_VERSION} is still installed. {reason}")),
     }
-    match install_prepared(paths, false) {
-        Ok(_) => CliReport { state: "installing", ..report },
-        Err(reason) => report.with_blocked(reason),
+}
+
+/// Puts back the version the last headless install (or rollback) replaced.
+fn rollback(paths: &UpdatePaths) -> CliReport {
+    let mut report = CliReport::blocked(String::new());
+    report.state = "rolled_back";
+    report.reason = None;
+    let program = match installed_program() {
+        Ok(program) => program,
+        Err(reason) => return report.with_blocked(reason),
+    };
+    let dir = previous_dir(paths);
+    let Some(previous) = crate::hub::read_previous(&dir) else {
+        return report.with_blocked("There is no earlier version to go back to. One is kept after each update Ava installs.".into());
+    };
+    match other_copy_running() {
+        Ok(false) => {}
+        Ok(true) => return report.with_blocked(OPEN_REASON.into()),
+        Err(reason) => return report.with_blocked(reason),
+    }
+    crate::hub::remove_aside(&program);
+    let installed = std::cell::RefCell::new(None);
+    let swapped = crate::hub::install_keeping_previous(&program, &crate::hub::previous_exe(&dir), &dir, &running_as_previous(), &|exe| {
+        *installed.borrow_mut() = Some(crate::hub::verify_program(exe, &previous.commit)?);
+        Ok(())
+    });
+    match (swapped, installed.into_inner()) {
+        (Ok(()), Some(installed)) => {
+            after_swap(paths, &program, &installed);
+            CliReport { current: installed.version.clone(), version: installed.version, commit: installed.commit, ..report }
+        }
+        (Ok(()), None) => report.failed("The earlier program was not checked.".into()),
+        (Err(reason), _) => report.failed(format!("Rollback failed; Social Space {APP_VERSION} is still installed. {reason}")),
     }
 }
 
 fn human(report: &CliReport) -> String {
-    let mut lines = vec![format!("Social Space {} ({}): {}", report.version, short(&report.commit), report.state)];
+    let mut lines = vec![format!("Social Space {} ({}): {}", report.current, short(&report.commit), report.state)];
     if let Some(commit) = &report.latest_commit {
-        lines.push(format!("main: {} ({})", report.latest_version.as_deref().unwrap_or("?"), short(commit)));
+        lines.push(format!("main: {} ({})", report.latest.as_deref().unwrap_or("?"), short(commit)));
     }
     lines.extend(report.notes.iter().map(|note| format!("  {note}")));
     if let Some(reason) = &report.reason {
@@ -941,29 +1139,40 @@ fn connect_stdout() {
 #[cfg(not(windows))]
 fn connect_stdout() {}
 
-/// Runs `--update ...` without opening a window and returns the process exit code:
-/// 0 whenever a report was printed (the state says what happened), 2 for bad arguments.
+fn print_line(text: &str) {
+    let mut stdout = std::io::stdout().lock();
+    let _ = writeln!(stdout, "{text}");
+    let _ = stdout.flush();
+}
+
+/// Runs `--version` or `--update ...` without opening a window and returns the process exit code:
+/// check and version 0 once they printed; apply and rollback 0 done, 1 failed, 2 refused (blocked);
+/// 2 for bad arguments.
 pub fn run_cli(request: Result<CliRequest, String>) -> i32 {
     connect_stdout();
     let request = match request {
         Ok(request) => request,
         Err(message) => {
             eprintln!("{message}");
-            return 2;
+            return EXIT_BLOCKED;
         }
     };
+    if request.action == CliAction::Version {
+        let info = crate::hub::version_info();
+        print_line(&if request.json { serde_json::to_string(&info).unwrap_or_default() } else { format!("Social Space {} ({})", info.version, short(&info.commit)) });
+        return EXIT_OK;
+    }
     let report = match UpdatePaths::from_env() {
         Err(reason) => CliReport::blocked(reason),
         Ok(paths) => match request.action {
             CliAction::Check => report_from_check(check_with(&paths)),
             CliAction::Apply => apply(&paths),
+            CliAction::Rollback => rollback(&paths),
+            CliAction::Version => unreachable!("handled above"),
         },
     };
-    let text = if request.json { serde_json::to_string(&report).unwrap_or_default() } else { human(&report) };
-    let mut stdout = std::io::stdout().lock();
-    let _ = writeln!(stdout, "{text}");
-    let _ = stdout.flush();
-    0
+    print_line(&if request.json { serde_json::to_string(&report).unwrap_or_default() } else { human(&report) });
+    if request.action == CliAction::Check { EXIT_OK } else { report.exit_code() }
 }
 
 #[cfg(test)]
@@ -998,9 +1207,18 @@ mod tests {
     }
 
     #[test]
-    fn offline_checks_fall_back_to_local_main() {
-        assert_eq!(target_ref(true), "origin/main");
-        assert_eq!(target_ref(false), "main");
+    fn an_offline_check_is_blocked_quickly_with_a_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let git_in = |args: &[&str]| assert!(Command::new("git").arg("-C").arg(dir.path()).args(args).output().unwrap().status.success());
+        git_in(&["init", "-q", "-b", "main"]);
+        git_in(&["remote", "add", "origin", &dir.path().join("nowhere").display().to_string()]);
+        let started = std::time::Instant::now();
+        let reason = fetch_main(dir.path()).unwrap_err();
+        assert!(reason.starts_with("Could not reach GitHub"), "{reason}");
+        assert!(started.elapsed() < FETCH_TIMEOUT + Duration::from_secs(5));
+        let report = report_from_check(Err(reason));
+        assert_eq!(report.state, "blocked");
+        assert!(FETCH_TIMEOUT < Duration::from_secs(30), "check must answer within 30 s");
     }
 
     #[test]
@@ -1038,7 +1256,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let installer = dir.path().join("SocialSpace-setup.exe");
         fs::write(&installer, b"installer").unwrap();
-        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: String::new(), built_at: 1 };
+        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: String::new(), built_at: 1, app_exe: None, app_sha256: None };
         assert!(prepared_for(Some(prepared.clone()), &"b".repeat(40)).is_some());
         assert!(prepared_for(Some(prepared.clone()), &"c".repeat(40)).is_none(), "main moved on since the build");
         fs::remove_file(&installer).unwrap();
@@ -1157,11 +1375,17 @@ mod tests {
 
     #[test]
     fn cli_arguments_are_parsed() {
+        let request = |action, json| Some(Ok(CliRequest { action, json }));
         assert_eq!(parse_cli(&args(&[])), None);
         assert_eq!(parse_cli(&args(&["--something-else"])), None);
-        assert_eq!(parse_cli(&args(&["--update", "check", "--json"])), Some(Ok(CliRequest { action: CliAction::Check, json: true })));
-        assert_eq!(parse_cli(&args(&["--json", "--update", "apply"])), Some(Ok(CliRequest { action: CliAction::Apply, json: true })));
-        assert_eq!(parse_cli(&args(&["--update=check"])), Some(Ok(CliRequest { action: CliAction::Check, json: false })));
+        assert_eq!(parse_cli(&args(&["--hub"])), None, "a managed launch opens the window");
+        assert_eq!(parse_cli(&args(&["--update", "check", "--json"])), request(CliAction::Check, true));
+        assert_eq!(parse_cli(&args(&["--json", "--update", "apply"])), request(CliAction::Apply, true));
+        assert_eq!(parse_cli(&args(&["--update", "rollback", "--json"])), request(CliAction::Rollback, true));
+        assert_eq!(parse_cli(&args(&["--update=check"])), request(CliAction::Check, false));
+        assert_eq!(parse_cli(&args(&["--version", "--json"])), request(CliAction::Version, true));
+        assert_eq!(parse_cli(&args(&["--hub", "--version"])), request(CliAction::Version, false));
+        assert!(parse_cli(&args(&["--version", "x"])).unwrap().unwrap_err().contains("Unknown argument"));
         assert!(parse_cli(&args(&["--update"])).unwrap().unwrap_err().contains("Missing"));
         assert!(parse_cli(&args(&["--update", "--json"])).unwrap().unwrap_err().contains("Missing"));
         assert!(parse_cli(&args(&["--update", "install"])).unwrap().unwrap_err().contains("Unknown update action"));
@@ -1173,15 +1397,34 @@ mod tests {
         let report = report_from_check(Ok(status("available", None)));
         let json: serde_json::Value = serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
         let keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
-        assert_eq!(keys.len(), 7);
-        for key in ["state", "version", "latestVersion", "commit", "latestCommit", "notes", "reason"] {
+        for key in ["state", "current", "latest", "notes", "reason", "version", "latestVersion", "commit", "latestCommit"] {
             assert!(keys.contains(&key), "missing {key}");
         }
+        assert_eq!(keys.len(), 9);
         assert_eq!(json["state"], "available");
+        assert_eq!((json["current"].as_str(), json["latest"].as_str()), (Some("0.2.0"), Some("0.3.0")));
         assert_eq!(json["latestVersion"], "0.3.0");
         assert_eq!(json["notes"][0], "bbbbbbb Add video library");
         assert!(json["reason"].is_null());
         assert!(!serde_json::to_string(&report).unwrap().contains('\n'), "one line");
+    }
+
+    #[test]
+    fn apply_and_rollback_exit_codes_follow_the_contract() {
+        let report = report_from_check(Ok(status("available", None)));
+        assert_eq!(CliReport { state: "installed", ..report.clone() }.exit_code(), EXIT_OK);
+        assert_eq!(CliReport { state: "rolled_back", ..report.clone() }.exit_code(), EXIT_OK);
+        assert_eq!(report_from_check(Ok(status("up_to_date", None))).exit_code(), EXIT_OK);
+        assert_eq!(report.clone().with_blocked(OPEN_REASON.into()).exit_code(), EXIT_BLOCKED);
+        let failed = report.failed("did not build".into());
+        assert_eq!((failed.state, failed.exit_code()), ("failed", EXIT_FAILED));
+        assert_eq!(run_cli(Err("bad".into())), EXIT_BLOCKED);
+    }
+
+    #[test]
+    fn the_test_build_is_never_swapped() {
+        // cargo test runs from target\debug\deps, which has no uninstall.exe.
+        assert!(installed_program().unwrap_err().contains("not an installed Social Space"));
     }
 
     #[test]

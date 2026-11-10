@@ -25,9 +25,16 @@ export type UpdateProgress = {
   error: string | null;
 };
 export type UpdateResult = { fromCommit: string; toCommit: string; succeeded: boolean };
+/** managedBy is "Ava" while the Ava hub manages updates (its marker file or --hub); null when the app updates itself. */
+export type UpdateManagement = { managedBy: string | null };
 
 const COMMIT = /^[a-f0-9]{40}$/i;
 
+/** Who manages updates. Outside the desktop app nothing does. */
+export async function updateManagement(): Promise<UpdateManagement> {
+  if (!isTauri()) return { managedBy: null };
+  return invoke('update_management');
+}
 /** Returns null outside the desktop app, where there is nothing to update. */
 export async function checkForUpdate(): Promise<UpdateStatus | null> {
   if (!isTauri()) return null;
