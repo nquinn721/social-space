@@ -89,6 +89,11 @@ describe('update banner', () => {
     expect(state.restartToUpdate).toHaveBeenCalledOnce();
   });
 
+  it('says why when Restart to update fails, instead of doing nothing', () => {
+    render(<UpdateBanner updates={fake({ status: ready, error: 'The prepared installer is gone. Build the update again.' })} onOpen={vi.fn()}/>);
+    expect(screen.getByText(/didn't start: The prepared installer is gone/)).toBeInTheDocument();
+  });
+
   it('points to the Updates page when a build failed', async () => {
     const open = vi.fn();
     render(<UpdateBanner updates={fake({ progress: { ...idle, state: 'failed', error: 'npm failed' } })} onOpen={open}/>);
