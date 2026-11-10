@@ -23,7 +23,7 @@ function SetupGuide({ busy, onOpenDeveloper }: { busy: boolean; onOpenDeveloper:
     <p>Posting uses Meta's official Instagram API. It works only for professional (Business or Creator) accounts. One-time setup:</p>
     <ol>
       <li>In the Instagram app, open <strong>Settings → Account type and tools → Switch to professional account</strong> and pick Business or Creator.</li>
-      <li>At Meta for Developers, create an app (use case: <strong>Manage messaging & content on Instagram</strong>) and open <strong>API setup with Instagram login</strong>.</li>
+      <li>At Meta for Developers, log in with Facebook (first time: press Get started), then go to My Apps and create an app (use case: <strong>Manage messaging & content on Instagram</strong>) and open <strong>API setup with Instagram login</strong>.</li>
       <li>Under <strong>Generate access tokens</strong>, add your Instagram account and sign in. If Instagram shows a tester invite, accept it in <strong>Settings → Website permissions → Apps and websites</strong>.</li>
       <li>Copy the token (it starts with <code>IG</code>) and paste it below. The app keeps it fresh for you.</li>
     </ol>

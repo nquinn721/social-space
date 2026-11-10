@@ -278,6 +278,8 @@ fn save_workspace(
 }
 
 // URLs are selected entirely in Rust, so the webview cannot open arbitrary destinations.
+const META_DEVELOPERS_HOME: &str = "https://developers.facebook.com/";
+
 fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
     match (platform, action) {
         (Platform::X, "create") => Some("https://x.com/i/flow/signup"),
@@ -289,9 +291,8 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Instagram, "post") => Some("https://www.instagram.com/"),
         // Instagram moved name and username editing to Accounts Center.
         (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
-        (Platform::Instagram, "developer") => {
-            Some("https://developers.facebook.com/apps/")
-        }
+        // The app list (/apps/) shows "link broken" until you are signed in, so start at the home page.
+        (Platform::Instagram, "developer") => Some(META_DEVELOPERS_HOME),
         (Platform::Tiktok, "create") => Some("https://www.tiktok.com/signup"),
         (Platform::Tiktok, "manage") => Some("https://www.tiktok.com/setting"),
         (Platform::Tiktok, "post") => Some("https://www.tiktok.com/upload"),
@@ -411,6 +412,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meta_developer_link_opens_a_page_that_works_signed_out() {
+        // /apps/ answers "link may be broken" until you sign in, so the button must open the home page.
+        let url = platform_url(Platform::Instagram, "developer").unwrap();
+        assert_eq!(url, "https://developers.facebook.com/");
+        assert_eq!(platform_url(Platform::Instagram, "identity"), Some("https://accountscenter.instagram.com/profiles/"));
+    }
 
     fn account(id: &str) -> Account {
         Account {
