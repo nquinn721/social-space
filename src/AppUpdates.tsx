@@ -180,7 +180,7 @@ export function UpdatesPage({ updates }: { updates: AppUpdates }) {
       {!status ? <p className="update-note">{checking ? 'Checking for updates…' : 'Update status is not available yet.'}</p> : <>
         <dl className="update-facts">
           <dt>Running</dt><dd>SocialSpace {status.runningVersion}, build {short(status.installedCommit)}</dd>
-          <dt>Latest on main</dt><dd>{short(status.latestCommit)}</dd>
+          <dt>Latest on main</dt><dd>{status.latestVersion ? `${status.latestVersion}, build ` : ''}{short(status.latestCommit)}</dd>
           <dt>Source folder</dt><dd>{status.sourceDir}</dd>
         </dl>
         {ready && status.prepared ? <p className="update-ready">Update ready: commit <strong>{short(status.prepared.commit)}</strong> is built. Restart to install it.</p>

@@ -323,6 +323,11 @@ async fn open_kling(app: tauri::AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // `--update check|apply --json` is for the Ava hub: answer on stdout and exit, no window.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(request) = updater::parse_cli(&args) {
+        std::process::exit(updater::run_cli(request));
+    }
     tauri::Builder::default()
         .manage(StorageLock::default())
         .manage(video_gen::GenerateLock::default())

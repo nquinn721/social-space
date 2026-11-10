@@ -6,6 +6,8 @@ export type UpdateStatus = {
   /** available: main has changes this build lacks. ready: they are built and waiting to install. */
   state: 'available' | 'ready' | 'up_to_date';
   runningVersion: string;
+  /** Version in main's tauri.conf.json, when it could be read. */
+  latestVersion: string | null;
   sourceDir: string;
   prepared: PreparedUpdate | null;
   installedCommit: string;

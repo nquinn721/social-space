@@ -9,7 +9,7 @@ vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), prepareUpdate: vi.f
 
 const MAIN = 'b'.repeat(40);
 const available: updates.UpdateStatus = {
-  state: 'available', runningVersion: '0.1.0', sourceDir: 'D:\\Projects\\SocialManager-release', prepared: null,
+  state: 'available', runningVersion: '0.1.0', latestVersion: '0.2.0', sourceDir: 'D:\\Projects\\SocialManager-release', prepared: null,
   installedCommit: 'a'.repeat(40), latestCommit: MAIN, updateAvailable: true,
   newCommits: ['bbbbbbb Add video library', 'ccccccc Fix queue'], blockedReason: null,
 };
@@ -45,7 +45,7 @@ describe('update checks', () => {
     expect(hasUpdate(available)).toBe(true);
     expect(hasUpdate(ready)).toBe(true);
     expect(hasUpdate(upToDate)).toBe(false);
-    expect(hasUpdate({ ...available, blockedReason: 'Uncommitted changes.' })).toBe(false);
+    expect(hasUpdate({ ...available, blockedReason: 'npm is not on PATH.' })).toBe(false);
     expect(hasUpdate(null)).toBe(false);
   });
 });
@@ -61,7 +61,7 @@ describe('automatic builds', () => {
   });
 
   it('does not build when updating is blocked or already running', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, blockedReason: 'Uncommitted changes.' });
+    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, blockedReason: 'npm is not on PATH.' });
     renderHook(() => useAppUpdates(60_000));
     await vi.waitFor(() => expect(updates.checkForUpdate).toHaveBeenCalled());
     await act(async () => { await Promise.resolve(); });
@@ -115,6 +115,7 @@ describe('Updates page', () => {
     render(<UpdatesPage updates={fake()}/>);
     expect(screen.getByText('SocialSpace 0.1.0, build aaaaaaa')).toBeInTheDocument();
     expect(screen.getByText(available.sourceDir)).toBeInTheDocument();
+    expect(screen.getByText('0.2.0, build bbbbbbb')).toBeInTheDocument();
     expect(screen.getByText('bbbbbbb Add video library')).toBeInTheDocument();
   });
 
@@ -146,8 +147,8 @@ describe('Updates page', () => {
   });
 
   it('explains why updating is blocked', () => {
-    render(<UpdatesPage updates={fake({ status: { ...available, blockedReason: 'The source folder has uncommitted changes (src/App.tsx).' } })}/>);
-    expect(screen.getByText(/uncommitted changes/)).toBeInTheDocument();
+    render(<UpdatesPage updates={fake({ status: { ...available, blockedReason: 'npm (npm.cmd) is not on PATH, so the update cannot be built.' } })}/>);
+    expect(screen.getByText(/npm .* is not on PATH/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Build now' })).not.toBeInTheDocument();
   });
 
