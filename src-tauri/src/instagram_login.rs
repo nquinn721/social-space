@@ -94,7 +94,7 @@ fn valid_app(app_id: &str, app_secret: &str) -> bool {
 /// Whether the one-time Meta app details are saved, so Connect can be a single click.
 #[tauri::command]
 pub fn instagram_app_ready() -> Result<bool, String> {
-    Ok(load_app()?.is_some())
+    Ok(load_app()?.is_some_and(|app| app.config_id.is_some()))
 }
 
 /// Saves the Meta app once: its App ID and secret, plus the configuration ID for Unified login apps.
@@ -273,7 +273,9 @@ impl Drop for Busy {
 #[tauri::command]
 pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, username: Option<String>) -> Result<crate::instagram::InstagramConnection, String> {
     let _busy = Busy::take()?;
-    let meta = load_app()?.ok_or("SETUP_NEEDED")?;
+    // New Meta apps only offer Unified login, so an app saved without its configuration
+    // (from the earlier form) is set up again instead of opening Instagram's page, which fails.
+    let meta = load_app()?.filter(|app| app.config_id.is_some()).ok_or("SETUP_NEEDED")?;
     let state = random_state()?;
     let (sender, receiver) = mpsc::channel::<Result<String, String>>();
     let label = format!("site-instagram-{}", &state[..8]);
