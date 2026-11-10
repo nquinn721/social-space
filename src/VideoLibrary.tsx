@@ -142,6 +142,7 @@ function VideoRow({ video, socials, busy, disabled, progress, onToggle, onOpen, 
       return <button type="button" key={platform} className={`posted-chip ${done ? 'done' : ''}`} aria-pressed={done} aria-label={getPlatform(platform).name} title={done ? `Posted on ${getPlatform(platform).name}. Click to unmark.` : `Mark as posted on ${getPlatform(platform).name}`} disabled={disabled} onClick={() => onToggle(platform)}><BrandMark platform={platform} small/>{done && <Check size={12}/>}</button>;
     })}</div>}
     <div className="library-video-actions">
+      {playable && <button type="button" className="ghost-button small-button" aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <><X size={14}/> Close</> : <><Play size={14}/> Watch</>}</button>}
       {!job && next && <button type="button" className="ghost-button small-button" disabled={busy} onClick={() => onOpen(next, 'post')}><AppWindow size={14}/> Upload to {getPlatform(next).name}</button>}
       {job && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={onRetry}><RotateCw size={14}/> {job.status === 'failed' ? 'Try again' : 'Check now'}</button>}
       <button type="button" className="icon-button" aria-label={`Remove ${video.title}`} disabled={disabled} onClick={onRemove}><Trash2 size={15}/></button>
