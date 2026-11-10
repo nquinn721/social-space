@@ -19,6 +19,6 @@ export async function instagramAppReady(): Promise<boolean> { desktopOnly(); ret
 /** configId is the Facebook Login for Business configuration that newer (Unified login) Meta apps need. */
 export async function saveInstagramApp(appId: string, appSecret: string, configId?: string): Promise<void> { desktopOnly(); return invoke('save_instagram_app', { appId, appSecret, configId: configId || null }); }
 /** Address to add under Valid OAuth Redirect URIs in the Meta app. */
-export const INSTAGRAM_REDIRECT_URI = 'https://localhost/socialspace/instagram';
+export const INSTAGRAM_REDIRECT_URI = 'https://nquinn721.github.io/socialspace/instagram';
 /** Opens Instagram's approval window with the profile's saved sign-in filled in. Rejects with SETUP_NEEDED until the Meta app is saved. */
 export async function connectInstagramApp(accountId: string | null, username: string | null): Promise<InstagramIdentity> { desktopOnly(); return invoke('connect_instagram_app', { accountId, username }); }

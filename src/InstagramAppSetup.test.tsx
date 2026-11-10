@@ -6,7 +6,7 @@ import InstagramAppSetup from './InstagramAppSetup';
 import { openPlatformAction } from './service';
 
 vi.mock('./service', () => ({ openPlatformAction: vi.fn() }));
-vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://localhost/socialspace/instagram' }));
+vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram' }));
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(openPlatformAction).mockResolvedValue(undefined); });
 afterEach(cleanup);
 
@@ -17,7 +17,7 @@ describe('Instagram one-time setup', () => {
     expect(screen.getByText(/Make the Instagram account professional/)).toBeInTheDocument();
     expect(screen.getByText('API setup with Unified login')).toBeInTheDocument();
     expect(screen.getByText('System-user access token')).toBeInTheDocument();
-    expect(screen.getByText('https://localhost/socialspace/instagram')).toBeInTheDocument();
+    expect(screen.getByText('https://nquinn721.github.io/socialspace/instagram')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Open Meta for Developers/ }));
     expect(openPlatformAction).toHaveBeenCalledWith('instagram', 'developer');
   });
@@ -26,7 +26,7 @@ describe('Instagram one-time setup', () => {
     const user = userEvent.setup();
     render(<InstagramAppSetup working={false} onSave={vi.fn()} onCancel={vi.fn()}/>);
     await user.click(screen.getByRole('button', { name: /Copy/ }));
-    expect(await navigator.clipboard.readText()).toBe('https://localhost/socialspace/instagram');
+    expect(await navigator.clipboard.readText()).toBe('https://nquinn721.github.io/socialspace/instagram');
     expect(screen.getByRole('button', { name: /Copied/ })).toBeInTheDocument();
   });
 

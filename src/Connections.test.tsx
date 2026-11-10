@@ -9,7 +9,7 @@ import * as x from './xService';
 import * as apps from './devAppsService';
 
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(async () => ({ host: 'gmail', username: 'softwings25@gmail.com', kind: 'gmail' })), connectGmailSession: vi.fn(), openGmailSignIn: vi.fn() }));
-vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://localhost/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn() }));
+vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn() }));
 vi.mock('./xService', () => ({ claimXConnection: vi.fn(), connectX: vi.fn(), disconnectX: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({ active: null, sources: [] })) }));
 vi.mock('./devAppsService', () => ({ listDeveloperApps: vi.fn(), saveDeveloperApp: vi.fn() }));

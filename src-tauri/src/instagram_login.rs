@@ -22,9 +22,10 @@ use std::{
 use serde::Deserialize;
 use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
 
-/// Must be listed under Valid OAuth Redirect URIs in the Meta app. It is caught in
-/// the window and never actually requested.
-pub const REDIRECT_URI: &str = "https://localhost/socialspace/instagram";
+/// Must be registered as the Redirect URL in the Meta app. It is caught in the window
+/// and never actually requested. Meta rejects localhost, so it is an HTTPS address on
+/// the repo owner's GitHub Pages domain, which nobody else can serve.
+pub const REDIRECT_URI: &str = "https://nquinn721.github.io/socialspace/instagram";
 const AUTHORIZE_URL: &str = "https://www.instagram.com/oauth/authorize";
 const TOKEN_URL: &str = "https://api.instagram.com/oauth/access_token";
 const LONG_TOKEN_URL: &str = "https://graph.instagram.com/access_token";
@@ -352,9 +353,9 @@ mod tests {
     #[test]
     fn only_the_matching_redirect_is_caught() {
         let parse = |value: &str| url::Url::parse(value).unwrap();
-        assert_eq!(redirect_result(&parse("https://localhost/socialspace/instagram?code=AQB1&state=abc#_"), "abc"), Some(Ok("AQB1".into())));
-        assert!(redirect_result(&parse("https://localhost/socialspace/instagram?code=AQB1&state=other"), "abc").unwrap().is_err());
-        assert!(redirect_result(&parse("https://localhost/socialspace/instagram?error=access_denied&state=abc"), "abc").unwrap().is_err());
+        assert_eq!(redirect_result(&parse("https://nquinn721.github.io/socialspace/instagram?code=AQB1&state=abc#_"), "abc"), Some(Ok("AQB1".into())));
+        assert!(redirect_result(&parse("https://nquinn721.github.io/socialspace/instagram?code=AQB1&state=other"), "abc").unwrap().is_err());
+        assert!(redirect_result(&parse("https://nquinn721.github.io/socialspace/instagram?error=access_denied&state=abc"), "abc").unwrap().is_err());
         assert_eq!(redirect_result(&parse("https://www.instagram.com/accounts/login/"), "abc"), None);
     }
 
@@ -371,7 +372,7 @@ mod tests {
 
     #[test]
     fn facebook_redirect_with_fragment_is_caught() {
-        let url = url::Url::parse("https://localhost/socialspace/instagram?code=AQD9&state=abc#_=_").unwrap();
+        let url = url::Url::parse("https://nquinn721.github.io/socialspace/instagram?code=AQD9&state=abc#_=_").unwrap();
         assert_eq!(redirect_result(&url, "abc"), Some(Ok("AQD9".into())));
     }
 
