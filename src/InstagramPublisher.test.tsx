@@ -20,12 +20,12 @@ describe('Instagram publishing', () => {
     expect(await screen.findByText(/Switch to professional account/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Access token'), 'IGtest-token');
     await user.click(screen.getByRole('button', { name: 'Connect Instagram' }));
-    expect(service.connectInstagram).toHaveBeenCalledWith('', 'IGtest-token');
+    expect(service.connectInstagram).toHaveBeenCalledWith('', 'IGtest-token', undefined);
     expect(await screen.findByText(/Connected as @example with an Instagram token/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Public link to a JPEG photo'), 'https://example.com/photo.jpg');
     await user.type(screen.getByLabelText('Caption optional'), 'Hello world');
     await user.click(screen.getByRole('button', { name: 'Publish photo' }));
-    expect(service.publishInstagramPhoto).toHaveBeenCalledWith('https://example.com/photo.jpg', 'Hello world');
+    expect(service.publishInstagramPhoto).toHaveBeenCalledWith('https://example.com/photo.jpg', 'Hello world', undefined);
     expect(await screen.findByText('Your photo was published to Instagram.')).toBeInTheDocument();
     expect(screen.getByLabelText('Caption optional')).toHaveValue('');
   });
@@ -38,7 +38,7 @@ describe('Instagram publishing', () => {
     await user.click(await screen.findByRole('button', { name: 'Reel from a link' }));
     await user.type(screen.getByLabelText('Public video URL'), 'https://example.com/video.mp4');
     await user.click(screen.getByRole('button', { name: 'Publish Reel' }));
-    expect(service.publishInstagramReel).toHaveBeenCalledWith('https://example.com/video.mp4', '');
+    expect(service.publishInstagramReel).toHaveBeenCalledWith('https://example.com/video.mp4', '', undefined);
     expect(await screen.findByText('Your Reel was published to Instagram.')).toBeInTheDocument();
   });
 
@@ -52,7 +52,7 @@ describe('Instagram publishing', () => {
     await user.click(screen.getByRole('button', { name: 'Choose video' }));
     expect(await screen.findByDisplayValue('C:\\videos\\test.mp4')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Publish Reel' }));
-    expect(service.publishInstagramReelFile).toHaveBeenCalledWith('C:\\videos\\test.mp4', '');
+    expect(service.publishInstagramReelFile).toHaveBeenCalledWith('C:\\videos\\test.mp4', '', undefined);
     expect(await screen.findByText('Your Reel was uploaded and published to Instagram.')).toBeInTheDocument();
   });
 
@@ -75,7 +75,7 @@ describe('Instagram publishing', () => {
     await user.type(await screen.findByLabelText('Instagram account ID only for Facebook Page tokens'), '123');
     await user.type(screen.getByLabelText('Access token'), 'bad-token');
     await user.click(screen.getByRole('button', { name: 'Connect Instagram' }));
-    expect(service.connectInstagram).toHaveBeenCalledWith('123', 'bad-token');
+    expect(service.connectInstagram).toHaveBeenCalledWith('123', 'bad-token', undefined);
     expect(await screen.findByRole('alert')).toHaveTextContent('Token rejected');
     expect(screen.queryByLabelText('Public link to a JPEG photo')).not.toBeInTheDocument();
   });

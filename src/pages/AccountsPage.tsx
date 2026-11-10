@@ -5,7 +5,8 @@ import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
-import Connections, { postingConnected, useConnectionState } from '../Connections';
+import Connections from '../Connections';
+import { canConnect, useProfileConnections } from '../profileConnections';
 import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
 
 type Props = {
@@ -43,11 +44,11 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
 export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand, onNavigate }: Props) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<'brands' | 'sign-ins' | 'connections'>('brands');
-  const connections = useConnectionState();
   const [openId, setOpenId] = useState<string | null>(null);
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
   const issues = useMemo(() => presenceIssues(all), [all]);
+  const connections = useProfileConnections(all);
   const shown = useMemo(() => {
     const text = query.trim().toLowerCase().replace(/^@/, '');
     return groups.filter((group) => !text || group.brand.name.toLowerCase().includes(text)
@@ -85,10 +86,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
           return <div key={account.id} className="account-row-wrap">
             <button className="account-row" onClick={() => onEditAccount(account)}>
               <BrandMark platform={account.platform}/>
-              <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}{live && (account.platform === 'instagram' || account.platform === 'x') && <small className={postingConnected(account, connections.state) ? 'row-connected' : 'row-unconnected'}>{connections.loading ? 'Checking posting…' : postingConnected(account, connections.state) ? 'App can post here' : 'Not connected for posting'}</small>}</div>
+              <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}{canConnect(account) && <small className={connections.connected[account.id] ? 'row-connected' : 'row-unconnected'}>{connections.loading ? 'Checking connection…' : connections.connected[account.id] ? 'Connected, the app can post here' : 'Not connected for posting'}</small>}</div>
               <span className={`pill ${account.status}`}><span className="dot"/>{live ? 'Live' : 'Not created yet'}</span>
               <ChevronRight size={16}/>
             </button>
+            {canConnect(account) && !connections.loading && !connections.connected[account.id] && onNavigate && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => setTab('connections')}>Connect</button>}
             {!live && onSignUp && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => onSignUp([account])}><AppWindow size={14}/> Create on {name}</button>}
             {!live && onAlreadyCreated && <button className="ghost-button small-button already-made" disabled={!loaded || busy} onClick={() => onAlreadyCreated(account)}>I already made it</button>}
             {!live && onRemoveAccount && <button className="icon-button remove-profile" aria-label={`Delete ${name} profile`} title="Delete this profile from the app" disabled={!loaded || busy} onClick={() => onRemoveAccount(account)}><Trash2 size={15}/></button>}
@@ -111,7 +113,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   return <>
     <PageHeader eyebrow="Your brands" title="Brands" description="Each brand gets one profile on every social. Open a brand to create its profiles, see its sign-ins and its videos." actions={actions}/>
     {tabs}
-    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
+    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all} brands={groups.map((group) => group.brand)}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
       <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>

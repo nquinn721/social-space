@@ -32,7 +32,8 @@ function SetupGuide({ busy, onOpenDeveloper }: { busy: boolean; onOpenDeveloper:
   </div>;
 }
 
-export default function InstagramPublisher() {
+/** profile: the app profile to post as, through its own Instagram connection. */
+export default function InstagramPublisher({ profile }: { profile?: string } = {}) {
   const [identity, setIdentity] = useState<InstagramIdentity | null>(null);
   const [available, setAvailable] = useState(false);
   const [accountId, setAccountId] = useState('');
@@ -44,7 +45,7 @@ export default function InstagramPublisher() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  useEffect(() => { instagramConnection().then((value) => { setIdentity(value); setAvailable(true); }).catch(() => setAvailable(false)); }, []);
+  useEffect(() => { instagramConnection(profile).then((value) => { setIdentity(value); setAvailable(true); }).catch(() => setAvailable(false)); }, []);
 
   async function run(action: () => Promise<void>) {
     if (busy) return;
@@ -54,16 +55,16 @@ export default function InstagramPublisher() {
   function connect(event: FormEvent) {
     event.preventDefault();
     if (!token.trim()) return;
-    void run(async () => { setIdentity(await connectInstagram(accountId.trim(), token.trim())); setToken(''); setAccountId(''); setMessage('Instagram account connected.'); });
+    void run(async () => { setIdentity(await connectInstagram(accountId.trim(), token.trim(), profile)); setToken(''); setAccountId(''); setMessage('Instagram account connected.'); });
   }
   const source = kind === 'reel-file' ? filePath : mediaUrl.trim();
   function publish(event: FormEvent) {
     event.preventDefault();
     if (!source) return;
     void run(async () => {
-      if (kind === 'photo') await publishInstagramPhoto(source, caption.trim());
-      else if (kind === 'reel-link') await publishInstagramReel(source, caption.trim());
-      else await publishInstagramReelFile(source, caption.trim());
+      if (kind === 'photo') await publishInstagramPhoto(source, caption.trim(), profile);
+      else if (kind === 'reel-link') await publishInstagramReel(source, caption.trim(), profile);
+      else await publishInstagramReelFile(source, caption.trim(), profile);
       setMediaUrl(''); setFilePath(''); setCaption('');
       setMessage(PUBLISHED[kind]);
     });
@@ -93,7 +94,7 @@ export default function InstagramPublisher() {
         <p>Check Instagram before retrying after an interruption; the post might already have been published.</p>
         <button className="primary-button" disabled={busy || !source || fileNeedsPageToken}>{kind === 'photo' ? 'Publish photo' : 'Publish Reel'}</button>
       </form>
-      <button className="remove-button disconnect" disabled={busy} onClick={() => void run(async () => { await disconnectInstagram(); setIdentity(null); setMessage('Instagram account disconnected.'); })}>Disconnect Instagram</button>
+      <button className="remove-button disconnect" disabled={busy} onClick={() => void run(async () => { await disconnectInstagram(profile); setIdentity(null); setMessage('Instagram account disconnected.'); })}>Disconnect Instagram</button>
     </> : <>
       <SetupGuide busy={busy} onOpenDeveloper={() => void run(() => openPlatformAction('instagram', 'developer'))}/>
       <p>Your token is stored in Windows Credential Manager, like your sign-ins.</p>

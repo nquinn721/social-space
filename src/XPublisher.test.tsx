@@ -18,11 +18,11 @@ describe('X publishing', () => {
     render(<XPublisher />);
     await user.type(await screen.findByLabelText('X OAuth 2.0 client ID'), 'client-id');
     await user.click(screen.getByRole('button', { name: 'Connect X account' }));
-    expect(service.connectX).toHaveBeenCalledWith('client-id');
+    expect(service.connectX).toHaveBeenCalledWith('client-id', undefined);
     expect(await screen.findByText(/Connected as @example/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Your post'), 'Hello');
     await user.click(screen.getByRole('button', { name: 'Post to X' }));
-    expect(service.postToX).toHaveBeenCalledWith('Hello');
+    expect(service.postToX).toHaveBeenCalledWith('Hello', undefined);
     expect(await screen.findByText('Your post was published to X.')).toBeInTheDocument();
     expect(screen.getByLabelText('Your post')).toHaveValue('');
   });

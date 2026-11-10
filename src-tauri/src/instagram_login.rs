@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
 
 /// Must be listed under Valid OAuth Redirect URIs in the Meta app. It is caught in
@@ -26,31 +26,17 @@ const LONG_TOKEN_URL: &str = "https://graph.instagram.com/access_token";
 const SCOPES: &str = "instagram_business_basic,instagram_business_content_publish";
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
-#[cfg(windows)]
-const KEYRING_SERVICE: &str = "social-manager-instagram-app";
-
 static BUSY: Mutex<bool> = Mutex::new(false);
 
-#[derive(Serialize, Deserialize)]
 struct MetaApp {
     app_id: String,
     app_secret: String,
 }
 
-#[cfg(windows)]
-fn entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, "primary").map_err(|_| "Windows Credential Manager is unavailable.".into())
-}
-#[cfg(windows)]
+/// The Meta app is the "meta" developer app, set up once in Settings or on first Connect.
 fn load_app() -> Result<Option<MetaApp>, String> {
-    match entry()?.get_password() {
-        Ok(value) => Ok(serde_json::from_str(&value).ok()),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => Err("Could not read the saved Meta app.".into()),
-    }
+    Ok(crate::dev_apps::get(crate::dev_apps::Provider::Meta)?.map(|app| MetaApp { app_id: app.id, app_secret: app.secret }))
 }
-#[cfg(not(windows))]
-fn load_app() -> Result<Option<MetaApp>, String> { Ok(None) }
 
 fn valid_app(app_id: &str, app_secret: &str) -> bool {
     !app_id.is_empty() && app_id.len() <= 32 && app_id.bytes().all(|b| b.is_ascii_digit())
@@ -70,13 +56,7 @@ pub fn save_instagram_app(app_id: String, app_secret: String) -> Result<(), Stri
     if !valid_app(app_id, app_secret) {
         return Err("Enter the Instagram App ID (numbers only) and the Instagram App Secret from the Meta app.".into());
     }
-    #[cfg(windows)]
-    {
-        let value = serde_json::to_string(&MetaApp { app_id: app_id.into(), app_secret: app_secret.into() }).map_err(|_| "Could not save the Meta app.")?;
-        entry()?.set_password(&value).map_err(|_| "Could not save the Meta app to Windows Credential Manager.".into())
-    }
-    #[cfg(not(windows))]
-    Err("Instagram connection is supported on Windows only.".into())
+    crate::dev_apps::save(crate::dev_apps::Provider::Meta, app_id, app_secret)
 }
 
 fn authorize_url(app_id: &str, state: &str) -> Result<url::Url, String> {
@@ -210,7 +190,9 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
     if token.trim().is_empty() || token.chars().any(char::is_whitespace) {
         return Err("Instagram returned an invalid token.".into());
     }
-    crate::instagram::store("", &token, crate::instagram::LoginKind::Instagram).await
+    // The connection belongs to the profile that pressed Connect.
+    let slot = crate::instagram::slot(account_id.as_deref())?;
+    crate::instagram::store(&slot, "", &token, crate::instagram::LoginKind::Instagram).await
 }
 
 #[cfg(test)]

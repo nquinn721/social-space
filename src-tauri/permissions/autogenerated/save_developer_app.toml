@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-developer-app"
+description = "Enables the save_developer_app command without any pre-configured scope."
+commands.allow = ["save_developer_app"]
+
+[[permission]]
+identifier = "deny-save-developer-app"
+description = "Denies the save_developer_app command without any pre-configured scope."
+commands.deny = ["save_developer_app"]

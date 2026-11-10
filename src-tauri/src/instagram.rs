@@ -122,12 +122,21 @@ fn now_secs() -> u64 {
         .map(|d| d.as_secs())
         .unwrap_or(0)
 }
-fn entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ENTRY)
+/// Each profile in the app keeps its own Instagram connection, saved under its profile id.
+/// Connections made before that live under "primary" until a profile claims them.
+pub(crate) fn slot(profile: Option<&str>) -> Result<String, String> {
+    match profile.map(str::trim).filter(|value| !value.is_empty()) {
+        None => Ok(KEYRING_ENTRY.to_string()),
+        Some(id) if id.len() <= 128 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') => Ok(id.to_string()),
+        Some(_) => Err("Invalid profile.".into()),
+    }
+}
+fn entry(slot: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEYRING_SERVICE, slot)
         .map_err(|_| "Could not access secure credential storage.".into())
 }
-fn load() -> Result<Option<Credential>, String> {
-    match entry()?.get_password() {
+fn load(slot: &str) -> Result<Option<Credential>, String> {
+    match entry(slot)?.get_password() {
         Ok(value) => serde_json::from_str(&value).map(Some).map_err(|_| {
             "Saved Instagram credentials could not be read. Disconnect and reconnect.".into()
         }),
@@ -135,10 +144,10 @@ fn load() -> Result<Option<Credential>, String> {
         Err(_) => Err("Could not read Instagram credentials from secure storage.".into()),
     }
 }
-fn save(value: &Credential) -> Result<(), String> {
+fn save(slot: &str, value: &Credential) -> Result<(), String> {
     let value =
         serde_json::to_string(value).map_err(|_| "Could not encode Instagram credentials.")?;
-    entry()?
+    entry(slot)?
         .set_password(&value)
         .map_err(|_| "Could not save Instagram credentials in secure storage.".into())
 }
@@ -283,7 +292,7 @@ async fn verify(
 
 /// Keeps an Instagram-login token alive. A failed refresh is not fatal: the old token still works
 /// until it expires, and the next post tries again.
-async fn refresh_if_due(mut credential: Credential) -> Credential {
+async fn refresh_if_due(slot: &str, mut credential: Credential) -> Credential {
     if credential.kind != LoginKind::Instagram
         || now_secs().saturating_sub(credential.refreshed_at) < REFRESH_AFTER_SECS
     {
@@ -300,22 +309,22 @@ async fn refresh_if_due(mut credential: Credential) -> Credential {
         if valid_token(&token.access_token) {
             credential.access_token = token.access_token;
             credential.refreshed_at = now_secs();
-            let _ = save(&credential);
+            let _ = save(slot, &credential);
         }
     }
     credential
 }
 
-async fn ready_credential(needs_file_upload: bool) -> Result<Credential, String> {
+async fn ready_credential(slot: &str, needs_file_upload: bool) -> Result<Credential, String> {
     let credential =
-        load()?.ok_or("Connect your Instagram professional account before publishing.")?;
+        load(slot)?.ok_or("Connect this Instagram profile before publishing.")?;
     if !valid_id(&credential.id) {
         return Err("Saved Instagram account ID is invalid. Reconnect your account.".into());
     }
     if needs_file_upload && credential.kind != LoginKind::Facebook {
         return Err("Posting a video file from this PC needs a Facebook Page token. With an Instagram token, post a Reel from a public link instead.".into());
     }
-    Ok(refresh_if_due(credential).await)
+    Ok(refresh_if_due(slot, credential).await)
 }
 
 async fn create_container(
@@ -382,10 +391,10 @@ async fn publish_container(
     response.json().await.map_err(|_| "Instagram's publish response was unreadable. Check Instagram before retrying; the post may have been published.".into())
 }
 
-async fn publish_from_url(media: (&str, &str), media_type: Option<&str>, caption: &str) -> Result<InstagramPost, String> {
+async fn publish_from_url(slot: &str, media: (&str, &str), media_type: Option<&str>, caption: &str) -> Result<InstagramPost, String> {
     validate_media_url(media.1)?;
     validate_caption(caption)?;
-    let credential = ready_credential(false).await?;
+    let credential = ready_credential(slot, false).await?;
     let http = client()?;
     let mut params = vec![media, ("caption", caption)];
     if let Some(media_type) = media_type {
@@ -400,7 +409,9 @@ async fn publish_from_url(media: (&str, &str), media_type: Option<&str>, caption
 pub async fn connect_instagram(
     account_id: Option<String>,
     access_token: String,
+    profile: Option<String>,
 ) -> Result<InstagramConnection, String> {
+    let slot = slot(profile.as_deref())?;
     let _guard = Guard::acquire()?;
     let account_id = account_id.unwrap_or_default();
     let account_id = account_id.trim();
@@ -408,13 +419,13 @@ pub async fn connect_instagram(
     if !valid_token(access_token) {
         return Err("Paste the whole access token from Meta, with no spaces.".into());
     }
-    store(account_id, access_token, LoginKind::for_token(access_token)).await
+    store(&slot, account_id, access_token, LoginKind::for_token(access_token)).await
 }
 
 /// Verifies and saves a token whose kind is already known, e.g. from Business Login for Instagram.
-pub(crate) async fn store(account_id: &str, access_token: &str, kind: LoginKind) -> Result<InstagramConnection, String> {
+pub(crate) async fn store(slot: &str, account_id: &str, access_token: &str, kind: LoginKind) -> Result<InstagramConnection, String> {
     let account = verify(kind, account_id, access_token).await?;
-    save(&Credential {
+    save(slot, &Credential {
         id: account.id.clone(),
         username: account.username.clone(),
         access_token: access_token.into(),
@@ -425,8 +436,8 @@ pub(crate) async fn store(account_id: &str, access_token: &str, kind: LoginKind)
 }
 
 #[tauri::command]
-pub fn instagram_connection() -> Result<Option<InstagramConnection>, String> {
-    Ok(load()?.map(|c| InstagramConnection {
+pub fn instagram_connection(profile: Option<String>) -> Result<Option<InstagramConnection>, String> {
+    Ok(load(&slot(profile.as_deref())?)?.map(|c| InstagramConnection {
         id: c.id,
         username: c.username,
         login: c.kind,
@@ -434,9 +445,9 @@ pub fn instagram_connection() -> Result<Option<InstagramConnection>, String> {
 }
 
 #[tauri::command]
-pub fn disconnect_instagram() -> Result<(), String> {
+pub fn disconnect_instagram(profile: Option<String>) -> Result<(), String> {
     let _guard = Guard::acquire()?;
-    match entry()?.delete_credential() {
+    match entry(&slot(profile.as_deref())?)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err("Could not remove Instagram credentials from secure storage.".into()),
     }
@@ -446,9 +457,10 @@ pub fn disconnect_instagram() -> Result<(), String> {
 pub async fn publish_instagram_reel(
     video_url: String,
     caption: String,
+    profile: Option<String>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
-    publish_from_url(("video_url", video_url.trim()), Some("REELS"), &caption).await
+    publish_from_url(&slot(profile.as_deref())?, ("video_url", video_url.trim()), Some("REELS"), &caption).await
 }
 
 /// Posts one photo. Meta downloads it from the link, and it must be a JPEG.
@@ -456,9 +468,10 @@ pub async fn publish_instagram_reel(
 pub async fn publish_instagram_photo(
     image_url: String,
     caption: String,
+    profile: Option<String>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
-    publish_from_url(("image_url", image_url.trim()), None, &caption).await
+    publish_from_url(&slot(profile.as_deref())?, ("image_url", image_url.trim()), None, &caption).await
 }
 
 /// Uploads a video from this PC as a Reel (Meta's resumable upload, Facebook Page tokens only).
@@ -466,15 +479,17 @@ pub async fn publish_instagram_photo(
 pub async fn publish_instagram_reel_file(
     path: String,
     caption: String,
+    profile: Option<String>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
+    let slot = slot(profile.as_deref())?;
     validate_caption(&caption)?;
     let file = std::path::PathBuf::from(path.trim());
     let size = std::fs::metadata(&file)
         .map_err(|_| "Could not open that video file.")?
         .len();
     validate_video_file(&file, size)?;
-    let credential = ready_credential(true).await?;
+    let credential = ready_credential(&slot, true).await?;
     let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(file))
         .await
         .map_err(|_| "Could not read that video file.")?
@@ -502,6 +517,26 @@ pub async fn publish_instagram_reel_file(
     publish_container(&http, &credential, &container).await
 }
 
+/// Moves a connection made before per-profile connections onto the profile it belongs to,
+/// only when its Instagram username is that profile's username.
+#[tauri::command]
+pub fn claim_instagram_connection(profile: String, username: String) -> Result<Option<InstagramConnection>, String> {
+    let _guard = Guard::acquire()?;
+    let target = slot(Some(&profile))?;
+    if target == KEYRING_ENTRY || load(&target)?.is_some() {
+        return instagram_connection(Some(profile));
+    }
+    let wanted = username.trim().trim_start_matches('@').to_lowercase();
+    match load(KEYRING_ENTRY)? {
+        Some(old) if !wanted.is_empty() && old.username.to_lowercase() == wanted => {
+            save(&target, &old)?;
+            let _ = entry(KEYRING_ENTRY)?.delete_credential();
+            Ok(Some(InstagramConnection { id: old.id, username: old.username, login: old.kind }))
+        }
+        _ => Ok(None),
+    }
+}
+
 /// Lets the user pick a video Instagram accepts for a Reel upload.
 #[tauri::command]
 pub async fn choose_instagram_video() -> Result<Option<String>, String> {
@@ -524,6 +559,14 @@ pub async fn choose_instagram_video() -> Result<Option<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn each_profile_has_its_own_slot() {
+        assert_eq!(slot(None).unwrap(), "primary");
+        assert_eq!(slot(Some("  ")).unwrap(), "primary");
+        assert_eq!(slot(Some("62919ea9-d027")).unwrap(), "62919ea9-d027");
+        assert!(slot(Some("../x")).is_err());
+    }
+
     #[test]
     fn only_finished_containers_can_be_published() {
         assert_eq!(container_ready("FINISHED"), Ok(true));

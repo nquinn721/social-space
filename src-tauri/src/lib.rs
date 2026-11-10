@@ -11,6 +11,7 @@ mod embedded;
 mod gmail_session;
 mod image_ai;
 mod grok;
+mod dev_apps;
 mod instagram;
 mod instagram_login;
 mod kling;
@@ -347,6 +348,11 @@ pub fn run() {
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
+            x_integration::claim_x_connection,
+            instagram::claim_instagram_connection,
+            dev_apps::developer_apps,
+            dev_apps::save_developer_app,
+            dev_apps::remove_developer_app,
             x_integration::post_to_x,
             instagram::connect_instagram,
             instagram_login::instagram_app_ready,
