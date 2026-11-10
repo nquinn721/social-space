@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clapperboard, KeyRound, Link2, Mail, RefreshCw } from 'lucide-react';
 import { connectGmailSession, emailConnection, openGmailSignIn } from './emailService';
-import { disconnectInstagram } from './instagramService';
+import { disconnectInstagram, saveInstagramApp } from './instagramService';
 import InstagramAppSetup from './InstagramAppSetup';
 import { disconnectX } from './xService';
 import { listVideoSources } from './videoSourcesService';
@@ -92,11 +92,12 @@ export default function Connections({ onNavigate, accounts = [], brands = [] }: 
     try { await (account.platform === 'instagram' ? disconnectInstagram(account.id) : disconnectX(account.id)); await profiles.refresh(); }
     catch (reason) { setNote(errorText(reason)); } finally { setWorking(false); }
   }
-  async function saveApp(provider: 'meta' | 'x', id: string, secret: string) {
+  async function saveApp(provider: 'meta' | 'x', id: string, secret: string, configId?: string) {
     if (working) return;
     setWorking(true); setNote('');
     try {
-      await saveDeveloperApp(provider, id, secret);
+      // The Meta app also needs its Unified login configuration, which only the Instagram command stores.
+      await (provider === 'meta' ? saveInstagramApp(id, secret, configId) : saveDeveloperApp(provider, id, secret));
       await loadApps();
       const retry = setup?.retry;
       setSetup(null); setWorking(false);
@@ -137,7 +138,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [] }: 
         </div>;
       })}</div>}
 
-    {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret) => saveApp('meta', id, secret)} onCancel={() => setSetup(null)}/>}
+    {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret, configId) => saveApp('meta', id, secret, configId)} onCancel={() => setSetup(null)}/>}
     {setup?.provider === 'x' && <XAppSetup working={working} onSave={(id) => saveApp('x', id, '')} onCancel={() => setSetup(null)}/>}
     {note && <p className="success-message" role="status">{note}</p>}
 

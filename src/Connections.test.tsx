@@ -9,7 +9,7 @@ import * as x from './xService';
 import * as apps from './devAppsService';
 
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(async () => ({ host: 'gmail', username: 'softwings25@gmail.com', kind: 'gmail' })), connectGmailSession: vi.fn(), openGmailSignIn: vi.fn() }));
-vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://localhost/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn() }));
+vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://localhost/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn() }));
 vi.mock('./xService', () => ({ claimXConnection: vi.fn(), connectX: vi.fn(), disconnectX: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({ active: null, sources: [] })) }));
 vi.mock('./devAppsService', () => ({ listDeveloperApps: vi.fn(), saveDeveloperApp: vi.fn() }));
@@ -45,6 +45,22 @@ describe('connections', () => {
     await within(row('Instagram @massagewithmia')).findByText('Connected');
     await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
     expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa');
+    expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
+  });
+
+  it('asks for the Meta app with its Unified login configuration once, then connects', async () => {
+    vi.mocked(instagram.connectInstagramApp).mockRejectedValueOnce('SETUP_NEEDED').mockResolvedValueOnce({ id: '2', username: 'massagelisa' });
+    const user = userEvent.setup();
+    render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
+    await within(row('Instagram @massagewithmia')).findByText('Connected');
+    await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
+    const form = await screen.findByRole('form', { name: 'Set up Instagram once' });
+    await user.type(within(form).getByLabelText('App ID'), '1234567890');
+    await user.type(within(form).getByLabelText('App Secret'), 'abcdef0123456789abcdef0123456789');
+    await user.type(within(form).getByLabelText('Configuration ID'), '555666777');
+    await user.click(within(form).getByRole('button', { name: 'Save and connect' }));
+    expect(instagram.saveInstagramApp).toHaveBeenCalledWith('1234567890', 'abcdef0123456789abcdef0123456789', '555666777');
+    expect(apps.saveDeveloperApp).not.toHaveBeenCalledWith('meta', expect.anything(), expect.anything());
     expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
   });
 
