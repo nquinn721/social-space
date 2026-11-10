@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-connect-youtube"
+description = "Enables the connect_youtube command without any pre-configured scope."
+commands.allow = ["connect_youtube"]
+
+[[permission]]
+identifier = "deny-connect-youtube"
+description = "Denies the connect_youtube command without any pre-configured scope."
+commands.deny = ["connect_youtube"]

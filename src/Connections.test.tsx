@@ -7,11 +7,13 @@ import type { Account } from './model';
 import * as instagram from './instagramService';
 import * as x from './xService';
 import * as apps from './devAppsService';
+import * as social from './socialConnectService';
 
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(async () => ({ host: 'gmail', username: 'softwings25@gmail.com', kind: 'gmail' })), connectGmailSession: vi.fn(), openGmailSignIn: vi.fn() }));
 vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn() }));
 vi.mock('./xService', () => ({ claimXConnection: vi.fn(), connectX: vi.fn(), disconnectX: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({ active: null, sources: [] })) }));
+vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'https://localhost/socialspace/tiktok', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
 vi.mock('./devAppsService', () => ({ listDeveloperApps: vi.fn(), saveDeveloperApp: vi.fn() }));
 vi.mock('./service', () => ({ openPlatformAction: vi.fn() }));
 
@@ -32,7 +34,7 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     expect(await within(row('Instagram @massagewithmia')).findByText('Connected')).toBeInTheDocument();
     expect(within(row('Instagram @massagelisa')).getByText('Not connected')).toBeInTheDocument();
-    expect(within(row('TikTok @mia')).getByText('Connect coming soon')).toBeInTheDocument();
+    expect(within(row('TikTok @mia')).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
     expect(screen.queryByRole('generic', { name: 'YouTube @lisa' })).not.toBeInTheDocument();
     expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('ig-lisa', 'massagelisa');
     expect(within(screen.getByRole('generic', { name: 'Developer apps' })).getByRole('button', { name: 'Change' })).toBeInTheDocument();
@@ -76,5 +78,19 @@ describe('connections', () => {
     expect(apps.saveDeveloperApp).toHaveBeenCalledWith('x', 'abc-123', '');
     expect(x.connectX).toHaveBeenLastCalledWith('', 'x-mia');
     expect(await screen.findByText('X connected as @mia_x for Massage With Mia.')).toBeInTheDocument();
+  });
+  it('asks for the TikTok app once, then connects that TikTok profile with its saved sign-in', async () => {
+    vi.mocked(social.connectTiktok).mockRejectedValueOnce('SETUP_NEEDED').mockResolvedValueOnce({ id: 'open-1', username: 'mia', name: 'Mia' });
+    const user = userEvent.setup();
+    render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
+    await within(row('Instagram @massagewithmia')).findByText('Connected');
+    await user.click(within(row('TikTok @mia')).getByRole('button', { name: 'Connect' }));
+    const form = await screen.findByRole('form', { name: 'Set up TikTok once' });
+    await user.type(within(form).getByLabelText('Client key'), 'awkey123');
+    await user.type(within(form).getByLabelText('Client secret'), 'secret-value-123');
+    await user.click(within(form).getByRole('button', { name: 'Save and connect' }));
+    expect(apps.saveDeveloperApp).toHaveBeenCalledWith('tiktok', 'awkey123', 'secret-value-123');
+    expect(social.connectTiktok).toHaveBeenLastCalledWith('tt-mia', 'mia');
+    expect(await screen.findByText('TikTok connected as @mia for Massage With Mia.')).toBeInTheDocument();
   });
 });

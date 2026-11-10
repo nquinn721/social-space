@@ -8,8 +8,8 @@ import type { Account, Video, Workspace } from './model';
 import * as sources from './videoSourcesService';
 
 vi.mock('./queueService', () => ({ chooseVideoFile: vi.fn() }));
-vi.mock('./videoFileService', () => ({
-  isLocalVideo: (path: string) => /^[a-z]:/i.test(path),
+vi.mock('./videoFileService', async (actual) => ({
+  isLocalVideo: (await actual<typeof import('./videoFileService')>()).isLocalVideo,
   videoPreviewUrl: vi.fn(async () => 'http://asset.localhost/bunny.mp4'),
   openVideoFile: vi.fn(async () => {}),
   showVideoInFolder: vi.fn(async () => {}),

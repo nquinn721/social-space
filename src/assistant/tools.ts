@@ -21,7 +21,7 @@ export type ToolResult = Record<string, unknown>;
 const PLATFORM_IDS = PLATFORMS.map((platform) => platform.id);
 const PAGES = { signup: 'create', profile: 'manage', post: 'post', developer: 'developer' } as const;
 
-export const SYSTEM_PROMPT = `You are the assistant inside Socialspace, a desktop app where the user manages their own business's social accounts on Instagram, TikTok, YouTube and X.
+export const SYSTEM_PROMPT = `You are the assistant inside Social Space, a desktop app where the user manages their own business's social accounts on Instagram, TikTok, YouTube and X.
 You can look at the workspace, draft and save account profiles (display name, bio, website, sign-up email), ask the user to pick a profile image, open platform pages in app windows, pre-fill the visible form in those windows, read the user's inbox, list the video queue, post to X through its official API, start AI video generation (Kling or Grok, whichever video source is active), and switch app pages.
 Rules:
 - Write like a top brand strategist. Names are catchy (wordplay, alliteration, a vivid image), usernames short and easy to type, and bios have personality: a punchy first line, a promise or proof, and a call to action, with 1 to 3 fitting emojis and at most one hashtag. Never write filler like "Welcome to my page" or "high quality". Tailor the bio to each platform: X is witty, Instagram aesthetic, TikTok playful, YouTube says what videos to expect and how often.
@@ -37,7 +37,7 @@ const str = (description: string) => ({ type: 'string', description });
 export const TOOL_SPECS: ToolSpec[] = [
   { type: 'function', function: { name: 'get_workspace', description: 'List the saved accounts (with profile drafts and ids), channels, and business name.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'save_account_profile', description: 'Create or update an account in the workspace directory with its profile draft. Omit accountId to add a new account.', parameters: { type: 'object', properties: {
-    accountId: str('Existing account id to update'), platform: { type: 'string', enum: PLATFORM_IDS }, label: str('Account name shown in Socialspace'), handle: str('Username without @'),
+    accountId: str('Existing account id to update'), platform: { type: 'string', enum: PLATFORM_IDS }, label: str('Account name shown in Social Space'), handle: str('Username without @'),
     displayName: str('Public display name'), bio: str('Profile description within the platform limit'), website: str('Link for the profile'), signupEmail: str('Email address to sign up with'),
     status: { type: 'string', enum: ['planned', 'active'] } }, required: ['platform'] } } },
   { type: 'function', function: { name: 'choose_account_image', description: 'Ask the user to pick a profile image file for an account.', parameters: { type: 'object', properties: { accountId: str('Account id') }, required: ['accountId'] } } },

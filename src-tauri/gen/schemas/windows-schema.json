@@ -267,10 +267,22 @@
           "markdownDescription": "Enables the connect_instagram_app command without any pre-configured scope."
         },
         {
+          "description": "Enables the connect_tiktok command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-tiktok",
+          "markdownDescription": "Enables the connect_tiktok command without any pre-configured scope."
+        },
+        {
           "description": "Enables the connect_x command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect-x",
           "markdownDescription": "Enables the connect_x command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the connect_youtube command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-youtube",
+          "markdownDescription": "Enables the connect_youtube command without any pre-configured scope."
         },
         {
           "description": "Enables the delete_account_password command without any pre-configured scope.",
@@ -303,10 +315,22 @@
           "markdownDescription": "Enables the disconnect_instagram command without any pre-configured scope."
         },
         {
+          "description": "Enables the disconnect_tiktok command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-disconnect-tiktok",
+          "markdownDescription": "Enables the disconnect_tiktok command without any pre-configured scope."
+        },
+        {
           "description": "Enables the disconnect_x command without any pre-configured scope.",
           "type": "string",
           "const": "allow-disconnect-x",
           "markdownDescription": "Enables the disconnect_x command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the disconnect_youtube command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-disconnect-youtube",
+          "markdownDescription": "Enables the disconnect_youtube command without any pre-configured scope."
         },
         {
           "description": "Enables the email_connection command without any pre-configured scope.",
@@ -621,6 +645,12 @@
           "markdownDescription": "Enables the take_update_result command without any pre-configured scope."
         },
         {
+          "description": "Enables the tiktok_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-tiktok-connection",
+          "markdownDescription": "Enables the tiktok_connection command without any pre-configured scope."
+        },
+        {
           "description": "Enables the update_progress command without any pre-configured scope.",
           "type": "string",
           "const": "allow-update-progress",
@@ -631,6 +661,12 @@
           "type": "string",
           "const": "allow-x-connection",
           "markdownDescription": "Enables the x_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the youtube_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-youtube-connection",
+          "markdownDescription": "Enables the youtube_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the add_queue_job command without any pre-configured scope.",
@@ -723,10 +759,22 @@
           "markdownDescription": "Denies the connect_instagram_app command without any pre-configured scope."
         },
         {
+          "description": "Denies the connect_tiktok command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-tiktok",
+          "markdownDescription": "Denies the connect_tiktok command without any pre-configured scope."
+        },
+        {
           "description": "Denies the connect_x command without any pre-configured scope.",
           "type": "string",
           "const": "deny-connect-x",
           "markdownDescription": "Denies the connect_x command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the connect_youtube command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-youtube",
+          "markdownDescription": "Denies the connect_youtube command without any pre-configured scope."
         },
         {
           "description": "Denies the delete_account_password command without any pre-configured scope.",
@@ -759,10 +807,22 @@
           "markdownDescription": "Denies the disconnect_instagram command without any pre-configured scope."
         },
         {
+          "description": "Denies the disconnect_tiktok command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-disconnect-tiktok",
+          "markdownDescription": "Denies the disconnect_tiktok command without any pre-configured scope."
+        },
+        {
           "description": "Denies the disconnect_x command without any pre-configured scope.",
           "type": "string",
           "const": "deny-disconnect-x",
           "markdownDescription": "Denies the disconnect_x command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the disconnect_youtube command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-disconnect-youtube",
+          "markdownDescription": "Denies the disconnect_youtube command without any pre-configured scope."
         },
         {
           "description": "Denies the email_connection command without any pre-configured scope.",
@@ -1077,6 +1137,12 @@
           "markdownDescription": "Denies the take_update_result command without any pre-configured scope."
         },
         {
+          "description": "Denies the tiktok_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-tiktok-connection",
+          "markdownDescription": "Denies the tiktok_connection command without any pre-configured scope."
+        },
+        {
           "description": "Denies the update_progress command without any pre-configured scope.",
           "type": "string",
           "const": "deny-update-progress",
@@ -1087,6 +1153,12 @@
           "type": "string",
           "const": "deny-x-connection",
           "markdownDescription": "Denies the x_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the youtube_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-youtube-connection",
+          "markdownDescription": "Denies the youtube_connection command without any pre-configured scope."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",

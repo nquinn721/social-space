@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disconnect-tiktok"
+description = "Enables the disconnect_tiktok command without any pre-configured scope."
+commands.allow = ["disconnect_tiktok"]
+
+[[permission]]
+identifier = "deny-disconnect-tiktok"
+description = "Denies the disconnect_tiktok command without any pre-configured scope."
+commands.deny = ["disconnect_tiktok"]

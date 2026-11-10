@@ -203,7 +203,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         const outcome = outcomes[item.id];
         return <li key={item.id} className={step === 'signup' && index === current ? 'current' : outcome ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcome === 'created' ? 'Created' : outcome === 'skipped' ? 'Skipped' : step === 'signup' && index === current ? 'Now' : 'Next'}</em></li>;
       })}</ol>}
-      <p className="rail-note">Socialspace only fills in forms. You press every button and solve any captcha or phone check.</p>
+      <p className="rail-note">Social Space only fills in forms. You press every button and solve any captcha or phone check.</p>
     </aside>
 
     <div className="wizard-main">

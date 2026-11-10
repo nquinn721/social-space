@@ -14,6 +14,7 @@ mod grok;
 mod dev_apps;
 mod instagram;
 mod instagram_login;
+mod social_connect;
 mod kling;
 mod ollama;
 mod queue;
@@ -352,6 +353,12 @@ pub fn run() {
             x_integration::claim_x_connection,
             instagram::claim_instagram_connection,
             dev_apps::developer_apps,
+            social_connect::connect_youtube,
+            social_connect::youtube_connection,
+            social_connect::disconnect_youtube,
+            social_connect::connect_tiktok,
+            social_connect::tiktok_connection,
+            social_connect::disconnect_tiktok,
             dev_apps::save_developer_app,
             dev_apps::remove_developer_app,
             x_integration::post_to_x,
@@ -406,7 +413,7 @@ pub fn run() {
             updater::take_update_result
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Social Manager");
+        .expect("error while running Social Space");
 }
 
 #[cfg(test)]
