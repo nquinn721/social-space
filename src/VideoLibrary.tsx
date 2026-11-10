@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { AlertCircle, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Loader2, Play, Plus, RotateCw, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Loader2, Play, Plus, RotateCw, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Platform, type PlatformAction, type Video, type VideoCategory, type Workspace } from './model';
 import { chooseVideoFile } from './queueService';
 import { BrandMark, errorText, PageHeader } from './ui';
 import { ASPECT_RATIOS, PROVIDERS } from './videoProviders';
 import { DESKTOP_ONLY, listVideoSources, type SourcesState } from './videoSourcesService';
 import { useVideoGenerations } from './useVideoGenerations';
+import { publishVideoToInstagram, useBrandInstagram, type BrandInstagram } from './useBrandInstagram';
 import { isLocalVideo, openVideoFile, showVideoInFolder, videoPreviewUrl } from './videoFileService';
 import './library.css';
 
@@ -41,6 +42,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   const videos = workspace.videos ?? [];
   const [brandId, setBrandId] = useState(brands[0]?.id ?? '');
   const brand = brands.find((item) => item.id === brandId) ?? brands[0];
+  const instagram = useBrandInstagram(workspace, brand?.id);
   const brandCategories = categories.filter((category) => category.brandId === brand?.id);
   const [categoryId, setCategoryId] = useState('');
   const category = brandCategories.find((item) => item.id === categoryId) ?? brandCategories[0];
@@ -68,6 +70,13 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
     if (disabled) return;
     const posted = video.posted.includes(platform) ? video.posted.filter((item) => item !== platform) : [...video.posted, platform];
     void save({ videos: videos.map((item) => item.id === video.id ? { ...item, posted } : item) }, posted.includes(platform) ? `Marked "${video.title}" as posted on ${getPlatform(platform).name}.` : `Marked "${video.title}" as not posted on ${getPlatform(platform).name}.`);
+  }
+  /** Publishes the video as a Reel on the brand's connected Instagram profile, then marks it posted there. */
+  async function publishToInstagram(video: Video) {
+    if (!instagram) return;
+    await publishVideoToInstagram(instagram, video.mediaSource, video.caption.trim());
+    const latest = workspace.videos ?? [];
+    await save({ videos: latest.map((item) => item.id === video.id && !item.posted.includes('instagram') ? { ...item, posted: [...item.posted, 'instagram'] } : item) }, `Published "${video.title}" to @${instagram.username} on Instagram.`);
   }
   function removeVideo(video: Video) {
     const note = video.generation?.status === 'working' ? ' The source may still finish it, but it will not be saved here.' : ' This does not delete it from any social or from your PC.';
@@ -112,7 +121,8 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
           {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Accounts.</p>}
           {shown.length === 0 ? <div className="library-empty">No videos in {category.name} yet. Make one with AI or add a file.</div> : <ul className="library-videos">
             {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy} disabled={disabled} progress={generations.progress[video.id]}
-              onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}/>)}
+              onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
+              instagram={instagram} onPublishInstagram={() => publishToInstagram(video)}/>)}
           </ul>}
         </>}
         {error && <div className="error-message" role="alert">{error}</div>}
@@ -121,13 +131,28 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   </>;
 }
 
-type RowProps = { video: Video; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void };
-function VideoRow({ video, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry }: RowProps) {
+type RowProps = { video: Video; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void;
+  instagram?: BrandInstagram | null; onPublishInstagram?: () => Promise<void> };
+function VideoRow({ video, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, instagram, onPublishInstagram }: RowProps) {
   const job = video.generation;
   const next = socials.find((platform) => !video.posted.includes(platform));
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
   const [watching, setWatching] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  // One click posts straight to the brand's connected Instagram, once it is connected through Meta.
+  const canPublish = !job && !!instagram?.canUploadFiles && !!onPublishInstagram && isLocalVideo(video.mediaSource)
+    && socials.includes('instagram') && !video.posted.includes('instagram');
+  async function publish() {
+    if (publishing || !instagram || !onPublishInstagram) return;
+    if (!window.confirm(`Publish "${video.title}" to @${instagram.username} on Instagram now? It goes live right away.`)) return;
+    setPublishing(true); setPublishError('');
+    try { await onPublishInstagram(); }
+    catch (reason) { setPublishError(errorText(reason, 'Instagram did not publish this video.')); }
+    finally { setPublishing(false); }
+  }
+  const openNext = canPublish && next === 'instagram' ? socials.find((platform) => platform !== 'instagram' && !video.posted.includes(platform)) : next;
   return <li className={`library-video ${job ? `is-${job.status}` : ''}`} aria-label={video.title}>
     {playable ? <button type="button" className="library-video-icon library-play" aria-label={`${watching ? 'Hide' : 'Play'} ${video.title}`} aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <X size={16}/> : <Play size={16}/>}</button>
       : <div className="library-video-icon">{job?.status === 'working' ? <Loader2 size={16} className="spin"/> : job?.status === 'failed' ? <AlertCircle size={16}/> : <Film size={16}/>}</div>}
@@ -143,10 +168,13 @@ function VideoRow({ video, socials, busy, disabled, progress, onToggle, onOpen, 
     })}</div>}
     <div className="library-video-actions">
       {playable && <button type="button" className="ghost-button small-button" aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <><X size={14}/> Close</> : <><Play size={14}/> Watch</>}</button>}
-      {!job && next && <button type="button" className="ghost-button small-button" disabled={busy} onClick={() => onOpen(next, 'post')}><AppWindow size={14}/> Upload to {getPlatform(next).name}</button>}
+      {canPublish && <button type="button" className="primary-button small-button" disabled={busy || publishing} onClick={() => void publish()}>{publishing ? <><Loader2 size={14} className="spin"/> Publishing…</> : <><Send size={14}/> Publish to Instagram</>}</button>}
+      {!job && openNext && <button type="button" className="ghost-button small-button" disabled={busy} onClick={() => onOpen(openNext, 'post')}><AppWindow size={14}/> Upload to {getPlatform(openNext).name}</button>}
       {job && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={onRetry}><RotateCw size={14}/> {job.status === 'failed' ? 'Try again' : 'Check now'}</button>}
       <button type="button" className="icon-button" aria-label={`Remove ${video.title}`} disabled={disabled} onClick={onRemove}><Trash2 size={15}/></button>
     </div>
+    {publishing && <p className="library-hint" role="status">Uploading to Instagram. This can take a few minutes; keep the app open.</p>}
+    {publishError && <div className="error-message" role="alert">{publishError}</div>}
     {playable && watching && <VideoPlayer path={video.mediaSource} title={video.title}/>}
   </li>;
 }

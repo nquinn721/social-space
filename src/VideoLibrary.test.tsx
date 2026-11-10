@@ -23,6 +23,8 @@ vi.mock('./videoSourcesService', () => ({
   getVideo: vi.fn(),
   saveGeneratedVideo: vi.fn(),
 }));
+vi.mock('./instagramService', () => ({ instagramConnection: vi.fn(async () => null), publishInstagramReelFile: vi.fn() }));
+import * as instagram from './instagramService';
 const mocked = vi.mocked(sources);
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 beforeEach(() => { vi.clearAllMocks(); });
@@ -141,5 +143,49 @@ describe('video library', () => {
     const title = titleFromPrompt('A fluffy white rabbit hops slowly through a sunny spring garden full of bright tulips and daisies');
     expect(title.length).toBeLessThanOrEqual(61);
     expect(title.endsWith('…')).toBe(true);
+  });
+});
+
+describe('one-click Instagram publishing', () => {
+  const fresh: Video = { ...bunny, id: 'v2', title: 'Carrot crunch', mediaSource: 'C:\\clips\\carrot.mp4', caption: 'Crunchy', posted: [] };
+  const workspace = { ...base, videos: [fresh] };
+
+  it('publishes a saved video to the connected profile and marks it posted', async () => {
+    vi.mocked(instagram.instagramConnection).mockResolvedValue({ id: '178', username: 'softwings25', login: 'facebook' });
+    vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1' });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { onSave, user } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: /Publish to Instagram/ }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('@softwings25'));
+    expect(instagram.instagramConnection).toHaveBeenCalledWith('1');
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1');
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'] })] }), 'Published "Carrot crunch" to @softwings25 on Instagram.');
+    expect(screen.getByRole('button', { name: /Upload to TikTok/ })).toBeInTheDocument();
+  });
+
+  it('does nothing when the confirmation is cancelled', async () => {
+    vi.mocked(instagram.instagramConnection).mockResolvedValue({ id: '178', username: 'softwings25', login: 'facebook' });
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { onSave, user } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: /Publish to Instagram/ }));
+    expect(instagram.publishInstagramReelFile).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('shows the Instagram error and keeps the video unposted', async () => {
+    vi.mocked(instagram.instagramConnection).mockResolvedValue({ id: '178', username: 'softwings25', login: 'facebook' });
+    vi.mocked(instagram.publishInstagramReelFile).mockRejectedValue('Instagram refused the video upload (HTTP 400).');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { onSave, user } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: /Publish to Instagram/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 400');
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('keeps the open-in-Instagram button when the profile is not connected', async () => {
+    vi.mocked(instagram.instagramConnection).mockResolvedValue(null);
+    setup(workspace);
+    expect(await screen.findByRole('button', { name: /Upload to Instagram/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Publish to Instagram/ })).not.toBeInTheDocument();
   });
 });
