@@ -11,6 +11,7 @@ mod embedded;
 mod gmail_session;
 mod image_ai;
 mod grok;
+mod dev_apps;
 mod instagram;
 mod instagram_login;
 mod kling;
@@ -277,6 +278,8 @@ fn save_workspace(
 }
 
 // URLs are selected entirely in Rust, so the webview cannot open arbitrary destinations.
+const META_DEVELOPERS_HOME: &str = "https://developers.facebook.com/";
+
 fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
     match (platform, action) {
         (Platform::X, "create") => Some("https://x.com/i/flow/signup"),
@@ -288,9 +291,8 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Instagram, "post") => Some("https://www.instagram.com/"),
         // Instagram moved name and username editing to Accounts Center.
         (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
-        (Platform::Instagram, "developer") => {
-            Some("https://developers.facebook.com/apps/")
-        }
+        // The app list (/apps/) shows "link broken" until you are signed in, so start at the home page.
+        (Platform::Instagram, "developer") => Some(META_DEVELOPERS_HOME),
         (Platform::Tiktok, "create") => Some("https://www.tiktok.com/signup"),
         (Platform::Tiktok, "manage") => Some("https://www.tiktok.com/setting"),
         (Platform::Tiktok, "post") => Some("https://www.tiktok.com/upload"),
@@ -347,6 +349,11 @@ pub fn run() {
             x_integration::connect_x,
             x_integration::x_connection,
             x_integration::disconnect_x,
+            x_integration::claim_x_connection,
+            instagram::claim_instagram_connection,
+            dev_apps::developer_apps,
+            dev_apps::save_developer_app,
+            dev_apps::remove_developer_app,
             x_integration::post_to_x,
             instagram::connect_instagram,
             instagram_login::instagram_app_ready,
@@ -405,6 +412,14 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meta_developer_link_opens_a_page_that_works_signed_out() {
+        // /apps/ answers "link may be broken" until you sign in, so the button must open the home page.
+        let url = platform_url(Platform::Instagram, "developer").unwrap();
+        assert_eq!(url, "https://developers.facebook.com/");
+        assert_eq!(platform_url(Platform::Instagram, "identity"), Some("https://accountscenter.instagram.com/profiles/"));
+    }
 
     fn account(id: &str) -> Account {
         Account {

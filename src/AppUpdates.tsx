@@ -152,7 +152,7 @@ export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen:
   if (status?.state !== 'ready' || status.blockedReason || dismissed === status.latestCommit) return null;
   return <div role="status" className="update-banner">
     <Download size={17}/>
-    <span>{`Update ready: ${changeCount(status).toLowerCase()} from main. Restart to install it.`}</span>
+    <span>{updates.error ? `The update didn't start: ${updates.error}` : `Update ready: ${changeCount(status).toLowerCase()} from main. Restart to install it.`}</span>
     <button className="primary-button small-button" onClick={() => void restartToUpdate()}>Restart to update</button>
     <button className="update-dismiss" onClick={() => setDismissed(status.latestCommit)} aria-label="Dismiss update"><Close size={16}/></button>
   </div>;

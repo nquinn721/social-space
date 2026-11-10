@@ -93,12 +93,16 @@ pub struct XPost {
     text: String,
 }
 
-fn entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ENTRY)
+/// Each profile keeps its own X connection under its profile id; older ones live under "primary".
+fn slot(profile: Option<&str>) -> Result<String, String> {
+    crate::instagram::slot(profile).map(|value| if value == "primary" { KEYRING_ENTRY.to_string() } else { value })
+}
+fn entry(slot: &str) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEYRING_SERVICE, slot)
         .map_err(|_| "Could not access secure credential storage.".into())
 }
-fn load() -> Result<Option<Credential>, String> {
-    match entry()?.get_password() {
+fn load(slot: &str) -> Result<Option<Credential>, String> {
+    match entry(slot)?.get_password() {
         Ok(value) => serde_json::from_str(&value).map(Some).map_err(|_| {
             "Saved X credentials could not be read. Disconnect and reconnect X.".into()
         }),
@@ -106,9 +110,9 @@ fn load() -> Result<Option<Credential>, String> {
         Err(_) => Err("Could not read X credentials from secure storage.".into()),
     }
 }
-fn save(credential: &Credential) -> Result<(), String> {
+fn save(slot: &str, credential: &Credential) -> Result<(), String> {
     let value = serde_json::to_string(credential).map_err(|_| "Could not encode X credentials.")?;
-    entry()?
+    entry(slot)?
         .set_password(&value)
         .map_err(|_| "Could not save X credentials in secure storage.".into())
 }
@@ -231,8 +235,12 @@ async fn token_request(form: &[(&str, &str)]) -> Result<TokenResponse, String> {
 }
 
 #[tauri::command]
-pub async fn connect_x(app: tauri::AppHandle, client_id: String) -> Result<XConnection, String> {
+pub async fn connect_x(app: tauri::AppHandle, client_id: Option<String>, profile: Option<String>) -> Result<XConnection, String> {
     let _guard = OperationGuard::acquire()?;
+    let slot = slot(profile.as_deref())?;
+    // The X developer app is set up once; Connect only needs the Client ID typed when it isn't.
+    let saved = crate::dev_apps::get(crate::dev_apps::Provider::X)?.map(|app| app.id);
+    let client_id = client_id.filter(|value| !value.trim().is_empty()).or(saved).ok_or("SETUP_NEEDED")?;
     let client_id = client_id.trim();
     if client_id.is_empty() || client_id.len() > 256 || client_id.chars().any(char::is_whitespace) {
         return Err("Enter the X OAuth 2.0 Client ID from your Native App.".into());
@@ -282,31 +290,51 @@ pub async fn connect_x(app: tauri::AppHandle, client_id: String) -> Result<XConn
         username: user.data.username,
         name: user.data.name,
     };
-    save(&credential)?;
+    save(&slot, &credential)?;
     Ok(XConnection::from(&credential))
 }
 
 #[tauri::command]
-pub fn x_connection() -> Result<Option<XConnection>, String> {
-    Ok(load()?.as_ref().map(XConnection::from))
+pub fn x_connection(profile: Option<String>) -> Result<Option<XConnection>, String> {
+    Ok(load(&slot(profile.as_deref())?)?.as_ref().map(XConnection::from))
+}
+
+/// Moves an X connection made before per-profile connections onto the profile with that username.
+#[tauri::command]
+pub fn claim_x_connection(profile: String, username: String) -> Result<Option<XConnection>, String> {
+    let _guard = OperationGuard::acquire()?;
+    let target = slot(Some(&profile))?;
+    if target == KEYRING_ENTRY || load(&target)?.is_some() {
+        return x_connection(Some(profile));
+    }
+    let wanted = username.trim().trim_start_matches('@').to_lowercase();
+    match load(KEYRING_ENTRY)? {
+        Some(old) if !wanted.is_empty() && old.username.to_lowercase() == wanted => {
+            save(&target, &old)?;
+            let _ = entry(KEYRING_ENTRY)?.delete_credential();
+            Ok(Some(XConnection::from(&old)))
+        }
+        _ => Ok(None),
+    }
 }
 
 #[tauri::command]
-pub fn disconnect_x() -> Result<(), String> {
+pub fn disconnect_x(profile: Option<String>) -> Result<(), String> {
     let _guard = OperationGuard::acquire()?;
-    match entry()?.delete_credential() {
+    match entry(&slot(profile.as_deref())?)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err("Could not remove X credentials from secure storage.".into()),
     }
 }
 
 #[tauri::command]
-pub async fn post_to_x(text: String) -> Result<XPost, String> {
+pub async fn post_to_x(text: String, profile: Option<String>) -> Result<XPost, String> {
     let _guard = OperationGuard::acquire()?;
+    let slot = slot(profile.as_deref())?;
     if text.trim().is_empty() || text.len() > 25_000 {
         return Err("Enter a post before publishing to X.".into());
     }
-    let mut credential = load()?.ok_or("Connect your X account before posting.")?;
+    let mut credential = load(&slot)?.ok_or("Connect this X profile before posting.")?;
     if credential.expires_at <= now()?.saturating_add(TOKEN_REFRESH_MARGIN) {
         let token = token_request(&[
             ("grant_type", "refresh_token"),
@@ -319,7 +347,7 @@ pub async fn post_to_x(text: String) -> Result<XPost, String> {
             credential.refresh_token = refresh;
         }
         credential.expires_at = now()?.saturating_add(token.expires_in);
-        save(&credential)?;
+        save(&slot, &credential)?;
     }
     let response = client()?.post(POST_URL).bearer_auth(&credential.access_token).json(&serde_json::json!({ "text": text })).send().await.map_err(|_| "The X request did not complete. Check X before retrying; the post may have been published." )?;
     if !response.status().is_success() {

@@ -211,8 +211,8 @@ fn verify_channel_snapshot(job: &NewQueueJob, workspace: &crate::Workspace) -> R
     }
     Ok(())
 }
-fn instagram_identity() -> Result<(String, String), String> {
-    let identity = crate::instagram::instagram_connection()?
+fn instagram_identity(profile: Option<String>) -> Result<(String, String), String> {
+    let identity = crate::instagram::instagram_connection(profile)?
         .ok_or("Connect your Instagram API account before scheduling automatic posting.")?;
     let value =
         serde_json::to_value(identity).map_err(|_| "Could not read the Instagram account.")?;
@@ -264,7 +264,7 @@ pub fn list_queue(app: AppHandle) -> Result<Vec<QueueJob>, String> {
 #[tauri::command]
 pub fn add_queue_job(app: AppHandle, job: NewQueueJob) -> Result<QueueJob, String> {
     validate(&job)?;
-    {
+    let profile = {
         let storage = app.state::<crate::StorageLock>();
         let _guard = storage
             .0
@@ -272,9 +272,10 @@ pub fn add_queue_job(app: AppHandle, job: NewQueueJob) -> Result<QueueJob, Strin
             .map_err(|_| "Workspace storage is unavailable.")?;
         let workspace = crate::read_workspace(&crate::workspace_path(&app)?)?;
         verify_channel_snapshot(&job, &workspace)?;
-    }
+        workspace.channels.iter().find(|channel| channel.id == job.channel_id).and_then(|channel| channel.account_id.clone())
+    };
     let instagram_account_id = if job.mode == QueueMode::Automatic {
-        let (id, username) = instagram_identity()?;
+        let (id, username) = instagram_identity(profile)?;
         if normalize_handle(&job.channel_handle) != normalize_handle(&username) {
             return Err(format!(
                 "The selected channel does not match the connected Instagram account @{username}."
@@ -394,6 +395,11 @@ fn finish(dir: &Path, id: &str, result: Result<(), String>) -> Result<(), String
         Ok(())
     })
 }
+/// The app profile whose Instagram connection posts this item: the account linked to its channel.
+fn profile_for(dir: &Path, item: &QueueJob) -> Option<String> {
+    let workspace = crate::read_workspace(&dir.join(crate::WORKSPACE_FILE)).ok()?;
+    workspace.channels.iter().find(|channel| channel.id == item.input.channel_id)?.account_id.clone()
+}
 fn run_once(dir: &Path) -> Result<(), String> {
     let Some(_publisher) = try_publisher_lock(&dir.join(PUBLISH_LOCK))? else {
         return Ok(());
@@ -402,13 +408,15 @@ fn run_once(dir: &Path) -> Result<(), String> {
         return Ok(());
     };
     let result = (|| {
-        let (id, username) = instagram_identity()?;
+        let profile = profile_for(dir, &item);
+        let (id, username) = instagram_identity(profile.clone())?;
         if !matches_identity(&item, &id, &username) {
             return Err("Connected Instagram account changed. Reconnect the correct account and review this item.".into());
         }
         tauri::async_runtime::block_on(crate::instagram::publish_instagram_reel(
             item.input.media_source.clone(),
             item.input.caption.clone(),
+            profile,
         ))
         .map(|_| ())
     })();

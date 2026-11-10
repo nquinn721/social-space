@@ -406,21 +406,52 @@ fn build_update(app: &AppHandle, dir: &Path, expected_commit: &str) -> Result<()
     Ok(())
 }
 
+/// Where the installer is copied before installing, so a build started by the restarted app
+/// cannot delete it while it runs.
+const STAGED_INSTALLER: &str = "socialspace-update-setup.exe";
+const INSTALL_LOG: &str = "socialspace-install.log";
+
+/// The script the hidden helper runs. It waits for the app to close, runs the installer and
+/// waits for it to really finish (the NSIS installer can hand off to a child process), and only
+/// then starts the app again. Every step is logged so a failed install can be explained.
+fn install_script(pid: u32, installer: &Path, app_exe: &Path, log: &Path) -> String {
+    let quote = |path: &Path| path.display().to_string().replace('\'', "''");
+    let exe_name = app_exe.file_stem().map(|stem| stem.to_string_lossy().replace('\'', "''")).unwrap_or_default();
+    let installer_name = installer.file_stem().map(|stem| stem.to_string_lossy().replace('\'', "''")).unwrap_or_default();
+    format!(
+        r#"$log = '{log}'
+function Log($m) {{ Add-Content -Path $log -Value ("{{0:o}} {{1}}" -f (Get-Date), $m) }}
+Log 'Waiting for SocialSpace to close'
+$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue
+if ($p -and -not $p.WaitForExit(60000)) {{ Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }}
+Get-Process -Name '{exe_name}' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Log 'Running the installer'
+$i = Start-Process -FilePath '{installer}' -ArgumentList '/S' -PassThru -Wait
+Log ("Installer exited with " + $i.ExitCode)
+for ($n = 0; $n -lt 180 -and (Get-Process -Name '{installer_name}' -ErrorAction SilentlyContinue); $n++) {{ Start-Sleep -Seconds 1 }}
+Start-Sleep -Seconds 1
+Log 'Starting SocialSpace'
+Start-Process -FilePath '{app}'
+"#,
+        log = quote(log),
+        installer = quote(installer),
+        app = quote(app_exe),
+    )
+}
+
 /// A hidden helper waits for this process to exit, installs silently, and starts the app again
 /// (the old version if the install failed, which the next launch reports).
 #[cfg(windows)]
 fn launch_installer(installer: &Path) -> Result<(), String> {
     let app_exe = std::env::current_exe().map_err(|error| format!("Could not find the app: {error}"))?;
-    let quote = |path: &Path| path.display().to_string().replace('\'', "''");
-    let script = format!(
-        "$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p) {{ if (-not $p.WaitForExit(60000)) {{ Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }} }}; \
-         Start-Process -FilePath '{installer}' -ArgumentList '/S' -Wait; Start-Process -FilePath '{app}'",
-        pid = std::process::id(),
-        installer = quote(installer),
-        app = quote(&app_exe),
-    );
+    let temp = std::env::temp_dir();
+    let staged = temp.join(STAGED_INSTALLER);
+    fs::copy(installer, &staged).map_err(|error| format!("Could not stage the installer: {error}"))?;
+    let script_path = temp.join("socialspace-install.ps1");
+    fs::write(&script_path, install_script(std::process::id(), &staged, &app_exe, &temp.join(INSTALL_LOG)))
+        .map_err(|error| format!("Could not write the install helper: {error}"))?;
     let mut command = Command::new("powershell.exe");
-    command.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", &script]);
+    command.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"]).arg(&script_path);
     hidden(&mut command)
         .spawn()
         .map_err(|error| format!("Could not start the installer: {error}"))?;
@@ -619,6 +650,17 @@ mod tests {
         remove_old_installers(dir.path());
         assert!(!nsis.join("Social Manager_0.1.0_x64-setup.exe").exists());
         assert!(nsis.join("notes.txt").exists());
+    }
+
+    #[test]
+    fn the_app_restarts_only_after_the_installer_is_done() {
+        let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Manager\social-manager.exe"), Path::new(r"C:\Temp\install.log"));
+        let install = script.find("-ArgumentList '/S' -PassThru -Wait").unwrap();
+        let wait_for_children = script.find("Get-Process -Name 'socialspace-update-setup'").unwrap();
+        let relaunch = script.find(r"Start-Process -FilePath 'C:\Apps\Social Manager\social-manager.exe'").unwrap();
+        assert!(install < wait_for_children && wait_for_children < relaunch);
+        assert!(script.contains("Get-Process -Id 42"));
+        assert!(script.contains("Get-Process -Name 'social-manager'"), "other open windows are closed first");
     }
 
     #[test]

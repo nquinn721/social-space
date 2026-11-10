@@ -47,7 +47,7 @@ export const TOOL_SPECS: ToolSpec[] = [
   { type: 'function', function: { name: 'list_emails', description: 'List recent inbox emails (newest first) without marking them read.', parameters: { type: 'object', properties: { limit: { type: 'number' }, unreadOnly: { type: 'boolean' }, search: str('Words to search for') } } } },
   { type: 'function', function: { name: 'read_email', description: 'Read one email by uid.', parameters: { type: 'object', properties: { uid: { type: 'number' } }, required: ['uid'] } } },
   { type: 'function', function: { name: 'list_video_queue', description: 'List scheduled and finished items in the video queue.', parameters: { type: 'object', properties: {} } } },
-  { type: 'function', function: { name: 'post_to_x', description: 'Publish a post to the connected X account (asks the user first).', parameters: { type: 'object', properties: { text: str('Post text, up to 280 characters') }, required: ['text'] } } },
+  { type: 'function', function: { name: 'post_to_x', description: 'Publish a post as one X profile through its own connection (asks the user first).', parameters: { type: 'object', properties: { text: str('Post text, up to 280 characters'), accountId: str('Id of the live X profile to post as; omit for the first live X profile') }, required: ['text'] } } },
   { type: 'function', function: { name: 'generate_video', description: 'Start an AI video with the active video source, or a named one (paid; asks the user first).', parameters: { type: 'object', properties: { prompt: str('Video prompt'), source: str('Name of the video source to use; omit to use the active one'), aspectRatio: { type: 'string', enum: ['16:9', '9:16', '1:1'] }, duration: { type: 'number', enum: [5, 8, 10, 15] } }, required: ['prompt'] } } },
   { type: 'function', function: { name: 'go_to_page', description: 'Show a page of the app.', parameters: { type: 'object', properties: { page: { type: 'string', enum: VIEWS } }, required: ['page'] } } },
 ];
@@ -123,8 +123,11 @@ export async function runTool(name: string, args: Record<string, unknown>, ctx: 
       const post = text(args.text);
       if (!post) throw new Error('The post is empty.');
       if (post.length > 280) throw new Error(`The post is ${post.length} characters; X allows 280.`);
-      if (!await ctx.confirm({ title: 'Post to X?', detail: post })) return { posted: false, note: 'The user declined.' };
-      return { posted: true, post: await postToX(post) };
+      const xProfiles = ctx.getWorkspace().accounts.filter((account) => account.platform === 'x' && account.status === 'active');
+      const profile = args.accountId ? xProfiles.find((account) => account.id === args.accountId) : xProfiles[0];
+      if (args.accountId && !profile) throw new Error('No live X profile with that id. Call get_workspace to see the ids.');
+      if (!await ctx.confirm({ title: profile ? `Post to X as @${profile.handle}?` : 'Post to X?', detail: post })) return { posted: false, note: 'The user declined.' };
+      return { posted: true, post: await postToX(post, profile?.id) };
     }
     case 'generate_video': {
       const prompt = text(args.prompt);
