@@ -232,25 +232,91 @@ fn choose_account(accounts: Vec<IgAccount>, wanted: Option<&str>) -> Result<IgAc
     }
 }
 
-/// Finds the Instagram account a Unified login token can post for. System-user tokens list
-/// their assigned accounts; user tokens reach it through a Facebook Page instead.
-async fn unified_account(token: &str, wanted: Option<&str>) -> Result<IgAccount, String> {
+/// Meta's error text from a failed Graph call, without anything secret (tokens are never echoed).
+async fn meta_error(response: reqwest::Response) -> String {
+    let status = response.status().as_u16();
+    let message = response.json::<serde_json::Value>().await.ok()
+        .and_then(|body| body.pointer("/error/message").and_then(|m| m.as_str()).map(str::to_owned))
+        .unwrap_or_default();
+    let message: String = message.chars().take(160).collect();
+    if message.is_empty() { format!("HTTP {status}") } else { format!("HTTP {status}: {message}") }
+}
+
+#[derive(Deserialize)]
+struct DebugToken { data: DebugData }
+#[derive(Deserialize)]
+struct DebugData { #[serde(default)] granular_scopes: Vec<GranularScope> }
+#[derive(Deserialize)]
+struct GranularScope { scope: String, #[serde(default)] target_ids: Vec<String> }
+
+/// The Instagram account IDs the person granted in the approval window, as Meta records them on the token.
+fn granted_instagram_ids(debug: DebugToken) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    for scope in debug.data.granular_scopes {
+        if scope.scope.starts_with("instagram_") {
+            for id in scope.target_ids {
+                if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) && !ids.contains(&id) {
+                    ids.push(id);
+                }
+            }
+        }
+    }
+    ids
+}
+
+/// Finds the Instagram account a Unified login token can post for. Tries, in order: the accounts
+/// granted on the token itself (debug_token), the system user's assigned accounts, and Pages.
+/// When nothing is found, the error says what Meta answered to each, so it can be fixed.
+async fn unified_account(app: &MetaApp, token: &str, wanted: Option<&str>) -> Result<IgAccount, String> {
     let http = reqwest::Client::builder().https_only(true).timeout(HTTP_TIMEOUT).build().map_err(|_| "Could not reach Meta.")?;
-    let assigned = http.get(format!("{FACEBOOK_GRAPH}/{GRAPH_VERSION}/me/assigned_instagram_accounts"))
-        .query(&[("fields", "id,username")]).bearer_auth(token).send().await;
-    let mut accounts = Vec::new();
-    if let Ok(response) = assigned {
-        if response.status().is_success() {
-            accounts = response.json::<IgAccounts>().await.map(|list| list.data).unwrap_or_default();
+    let base = format!("{FACEBOOK_GRAPH}/{GRAPH_VERSION}");
+    let mut notes: Vec<String> = Vec::new();
+    let mut accounts: Vec<IgAccount> = Vec::new();
+
+    let app_token = format!("{}|{}", app.app_id, app.app_secret);
+    match http.get(format!("{base}/debug_token")).query(&[("input_token", token), ("access_token", app_token.as_str())]).send().await {
+        Ok(response) if response.status().is_success() => match response.json::<DebugToken>().await {
+            Ok(debug) => {
+                let ids = granted_instagram_ids(debug);
+                if ids.is_empty() { notes.push("token lists no Instagram account".into()); }
+                for id in ids {
+                    match http.get(format!("{base}/{id}")).query(&[("fields", "id,username")]).bearer_auth(token).send().await {
+                        Ok(response) if response.status().is_success() => {
+                            if let Ok(account) = response.json::<IgAccount>().await { accounts.push(account); }
+                        }
+                        Ok(response) => notes.push(format!("account {id}: {}", meta_error(response).await)),
+                        Err(_) => notes.push(format!("account {id}: no answer")),
+                    }
+                }
+            }
+            Err(_) => notes.push("token check unreadable".into()),
+        },
+        Ok(response) => notes.push(format!("token check: {}", meta_error(response).await)),
+        Err(_) => notes.push("token check: no answer".into()),
+    }
+
+    if accounts.is_empty() {
+        match http.get(format!("{base}/me/assigned_instagram_accounts")).query(&[("fields", "id,username")]).bearer_auth(token).send().await {
+            Ok(response) if response.status().is_success() => {
+                accounts = response.json::<IgAccounts>().await.map(|list| list.data).unwrap_or_default();
+                if accounts.is_empty() { notes.push("assigned accounts: none".into()); }
+            }
+            Ok(response) => notes.push(format!("assigned accounts: {}", meta_error(response).await)),
+            Err(_) => notes.push("assigned accounts: no answer".into()),
         }
     }
     if accounts.is_empty() {
-        let response = http.get(format!("{FACEBOOK_GRAPH}/{GRAPH_VERSION}/me/accounts"))
-            .query(&[("fields", "instagram_business_account{id,username}")]).bearer_auth(token).send().await
-            .map_err(|_| "Could not reach Meta.")?;
-        if response.status().is_success() {
-            accounts = response.json::<PageAccounts>().await.map(|pages| pages.data.into_iter().filter_map(|page| page.instagram_business_account).collect()).unwrap_or_default();
+        match http.get(format!("{base}/me/accounts")).query(&[("fields", "instagram_business_account{id,username}")]).bearer_auth(token).send().await {
+            Ok(response) if response.status().is_success() => {
+                accounts = response.json::<PageAccounts>().await.map(|pages| pages.data.into_iter().filter_map(|page| page.instagram_business_account).collect()).unwrap_or_default();
+                if accounts.is_empty() { notes.push("pages: none".into()); }
+            }
+            Ok(response) => notes.push(format!("pages: {}", meta_error(response).await)),
+            Err(_) => notes.push("pages: no answer".into()),
         }
+    }
+    if accounts.is_empty() {
+        return Err(format!("Meta did not share an Instagram account. In the Facebook window, make sure the Instagram account is selected, then press Connect again. (Meta said: {})", notes.join("; ")));
     }
     choose_account(accounts, wanted)
 }
@@ -329,7 +395,7 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
         if token.trim().is_empty() || token.chars().any(char::is_whitespace) {
             return Err("Meta returned an invalid token.".into());
         }
-        let account = unified_account(&token, username.as_deref()).await?;
+        let account = unified_account(&meta, &token, username.as_deref()).await?;
         return crate::instagram::store(&slot, &account.id, &token, crate::instagram::LoginKind::Facebook).await;
     }
     let token = exchange(&meta, &code).await?;
@@ -387,6 +453,17 @@ mod tests {
         assert!(choose_account(vec![], None).unwrap_err().contains("asset"));
         assert!(choose_account(vec![account("1", "a"), account("2", "b")], None).unwrap_err().contains("@a, @b"));
         assert!(choose_account(vec![account("../x", "a")], None).is_err());
+    }
+
+    #[test]
+    fn granted_instagram_accounts_are_read_from_the_token() {
+        let debug: DebugToken = serde_json::from_value(serde_json::json!({ "data": { "granular_scopes": [
+            { "scope": "instagram_basic", "target_ids": ["17841466785898395"] },
+            { "scope": "instagram_content_publish", "target_ids": ["17841466785898395", "../x"] },
+            { "scope": "ads_read", "target_ids": ["999"] },
+            { "scope": "business_management" }
+        ] } })).unwrap();
+        assert_eq!(granted_instagram_ids(debug), vec!["17841466785898395".to_string()]);
     }
 
     #[test]
