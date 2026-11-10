@@ -2,7 +2,7 @@
 name = "social-manager"
 version = "0.1.0"
 description = "A desktop workspace for social accounts"
-authors = ["Social Manager"]
+authors = ["Social Space"]
 edition = "2021"
 
 [lib]

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Same tile Ava's launcher draws for Social Space: 135deg #ff6a3d -> #ff3d7f, lucide "users" glyph at half size. -->
+  <defs>
+    <linearGradient id="tint" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff6a3d"/>
+      <stop offset="1" stop-color="#ff3d7f"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="280" fill="url(#tint)"/>
+  <rect x="32" y="32" width="960" height="960" rx="280" fill="url(#shine)"/>
+  <g transform="translate(272 272) scale(20)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </g>
+</svg>

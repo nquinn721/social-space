@@ -406,7 +406,7 @@ pub fn run() {
             updater::take_update_result
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Social Manager");
+        .expect("error while running Social Space");
 }
 
 #[cfg(test)]

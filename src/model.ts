@@ -7,7 +7,7 @@ export type PlatformAction = 'create' | 'manage' | 'post' | 'developer' | 'ident
 export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
 /**
  * One profile of a brand on one social. status says whether it really exists there:
- * 'planned' is only saved in Socialspace and still has to be created, 'active' is live on the social.
+ * 'planned' is only saved in Social Space and still has to be created, 'active' is live on the social.
  * brandId ties it to its brand; accounts saved before brands existed get one when the workspace loads.
  */
 export type Account = { id: string; platform: Platform; label: string; handle: string; status: 'planned' | 'active'; notes: string; brandId?: string } & AccountProfile;

@@ -410,6 +410,10 @@ fn build_update(app: &AppHandle, dir: &Path, expected_commit: &str) -> Result<()
 /// cannot delete it while it runs.
 const STAGED_INSTALLER: &str = "socialspace-update-setup.exe";
 const INSTALL_LOG: &str = "socialspace-install.log";
+/// The uninstall entry the installer writes, named after `productName` in tauri.conf.json.
+/// Renaming the app from Social Manager moved its install folder, so the restart reads the
+/// install location from here instead of reusing the old exe path, which the installer removes.
+const UNINSTALL_KEY: &str = r"HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Social Space";
 
 /// The script the hidden helper runs. It waits for the app to close, runs the installer and
 /// waits for it to really finish (the NSIS installer can hand off to a child process), and only
@@ -430,12 +434,17 @@ $i = Start-Process -FilePath '{installer}' -ArgumentList '/S' -PassThru -Wait
 Log ("Installer exited with " + $i.ExitCode)
 for ($n = 0; $n -lt 180 -and (Get-Process -Name '{installer_name}' -ErrorAction SilentlyContinue); $n++) {{ Start-Sleep -Seconds 1 }}
 Start-Sleep -Seconds 1
-Log 'Starting SocialSpace'
-Start-Process -FilePath '{app}'
+$app = '{app}'
+$dir = (Get-ItemProperty -Path '{uninstall_key}' -Name InstallLocation -ErrorAction SilentlyContinue).InstallLocation
+if ($dir) {{ $new = Join-Path $dir.Trim('"') '{exe_file}'; if (Test-Path $new) {{ $app = $new }} }}
+Log ("Starting SocialSpace from " + $app)
+Start-Process -FilePath $app
 "#,
         log = quote(log),
         installer = quote(installer),
         app = quote(app_exe),
+        uninstall_key = UNINSTALL_KEY,
+        exe_file = app_exe.file_name().map(|name| name.to_string_lossy().replace('\'', "''")).unwrap_or_default(),
     )
 }
 
@@ -657,8 +666,11 @@ mod tests {
         let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Manager\social-manager.exe"), Path::new(r"C:\Temp\install.log"));
         let install = script.find("-ArgumentList '/S' -PassThru -Wait").unwrap();
         let wait_for_children = script.find("Get-Process -Name 'socialspace-update-setup'").unwrap();
-        let relaunch = script.find(r"Start-Process -FilePath 'C:\Apps\Social Manager\social-manager.exe'").unwrap();
+        let relaunch = script.find("Start-Process -FilePath $app").unwrap();
         assert!(install < wait_for_children && wait_for_children < relaunch);
+        assert!(script.contains(r"$app = 'C:\Apps\Social Manager\social-manager.exe'"), "falls back to the running exe");
+        assert!(script.contains(r"Uninstall\Social Space' -Name InstallLocation"), "prefers the renamed install folder");
+        assert!(script.contains(r#"Join-Path $dir.Trim('"') 'social-manager.exe'"#));
         assert!(script.contains("Get-Process -Id 42"));
         assert!(script.contains("Get-Process -Name 'social-manager'"), "other open windows are closed first");
     }

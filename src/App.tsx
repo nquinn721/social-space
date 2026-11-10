@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Film, AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, RotateCw, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText } from './brands';
+import appIcon from './assets/app-icon.png';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { BrandMark, initialOf, PageHeader } from './ui';
 
@@ -112,7 +113,7 @@ function App() {
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="brand"><div className="brand-symbol"><span></span><span></span><span></span><span></span></div><div><strong>Social<span>space</span></strong><small>Your social workspace</small></div></div>
+      <div className="brand"><img className="brand-symbol" src={appIcon} alt=""/><div><strong>Social <span>Space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation">{NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><div className="nav-label">{group.label}</div>{group.items.map(navButton)}</div>)}</nav>
       <div className="sidebar-bottom">
         {navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
@@ -122,7 +123,7 @@ function App() {
     </aside>
     <main className="main">
       <header className="topbar">
-        <div className="breadcrumb">Socialspace <ChevronRight size={13}/> <span>{TITLES[view]}</span></div>
+        <div className="breadcrumb">Social Space <ChevronRight size={13}/> <span>{TITLES[view]}</span></div>
         <div className="topbar-right">
           <span className="local-badge"><span className="dot"/> Local workspace</span>
           <button className={`outline-button small-button assistant-button ${assistantOpen ? 'open' : ''}`} aria-pressed={assistantOpen} onClick={() => setAssistantOpen((value) => !value)}><Bot size={15}/> Assistant</button>

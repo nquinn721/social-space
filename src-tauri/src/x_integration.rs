@@ -187,7 +187,7 @@ fn read_callback(mut stream: TcpStream, state: &str) -> Option<Result<String, St
     let request = std::str::from_utf8(&bytes[..count]).ok()?;
     let result = callback_result(request.lines().next()?, state);
     let body = if result.is_some() {
-        "You may return to Social Manager."
+        "You may return to Social Space."
     } else {
         "Invalid callback."
     };
