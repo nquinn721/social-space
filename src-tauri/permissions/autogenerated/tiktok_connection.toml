@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tiktok-connection"
+description = "Enables the tiktok_connection command without any pre-configured scope."
+commands.allow = ["tiktok_connection"]
+
+[[permission]]
+identifier = "deny-tiktok-connection"
+description = "Denies the tiktok_connection command without any pre-configured scope."
+commands.deny = ["tiktok_connection"]

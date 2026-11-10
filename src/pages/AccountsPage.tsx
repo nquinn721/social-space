@@ -136,11 +136,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         </button>;
       })}</div>
     </>}
-    <details className="more-tools"><summary>Open a social's own site</summary>
+    {tab === 'brands' && <details className="more-tools"><summary>Open a social's own site</summary>
     <div className="platform-shortcuts" style={{ marginTop: 0 }}>{PLATFORMS.map((platform) => <div className="platform-shortcut" key={platform.id}>
       <BrandMark platform={platform.id} small/>
       <div><strong>{platform.name}</strong><small>{platform.description}</small></div>
       <button className="icon-button" aria-label={`Manage on ${platform.name}`} disabled={busy} onClick={() => onOpen(platform.id, 'manage')}><AppWindow size={16}/></button>
-    </div>)}</div></details>
+    </div>)}</div></details>}
   </>;
 }
