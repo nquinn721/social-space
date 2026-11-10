@@ -115,7 +115,8 @@ pub fn save_instagram_app(app_id: String, app_secret: String, config_id: Option<
 /// Facebook Login for Business: the configuration decides the token type, assets and permissions,
 /// so no scope is sent. System-user configurations need override_default_response_type.
 fn unified_authorize_url(app_id: &str, config_id: &str, state: &str) -> Result<url::Url, String> {
-    url::Url::parse_with_params(&format!("{FACEBOOK_DIALOG}/{GRAPH_VERSION}/dialog/oauth"), &[
+    // Same address and parameters as the "Login URL" Meta generates for the configuration.
+    url::Url::parse_with_params(&format!("{FACEBOOK_DIALOG}/dialog/oauth"), &[
         ("client_id", app_id),
         ("config_id", config_id),
         ("redirect_uri", REDIRECT_URI),
@@ -362,7 +363,7 @@ mod tests {
     #[test]
     fn unified_approval_uses_the_configuration_and_no_scope() {
         let url = unified_authorize_url("123456", "987654", "abc").unwrap();
-        assert!(url.as_str().starts_with("https://www.facebook.com/v25.0/dialog/oauth?"));
+        assert!(url.as_str().starts_with("https://www.facebook.com/dialog/oauth?"));
         let query: Vec<(String, String)> = url.query_pairs().map(|(k, v)| (k.into(), v.into())).collect();
         for pair in [("client_id", "123456"), ("config_id", "987654"), ("redirect_uri", REDIRECT_URI), ("response_type", "code"), ("override_default_response_type", "true"), ("state", "abc")] {
             assert!(query.contains(&(pair.0.into(), pair.1.into())), "{pair:?}");
