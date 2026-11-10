@@ -91,3 +91,4 @@
 .conn-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 1000px) { .conn-columns { grid-template-columns: 1fr; } }
 .conn-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.rename-brand { margin-left: 8px; vertical-align: middle; color: var(--text-3); } .rename-form { max-width: 420px; }

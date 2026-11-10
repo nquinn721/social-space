@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AppWindow, ArrowLeft, ChevronRight, Plus, Search, Trash2, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
+import { AppWindow, ArrowLeft, ChevronRight, Pencil, Plus, Search, Trash2, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from '../model';
 import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
@@ -30,6 +30,8 @@ type Props = {
   onRemoveAccount?: (account: Account) => void;
   /** Removes a brand with all its profiles and videos from the app (asks first). */
   onRemoveBrand?: (brand: Brand) => void;
+  /** Renames a brand and its profiles in the app (usernames on the socials are changed separately). */
+  onRenameBrand?: (brand: Brand, name: string) => Promise<boolean | undefined>;
 };
 type BrandGroup = { key: string; brand: Brand; accounts: Account[] };
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -41,10 +43,11 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand, onNavigate }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, onOpenLibrary, onRemoveAccount, onRemoveBrand, onRenameBrand, onNavigate }: Props) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<'brands' | 'sign-ins' | 'connections'>('brands');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const groups = useMemo(() => groupByBrand(workspace), [workspace]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
   const issues = useMemo(() => presenceIssues(all), [all]);
@@ -71,10 +74,15 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     const categories = (workspace.categories ?? []).filter((category) => category.brandId === brand.id);
     const videos = (workspace.videos ?? []).filter((video) => video.brandId === brand.id);
     return <>
-      <button type="button" className="text-button back-link" onClick={() => setOpenId(null)}><ArrowLeft size={15}/> All brands</button>
+      <button type="button" className="text-button back-link" onClick={() => { setOpenId(null); setRenaming(null); }}><ArrowLeft size={15}/> All brands</button>
       <div className="brand-hero">
         <AccountAvatar account={lead} name={brand.name} size="lg"/>
-        <div><h1>{brand.name}</h1><p>{accounts.length - notCreated.length} of {accounts.length} {accounts.length === 1 ? 'profile' : 'profiles'} live{missing.length ? ` · not on ${missing.map((platform) => platform.name).join(', ')} yet` : ''}</p></div>
+        <div>{renaming === null
+          ? <h1>{brand.name}{onRenameBrand && <button type="button" className="icon-button rename-brand" aria-label={`Rename ${brand.name}`} disabled={!loaded || busy} onClick={() => setRenaming(brand.name)}><Pencil size={15}/></button>}</h1>
+          : <form className="inline-add rename-form" onSubmit={(event) => { event.preventDefault(); const name = renaming.trim(); if (name && onRenameBrand) void onRenameBrand(brand, name).then((ok) => { if (ok) setRenaming(null); }); }}>
+            <label htmlFor="brand-name" className="sr-only">Brand name</label><input id="brand-name" autoFocus maxLength={120} value={renaming} onChange={(event) => setRenaming(event.target.value)}/>
+            <button className="primary-button small-button" disabled={!renaming.trim() || busy}>Save</button><button type="button" className="ghost-button small-button" onClick={() => setRenaming(null)}>Cancel</button>
+          </form>}<p>{accounts.length - notCreated.length} of {accounts.length} {accounts.length === 1 ? 'profile' : 'profiles'} live{missing.length ? ` · not on ${missing.map((platform) => platform.name).join(', ')} yet` : ''}</p></div>
         {notCreated.length > 1 && onSignUp && <button className="primary-button" disabled={!loaded || busy} onClick={() => onSignUp(notCreated)}><AppWindow size={15}/> Create all {notCreated.length} on the socials</button>}
       </div>
       <section className="brand-card" aria-label={`${brand.name} profiles`}>

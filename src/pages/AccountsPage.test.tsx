@@ -95,4 +95,15 @@ describe('brands page', () => {
     expect(screen.getByText('No brands yet')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'New brand' })[0]).toBeEnabled();
   });
+  it('renames a brand', async () => {
+    const onRenameBrand = vi.fn(async () => true);
+    renderPage({ onRenameBrand });
+    const user = await openBrand('Soft Wings');
+    await user.click(screen.getByRole('button', { name: 'Rename Soft Wings' }));
+    const input = screen.getByLabelText('Brand name');
+    await user.clear(input);
+    await user.type(input, 'Fluffy Bunny{Enter}');
+    expect(onRenameBrand).toHaveBeenCalledWith(expect.objectContaining({ name: 'Soft Wings' }), 'Fluffy Bunny');
+    expect(screen.queryByLabelText('Brand name')).not.toBeInTheDocument();
+  });
 });

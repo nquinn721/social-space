@@ -79,6 +79,12 @@ function App() {
     const channels = workspace.channels.map((channel) => channel.accountId === account.id && channel.platform !== account.platform ? { ...channel, accountId: null } : channel);
     if (await persist({ ...workspace, accounts, channels }, exists ? 'Account details saved.' : 'Account added to your workspace.')) { setShowAccount(false); setEditingAccount(null); }
   }
+  async function renameBrand(brand: Brand, name: string) {
+    const old = brand.name;
+    const accounts = workspace.accounts.map((account) => account.brandId === brand.id
+      ? { ...account, label: name, ...(account.displayName === old ? { displayName: name } : {}) } : account);
+    return persist({ ...workspace, brands: workspace.brands.map((item) => item.id === brand.id ? { ...item, name } : item), accounts }, `Renamed ${old} to ${name}. To change a username on a social, open that profile and use Fill profile.`);
+  }
   async function removeBrand(brand: Brand) {
     const profiles = workspace.accounts.filter((account) => account.brandId === brand.id);
     const live = profiles.filter((account) => account.status === 'active');
@@ -133,7 +139,7 @@ function App() {
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onOpenLibrary={() => navigate('library')} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onNavigate={navigate}/>}
+        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onOpenLibrary={() => navigate('library')} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch} onManageSources={() => navigate('sources')}/>}
         {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
