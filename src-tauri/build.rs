@@ -90,6 +90,16 @@ fn main() {
         "restart_app",
         "update_progress",
         "take_update_result",
+        "review_connection",
+        "connect_review",
+        "disconnect_review",
+        "list_reviewers",
+        "add_reviewer",
+        "remove_reviewer",
+        "list_review_posts",
+        "submit_for_review",
+        "record_review_result",
+        "open_review_site",
     ];
     require_stamping_script();
     record_build_source();

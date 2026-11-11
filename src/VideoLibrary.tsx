@@ -13,6 +13,7 @@ import { detailProblems, detailsOf, formatMs, newPost, hashtagText, LIMITS, pars
 import { suggestPost } from './assistant/postSuggest';
 import { useConfirm } from './ConfirmDialog';
 import { openInstagramPost } from './instagramService';
+import PartnerReviewControls from './PartnerReviewControls';
 import './library.css';
 
 type Props = {
@@ -267,6 +268,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       {video.caption.trim() ? <p>{video.caption.trim()}</p> : <p className="post-empty">No description yet. Edit the post or use Suggest with AI.</p>}
       {tags.length > 0 && <p className="post-tags">{hashtagText(tags)}</p>}
     </div>}
+    {!editing && stage !== 'making' && <PartnerReviewControls video={video} socials={socials} disabled={disabled || working}/>}
     {working && !video.posted.includes('instagram') && <p className="library-hint" role="status">Uploading to Instagram. This can take a few minutes; keep the app open.</p>}
     {dialog}
     {error && !editing && <div className="error-message" role="alert">{error}</div>}

@@ -19,6 +19,7 @@ mod social_connect;
 mod kling;
 mod ollama;
 mod queue;
+mod review;
 mod setup_pages;
 mod updater;
 mod video_files;
@@ -455,7 +456,17 @@ pub fn run() {
             updater::update_progress,
             updater::take_update_result,
             hub::update_management,
-            hub::request_hub_update
+            hub::request_hub_update,
+            review::review_connection,
+            review::connect_review,
+            review::disconnect_review,
+            review::list_reviewers,
+            review::add_reviewer,
+            review::remove_reviewer,
+            review::list_review_posts,
+            review::submit_for_review,
+            review::record_review_result,
+            review::open_review_site
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Space");

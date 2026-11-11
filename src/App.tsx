@@ -14,6 +14,7 @@ import { loginText } from './brands';
 import appIcon from './assets/app-icon.png';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { initialOf, PageHeader } from './ui';
+import { PartnerReviewProvider, usePartnerReview } from './usePartnerReview';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 /** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
@@ -108,6 +109,8 @@ function App() {
     const live = { ...account, status: 'active' as const };
     if (await persist({ ...workspace, accounts: workspace.accounts.map((item) => item.id === account.id ? live : item) }, `Marked ${account.label} on ${getPlatform(account.platform).name} as live. Check the username and add its password.`)) editAccount(live);
   }
+  // Approved posts are saved straight away, even while another save is running.
+  const review = usePartnerReview(workspace, loaded, async (next, success) => { await saveFromAssistant(next); showMessage(success); return true; });
   const signUp = (accounts: Account[]) => { setShowAccount(false); setEditingAccount(null); setWizard({ platforms: accounts.map((item) => item.platform), resume: accounts }); };
   function navigate(next: View, section?: string) {
     setView(next);
@@ -121,7 +124,7 @@ function App() {
     <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.brands.length > 0 && <span className="nav-badge">{workspace.brands.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
   </button>;
 
-  return <div className="app-shell">
+  return <PartnerReviewProvider value={review}><div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img className="brand-symbol" src={appIcon} alt=""/><div><strong>Social <span>Space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation"><div className="nav-group">{NAV_ITEMS.map(navButton)}</div></nav>
@@ -154,6 +157,6 @@ function App() {
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
     {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} existing={workspace.accounts} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
     {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined}/>}
-  </div>;
+  </div></PartnerReviewProvider>;
 }
 export default App;

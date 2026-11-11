@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// No direct access from browsers. Social Space uploads with its service account and gives each video
+// a private download link, which is stored on the post in Firestore, so only reviewers ever see it.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

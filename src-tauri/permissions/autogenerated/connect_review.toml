@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-connect-review"
+description = "Enables the connect_review command without any pre-configured scope."
+commands.allow = ["connect_review"]
+
+[[permission]]
+identifier = "deny-connect-review"
+description = "Denies the connect_review command without any pre-configured scope."
+commands.deny = ["connect_review"]

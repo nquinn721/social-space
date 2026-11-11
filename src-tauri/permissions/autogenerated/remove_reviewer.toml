@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-reviewer"
+description = "Enables the remove_reviewer command without any pre-configured scope."
+commands.allow = ["remove_reviewer"]
+
+[[permission]]
+identifier = "deny-remove-reviewer"
+description = "Denies the remove_reviewer command without any pre-configured scope."
+commands.deny = ["remove_reviewer"]

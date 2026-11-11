@@ -96,6 +96,16 @@
     "allow-update-progress",
     "allow-take-update-result",
     "allow-update-management",
-    "allow-request-hub-update"
+    "allow-request-hub-update",
+    "allow-review-connection",
+    "allow-connect-review",
+    "allow-disconnect-review",
+    "allow-list-reviewers",
+    "allow-add-reviewer",
+    "allow-remove-reviewer",
+    "allow-list-review-posts",
+    "allow-submit-for-review",
+    "allow-record-review-result",
+    "allow-open-review-site"
   ]
 }

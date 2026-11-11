@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck } from 'lucide-react';
+import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck, UserCheck } from 'lucide-react';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
+import PartnerReviewSettings from '../PartnerReviewSettings';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/ollamaClient';
 import { PageHeader } from '../ui';
 
@@ -10,6 +11,7 @@ type Props = { businessName: string; onBusinessNameChange: (value: string) => vo
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
   { id: 'email', label: 'Email inbox', icon: Mail },
+  { id: 'partner-review', label: 'Partner review', icon: UserCheck },
   { id: 'video-sources', label: 'Video sources', icon: Clapperboard },
   { id: 'assistant', label: 'Assistant', icon: Bot },
 ];
@@ -55,6 +57,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <button className="primary-button" disabled={busy || !loaded}>Save changes</button>
         </form>
         <EmailSettings/>
+        <PartnerReviewSettings/>
         <section className="settings-card" id="video-sources">
           <h2><Clapperboard size={17}/> Video sources</h2>
           <p>AI video providers you generate with, each under its own name and API key. Keys are checked with the provider and stored in Windows Credential Manager.</p>
