@@ -70,3 +70,11 @@ textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg)
 .dot.good { background: var(--good); } .dot.bad { background: var(--bad); } .dot.waiting { background: var(--muted); }
 details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 6px; }
 details .media { max-width: 300px; margin: 10px 0; }
+
+.new-video { max-width: 640px; margin: 0 auto; }
+.new-video h2 { margin: 0 0 4px; font-size: 18px; }
+.new-video input:not([type=checkbox]), .new-video select { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.new-video .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .new-video .two { grid-template-columns: 1fr; } }
+.chip.check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.check-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 14px; }

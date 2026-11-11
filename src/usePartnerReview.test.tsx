@@ -3,11 +3,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { isTauri } from '@tauri-apps/api/core';
 import type { Workspace } from './model';
 import { usePartnerReview } from './usePartnerReview';
-import { listReviewPosts, recordReviewResult, reviewConnection, type ReviewPost } from './reviewService';
+import { importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, type ReviewPost } from './reviewService';
 import { claimInstagramConnection, publishInstagramReelFile } from './instagramService';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
-vi.mock('./reviewService', () => ({ listReviewPosts: vi.fn(), recordReviewResult: vi.fn(), reviewConnection: vi.fn(), submitForReview: vi.fn() }));
+vi.mock('./reviewService', () => ({ listReviewPosts: vi.fn(), recordReviewResult: vi.fn(), reviewConnection: vi.fn(), submitForReview: vi.fn(), publishReviewCatalog: vi.fn(), importReviewVideo: vi.fn() }));
 vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(), publishInstagramReelFile: vi.fn() }));
 
 const workspace: Workspace = {
@@ -26,6 +26,8 @@ beforeEach(() => {
   vi.mocked(isTauri).mockReturnValue(true);
   vi.mocked(reviewConnection).mockResolvedValue({ clientEmail: 'sa@p.iam.gserviceaccount.com', projectId: 'socialspace-review', site: 'https://socialspace-review.web.app' });
   vi.mocked(recordReviewResult).mockResolvedValue();
+  vi.mocked(publishReviewCatalog).mockResolvedValue();
+  localStorage.clear();
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -58,6 +60,27 @@ describe('usePartnerReview', () => {
     expect(vi.mocked(recordReviewResult).mock.calls[1][1]).toBe('failed');
     expect(publishInstagramReelFile).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it('brings a video the partner made on the site into its brand and category, once', async () => {
+    const made: ReviewPost = { ...approved, id: 'p1', videoId: 'p1', source: 'partner', status: 'pending', title: 'Snow day', description: 'Fresh snow',
+      brandId: 'b1', categoryId: 'c1', mediaPath: 'uploads/u1/p1.mp4', createdBy: 'p@x.com' };
+    vi.mocked(listReviewPosts).mockResolvedValue([made]);
+    vi.mocked(importReviewVideo).mockResolvedValue('C:\\Users\\me\\Videos\\SocialSpace\\Animals\\Rabbit\\Snow day.mp4');
+    const save = vi.fn().mockResolvedValue(true);
+    renderHook(() => usePartnerReview(workspace, true, save));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(importReviewVideo).toHaveBeenCalledWith('uploads/u1/p1.mp4', 'Animals', 'Rabbit', 'Snow day');
+    const saved: Workspace = save.mock.calls[0][0];
+    expect(saved.videos?.[1]).toMatchObject({ id: 'p1', brandId: 'b1', categoryId: 'c1', caption: 'Fresh snow', posted: [], mediaSource: expect.stringContaining('Snow day.mp4') });
+    expect(recordReviewResult).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('socialspace.reviewImports') ?? '[]')).toEqual(['p1']);
+  });
+
+  it('keeps the brands and categories on the review site up to date', async () => {
+    vi.mocked(listReviewPosts).mockResolvedValue([]);
+    renderHook(() => usePartnerReview(workspace, true, vi.fn()));
+    await waitFor(() => expect(publishReviewCatalog).toHaveBeenCalledWith([{ id: 'b1', name: 'Animals', socials: ['instagram'], categories: [{ id: 'c1', name: 'Rabbit' }] }]));
   });
 
   it('does not post before the workspace has loaded', async () => {

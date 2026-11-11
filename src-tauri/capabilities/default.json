@@ -106,6 +106,8 @@
     "allow-list-review-posts",
     "allow-submit-for-review",
     "allow-record-review-result",
-    "allow-open-review-site"
+    "allow-open-review-site",
+    "allow-publish-review-catalog",
+    "allow-import-review-video"
   ]
 }

@@ -4,8 +4,8 @@ import { normalizeHandle, type Platform, type Video, type Workspace } from './mo
 import { claimInstagramConnection } from './instagramService';
 import { publishVideoToInstagram } from './useBrandInstagram';
 import { errorText } from './ui';
-import { approvedToPost, approvedVideo, AUTO_POST_PLATFORMS, finishedStatus, resultEvent, REVIEW_POLL_MS, submissionFor } from './partnerReview';
-import { listReviewPosts, recordReviewResult, reviewConnection, submitForReview, type PlatformResult, type ReviewConnection, type ReviewPost } from './reviewService';
+import { approvedToPost, approvedVideo, AUTO_POST_PLATFORMS, finishedStatus, partnerVideo, partnerVideosToImport, resultEvent, REVIEW_POLL_MS, reviewCatalog, submissionFor } from './partnerReview';
+import { importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, submitForReview, type PlatformResult, type ReviewConnection, type ReviewPost } from './reviewService';
 
 type Save = (next: Workspace, message: string) => Promise<boolean | undefined>;
 export type PartnerReview = {
@@ -22,6 +22,15 @@ const ReviewContext = createContext<PartnerReview | null>(null);
 export const usePartnerReviewContext = () => useContext(ReviewContext);
 export function PartnerReviewProvider({ value, children }: { value: PartnerReview; children: ReactNode }) {
   return <ReviewContext.Provider value={value}>{children}</ReviewContext.Provider>;
+}
+
+/** Videos already brought in from the review site, so one removed from the library is not brought back. */
+const IMPORTED_KEY = 'socialspace.reviewImports';
+function importedIds(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(IMPORTED_KEY) ?? '[]')); } catch { return new Set(); }
+}
+function rememberImported(id: string) {
+  try { localStorage.setItem(IMPORTED_KEY, JSON.stringify([...importedIds(), id])); } catch { /* only costs a possible re-import */ }
 }
 
 /** Posts one approved video to a social. Only Instagram is posted by the app; the others are left to do by hand. */
@@ -94,6 +103,26 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
     }
   }, []);
 
+  /** Brings videos the reviewer made on the site into their brand's category, one save for all of them. */
+  const importPartnerVideos = useCallback(async (list: ReviewPost[]) => {
+    const done = importedIds();
+    const fresh = partnerVideosToImport(list, latest.current).filter((post) => !done.has(post.videoId));
+    const added: Video[] = [];
+    for (const post of fresh) {
+      try {
+        const path = await importReviewVideo(post.mediaPath!, post.brand, post.category, post.title);
+        added.push(partnerVideo(post, path));
+        rememberImported(post.videoId);
+      } catch (reason) {
+        setError(errorText(reason, `Could not bring in "${post.title}" from the review site.`));
+      }
+    }
+    if (!added.length) return;
+    const now = latest.current;
+    const names = added.map((video) => `"${video.title}"`).join(', ');
+    await save.current({ ...now, videos: [...(now.videos ?? []), ...added] }, `Added ${names} from the review site.`);
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!connection || working.current) return;
     working.current = true;
@@ -101,6 +130,7 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
       const list = await listReviewPosts();
       setPosts(Object.fromEntries(list.map((post) => [post.videoId || post.id, post])));
       setError('');
+      if (ready.current) await importPartnerVideos(list);
       const approved = approvedToPost(list);
       if (approved.length && ready.current) {
         await postApproved(approved);
@@ -112,7 +142,7 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
     } finally {
       working.current = false;
     }
-  }, [connection, postApproved]);
+  }, [connection, importPartnerVideos, postApproved]);
 
   useEffect(() => {
     if (!connection) { setPosts({}); return; }
@@ -120,6 +150,15 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
     const timer = window.setInterval(() => void refresh(), REVIEW_POLL_MS);
     return () => window.clearInterval(timer);
   }, [connection, refresh]);
+
+  // Keeps the brands and categories on the site in step with the app, so new videos land in the right place.
+  const catalog = loaded && connection ? JSON.stringify(reviewCatalog(workspace)) : '';
+  const published = useRef('');
+  useEffect(() => {
+    if (!catalog || catalog === published.current) return;
+    published.current = catalog;
+    publishReviewCatalog(JSON.parse(catalog)).catch((reason) => { published.current = ''; setError(errorText(reason, 'Could not update the brands on the review site.')); });
+  }, [catalog]);
 
   const send = useCallback(async (video: Video, socials: Platform[]) => {
     const saved = await submitForReview(submissionFor(video, latest.current, socials));

@@ -1,7 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js';
 import { getAuth, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js';
-import { collection, doc, getDoc, getFirestore, onSnapshot, updateDoc } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
-import { decided, decision, NOTE_LIMIT, platformResults, postText, relativeTime, statusLabel, waiting } from './review.js';
+import { collection, doc, getDoc, getFirestore, onSnapshot, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js';
+import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js';
+import { decided, decision, DESCRIPTION_LIMIT, newVideoPost, newVideoProblem, NOTE_LIMIT, parseHashtags, pick, PLATFORM_NAMES, platformResults, postText, relativeTime, statusLabel, TITLE_LIMIT, waiting } from './review.js';
 
 // Public web config: it names the project, it does not grant access. Access is the database rules.
 const firebaseConfig = {
@@ -17,8 +18,9 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 const root = document.getElementById('app');
-const state = { user: null, allowed: null, posts: [], tab: 'review', busy: new Set(), error: '', unsubscribe: null };
+const state = { user: null, allowed: null, posts: [], catalog: null, tab: 'review', busy: new Set(), error: '', unsubscribe: [], form: null };
 
 const el = (tag, attrs = {}, ...children) => {
   const node = document.createElement(tag);
@@ -36,8 +38,10 @@ onAuthStateChanged(auth, async (user) => {
   state.user = user;
   state.allowed = null;
   state.posts = [];
-  state.unsubscribe?.();
-  state.unsubscribe = null;
+  state.unsubscribe.forEach((stop) => stop());
+  state.unsubscribe = [];
+  state.catalog = null;
+  state.form = null;
   render();
   if (!user) return;
   try {
@@ -48,11 +52,16 @@ onAuthStateChanged(auth, async (user) => {
     state.allowed = false;
   }
   if (state.allowed) {
-    state.unsubscribe = onSnapshot(collection(db, 'posts'), (snapshot) => {
+    state.unsubscribe.push(onSnapshot(doc(db, 'catalog', 'brands'), (snapshot) => {
+      state.catalog = snapshot.exists() ? snapshot.data() : { brands: [] };
+      state.form?.refresh();
+      if (state.tab === 'new' && !state.form) render();
+    }, () => { state.catalog = { brands: [] }; }));
+    state.unsubscribe.push(onSnapshot(collection(db, 'posts'), (snapshot) => {
       state.posts = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       state.error = '';
       render();
-    }, (error) => { state.error = `Couldn't load posts: ${error.message}`; render(); });
+    }, (error) => { state.error = `Couldn't load posts: ${error.message}`; render(); }));
   }
   render();
 });
@@ -112,8 +121,11 @@ function main() {
   const done = decided(state.posts);
   body.append(el('nav', { class: 'tabs', role: 'tablist' },
     tab('review', `To review (${queue.length})`),
+    tab('new', 'New video'),
     tab('history', `History (${done.length})`)));
-  if (state.tab === 'review') {
+  if (state.tab === 'new') {
+    body.append(newVideoForm());
+  } else if (state.tab === 'review') {
     body.append(queue.length ? el('div', { class: 'list' }, queue.map(reviewCard))
       : el('p', { class: 'muted center empty' }, 'Nothing to review. New posts show up here as soon as they are sent.'));
   } else {
@@ -125,6 +137,101 @@ function main() {
 
 function tab(id, label) {
   return el('button', { role: 'tab', 'aria-selected': String(state.tab === id), class: state.tab === id ? 'tab on' : 'tab', onClick: () => { state.tab = id; render(); } }, label);
+}
+
+/**
+ * Brand, then category, then the video and its text. Built once and kept, so typing is not lost when
+ * the page redraws for new posts; the brand list refreshes in place when Social Space changes it.
+ */
+function newVideoForm() {
+  if (state.form) return state.form.node;
+  if (!state.catalog) return el('p', { class: 'muted center' }, 'Loading brands…');
+  const brandSelect = el('select', { id: 'nv-brand' });
+  const categorySelect = el('select', { id: 'nv-category' });
+  const title = el('input', { id: 'nv-title', maxlength: String(TITLE_LIMIT), placeholder: 'e.g. Bunny finds a carrot' });
+  const file = el('input', { id: 'nv-file', type: 'file', accept: 'video/mp4,video/quicktime,.mp4,.mov' });
+  const description = el('textarea', { id: 'nv-description', rows: '4', maxlength: String(DESCRIPTION_LIMIT) });
+  const hashtags = el('input', { id: 'nv-hashtags', placeholder: 'bunny, cute, snow' });
+  const platformBox = el('div', { class: 'chips' });
+  const ai = el('input', { id: 'nv-ai', type: 'checkbox' });
+  const status = el('p', { class: 'muted small', role: 'status' });
+  const submit = el('button', { class: 'primary', type: 'submit' }, 'Upload for review');
+  let touchedText = false;
+  description.addEventListener('input', () => { touchedText = true; });
+  hashtags.addEventListener('input', () => { touchedText = true; });
+
+  const selected = () => pick(state.catalog, brandSelect.value, categorySelect.value);
+  function fillCategories() {
+    const { brand } = selected();
+    const keep = categorySelect.value;
+    categorySelect.replaceChildren(...(brand?.categories ?? []).map((item) => el('option', { value: item.id, selected: item.id === keep }, item.name)));
+    platformBox.replaceChildren(...(brand?.socials ?? []).map((platform) => el('label', { class: 'chip check' },
+      el('input', { type: 'checkbox', value: platform, checked: true }), ' ', PLATFORM_NAMES[platform] ?? platform)));
+    if (!brand?.socials?.length) platformBox.append(el('span', { class: 'muted small' }, 'This brand has no socials yet.'));
+    fillDefaults();
+  }
+  // A category's usual description and hashtags, until the reviewer types their own.
+  function fillDefaults() {
+    if (touchedText) return;
+    const { category } = selected();
+    description.value = category?.defaults?.caption ?? '';
+    hashtags.value = (category?.defaults?.hashtags ?? []).map((tag) => `#${tag}`).join(' ');
+  }
+  function refresh() {
+    const brands = state.catalog?.brands ?? [];
+    const keep = brandSelect.value;
+    brandSelect.replaceChildren(...brands.map((item) => el('option', { value: item.id, selected: item.id === keep }, item.name)));
+    fillCategories();
+  }
+  brandSelect.addEventListener('change', fillCategories);
+  categorySelect.addEventListener('change', fillDefaults);
+
+  async function upload(event) {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const { brand, category } = selected();
+    const platforms = [...platformBox.querySelectorAll('input:checked')].map((input) => input.value);
+    const video = file.files?.[0];
+    const problem = newVideoProblem({ brand, category, title: title.value, file: video, platforms, description: description.value });
+    if (problem) { status.textContent = problem; return; }
+    submit.disabled = true;
+    const id = crypto.randomUUID();
+    const ext = (video.name.split('.').pop() || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp4';
+    const mediaPath = `uploads/${state.user.uid}/${id}.${ext}`;
+    try {
+      const task = uploadBytesResumable(ref(storage, mediaPath), video, { contentType: video.type });
+      await new Promise((resolve, reject) => task.on('state_changed',
+        (snap) => { status.textContent = `Uploading… ${Math.round((snap.bytesTransferred / snap.totalBytes) * 100)}%`; },
+        reject, resolve));
+      status.textContent = 'Saving…';
+      const mediaUrl = await getDownloadURL(ref(storage, mediaPath));
+      await setDoc(doc(db, 'posts', id), newVideoPost({ id, email: state.user.email, brand, category, title: title.value, description: description.value,
+        hashtags: parseHashtags(hashtags.value), platforms, madeWithAi: ai.checked, mediaPath, mediaUrl }));
+      state.form = null;
+      state.tab = 'review';
+      render();
+    } catch (error) {
+      status.textContent = `Upload failed: ${error.message}`;
+      submit.disabled = false;
+    }
+  }
+
+  const field = (id, label, input) => [el('label', { for: id, class: 'label' }, label), input];
+  const node = el('form', { class: 'card new-video', onSubmit: upload },
+    el('h2', {}, 'New video'),
+    el('p', { class: 'muted small' }, 'It goes into that brand\'s category in Social Space and waits for approval like any other post.'),
+    el('div', { class: 'two' }, el('div', {}, field('nv-brand', 'Brand', brandSelect)), el('div', {}, field('nv-category', 'Category', categorySelect))),
+    field('nv-title', 'Title', title),
+    field('nv-file', 'Video file', file),
+    field('nv-description', 'Description', description),
+    field('nv-hashtags', 'Hashtags', hashtags),
+    el('div', { class: 'label' }, 'Posts to'), platformBox,
+    el('label', { class: 'check-row' }, ai, ' Made with AI'),
+    el('div', { class: 'actions' }, submit),
+    status);
+  state.form = { node, refresh };
+  refresh();
+  return node;
 }
 
 function media(post) {

@@ -466,7 +466,9 @@ pub fn run() {
             review::list_review_posts,
             review::submit_for_review,
             review::record_review_result,
-            review::open_review_site
+            review::open_review_site,
+            review::publish_review_catalog,
+            review::import_review_video
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Space");

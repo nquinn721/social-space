@@ -1,7 +1,7 @@
 import type { Platform, Video, Workspace } from './model';
-import { getPlatform } from './model';
+import { getPlatform, PLATFORMS } from './model';
 import { detailsOf } from './postDetails';
-import type { PlatformResult, ReviewEvent, ReviewPost, ReviewStatus, ReviewSubmission } from './reviewService';
+import type { CatalogBrand, PlatformResult, ReviewEvent, ReviewPost, ReviewStatus, ReviewSubmission } from './reviewService';
 
 /** Socials this app posts to by itself once a post is approved; the rest are posted by hand. */
 export const AUTO_POST_PLATFORMS: Platform[] = ['instagram'];
@@ -70,4 +70,30 @@ export function reviewLabel(post: ReviewPost | undefined): { text: string; tone:
 /** A post can be (re)sent while nobody approved it yet. */
 export function canSend(post: ReviewPost | undefined) {
   return !post || post.status === 'pending' || post.status === 'rejected';
+}
+
+/** What the review site offers for new videos: each brand with its socials and categories (with their defaults). */
+export function reviewCatalog(workspace: Workspace): CatalogBrand[] {
+  return workspace.brands.map((brand) => ({
+    id: brand.id,
+    name: brand.name,
+    socials: PLATFORMS.map((platform) => platform.id).filter((platform) => workspace.accounts.some((account) => account.brandId === brand.id && account.platform === platform)),
+    categories: (workspace.categories ?? []).filter((category) => category.brandId === brand.id)
+      .map((category) => ({ id: category.id, name: category.name, ...(category.defaults ? { defaults: category.defaults } : {}) })),
+  }));
+}
+
+/** Videos a reviewer made on the site that are not in Social Space yet, and whose brand and category still exist. */
+export function partnerVideosToImport(posts: ReviewPost[], workspace: Workspace): ReviewPost[] {
+  const have = new Set((workspace.videos ?? []).map((video) => video.id));
+  return posts.filter((post) => post.source === 'partner' && post.mediaPath && !have.has(post.videoId)
+    && (workspace.categories ?? []).some((category) => category.id === post.categoryId && category.brandId === post.brandId));
+}
+
+/** A reviewer's video as a library video, saved on this PC at mediaSource. */
+export function partnerVideo(post: ReviewPost, mediaSource: string, now = Date.now()): Video {
+  return {
+    id: post.videoId, brandId: post.brandId!, categoryId: post.categoryId!, title: post.title, mediaSource, caption: post.description, posted: [], createdAt: now,
+    details: { hashtags: post.hashtags ?? [], youtubeTitle: post.youtubeTitle || post.title.slice(0, 100), madeWithAi: post.madeWithAi, shareToFeed: true, madeForKids: false },
+  };
 }

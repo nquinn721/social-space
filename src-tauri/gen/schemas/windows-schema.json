@@ -441,6 +441,12 @@
           "markdownDescription": "Enables the image_ai_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the import_review_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-import-review-video",
+          "markdownDescription": "Enables the import_review_video command without any pre-configured scope."
+        },
+        {
           "description": "Enables the import_sign_ins command without any pre-configured scope.",
           "type": "string",
           "const": "allow-import-sign-ins",
@@ -625,6 +631,12 @@
           "type": "string",
           "const": "allow-publish-instagram-reel-file",
           "markdownDescription": "Enables the publish_instagram_reel_file command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the publish_review_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-publish-review-catalog",
+          "markdownDescription": "Enables the publish_review_catalog command without any pre-configured scope."
         },
         {
           "description": "Enables the read_email command without any pre-configured scope.",
@@ -1041,6 +1053,12 @@
           "markdownDescription": "Denies the image_ai_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the import_review_video command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-import-review-video",
+          "markdownDescription": "Denies the import_review_video command without any pre-configured scope."
+        },
+        {
           "description": "Denies the import_sign_ins command without any pre-configured scope.",
           "type": "string",
           "const": "deny-import-sign-ins",
@@ -1225,6 +1243,12 @@
           "type": "string",
           "const": "deny-publish-instagram-reel-file",
           "markdownDescription": "Denies the publish_instagram_reel_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the publish_review_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-publish-review-catalog",
+          "markdownDescription": "Denies the publish_review_catalog command without any pre-configured scope."
         },
         {
           "description": "Denies the read_email command without any pre-configured scope.",

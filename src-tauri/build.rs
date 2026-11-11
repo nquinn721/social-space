@@ -100,6 +100,8 @@ fn main() {
         "submit_for_review",
         "record_review_result",
         "open_review_site",
+        "publish_review_catalog",
+        "import_review_video",
     ];
     require_stamping_script();
     record_build_source();

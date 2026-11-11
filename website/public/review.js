@@ -52,6 +52,55 @@ export function decision(status, email, note, now = Date.now()) {
   return { status, decidedBy: email.toLowerCase(), decidedAt: now, note: String(note ?? '').trim().slice(0, NOTE_LIMIT) };
 }
 
+export const TITLE_LIMIT = 200;
+export const DESCRIPTION_LIMIT = 5000;
+export const MAX_VIDEO_BYTES = 1024 * 1024 * 1024;
+export const VIDEO_TYPES = ['video/mp4', 'video/quicktime'];
+
+/** Turns "bunny, #Cute snow" into ["bunny", "Cute", "snow"], like the app does. */
+export function parseHashtags(text) {
+  const seen = new Set();
+  const tags = [];
+  for (const raw of String(text ?? '').split(/[\s,]+/)) {
+    const tag = raw.replace(/^#+/, '').replace(/[^\p{L}\p{N}_]/gu, '');
+    if (tag && !seen.has(tag.toLowerCase())) { seen.add(tag.toLowerCase()); tags.push(tag); }
+  }
+  return tags;
+}
+
+/** The brand and category picked in the form, from the list Social Space keeps on the site. */
+export function pick(catalog, brandId, categoryId) {
+  const brand = (catalog?.brands ?? []).find((item) => item.id === brandId);
+  const category = brand?.categories?.find((item) => item.id === categoryId);
+  return { brand, category };
+}
+
+/** What is missing before a new video can be uploaded, or '' when it is ready. */
+export function newVideoProblem({ brand, category, title, file, platforms, description }) {
+  if (!brand) return 'Pick a brand.';
+  if (!category) return 'Pick a category.';
+  if (!String(title ?? '').trim()) return 'Give the video a title.';
+  if (String(title).trim().length > TITLE_LIMIT) return `Titles are at most ${TITLE_LIMIT} characters.`;
+  if (!file) return 'Choose the video file.';
+  if (!String(file.type ?? '').startsWith('video/')) return 'That file is not a video.';
+  if (!VIDEO_TYPES.includes(file.type)) return 'Use an MP4 or MOV video, the kinds every social takes.';
+  if (file.size > MAX_VIDEO_BYTES) return 'Videos can be at most 1 GB.';
+  if (String(description ?? '').length > DESCRIPTION_LIMIT) return `Descriptions are at most ${DESCRIPTION_LIMIT} characters.`;
+  if (!platforms?.length) return 'Pick at least one social.';
+  return '';
+}
+
+/** The new post as saved: it waits for approval like any post Social Space sends. Matches the database rules. */
+export function newVideoPost({ id, email, brand, category, title, description, hashtags, platforms, madeWithAi, mediaPath, mediaUrl, now = Date.now() }) {
+  const cleanTitle = String(title).trim();
+  return {
+    videoId: id, source: 'partner', createdBy: email.toLowerCase(), brandId: brand.id, categoryId: category.id, brand: brand.name, category: category.name,
+    title: cleanTitle, youtubeTitle: cleanTitle.slice(0, 100), description: String(description ?? '').trim(), hashtags, platforms,
+    madeWithAi: Boolean(madeWithAi), coverMs: null, mediaPath, mediaUrl, status: 'pending', submittedAt: now, results: {},
+    events: [{ at: now, text: `Uploaded by ${email.toLowerCase()}` }],
+  };
+}
+
 /** "5 min ago", "yesterday 3:04 PM", or a date. */
 export function relativeTime(ms, now = Date.now()) {
   if (!ms) return '';

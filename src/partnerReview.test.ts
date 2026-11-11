@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Video, Workspace } from './model';
-import { approvedToPost, approvedVideo, canSend, finishedStatus, resultEvent, reviewLabel, submissionFor } from './partnerReview';
+import { approvedToPost, approvedVideo, canSend, finishedStatus, partnerVideo, partnerVideosToImport, resultEvent, reviewCatalog, reviewLabel, submissionFor } from './partnerReview';
 import type { ReviewPost } from './reviewService';
 
 const video: Video = {
@@ -56,5 +56,24 @@ describe('partner review', () => {
     expect(canSend(post({ status: 'rejected' }))).toBe(true);
     expect(canSend(post({ status: 'approved' }))).toBe(false);
     expect(canSend(post({ status: 'posted' }))).toBe(false);
+  });
+});
+
+describe('videos the partner makes on the site', () => {
+  const made = (fields: Partial<ReviewPost>) => post({ source: 'partner', brandId: 'b1', categoryId: 'c1', mediaPath: 'uploads/u/p.mp4', ...fields });
+  it('offers each brand with its socials and categories', () => {
+    const withAccounts = { ...workspace, accounts: [{ id: 'a', platform: 'youtube' as const, label: '', handle: '', status: 'active' as const, notes: '', brandId: 'b1' }, { id: 'b', platform: 'instagram' as const, label: '', handle: '', status: 'planned' as const, notes: '', brandId: 'b1' }],
+      categories: [{ id: 'c1', brandId: 'b1', name: 'Rabbit', defaults: { caption: 'Hi', hashtags: ['bunny'] } }] };
+    expect(reviewCatalog(withAccounts)).toEqual([{ id: 'b1', name: 'Animals', socials: ['instagram', 'youtube'], categories: [{ id: 'c1', name: 'Rabbit', defaults: { caption: 'Hi', hashtags: ['bunny'] } }] }]);
+  });
+  it('imports only new partner videos whose category still exists', () => {
+    const list = [made({ id: 'n', videoId: 'n' }), made({ id: 'v1', videoId: 'v1' }), made({ id: 'gone', videoId: 'gone', categoryId: 'deleted' }), post({ id: 'app', videoId: 'app' })];
+    expect(partnerVideosToImport(list, workspace).map((item) => item.id)).toEqual(['n']);
+  });
+  it('turns the upload into a library video waiting for approval', () => {
+    expect(partnerVideo(made({ videoId: 'n', title: 'Snow', description: 'Fresh', hashtags: ['snow'], madeWithAi: true }), 'C:\\v\\Snow.mp4', 7)).toEqual({
+      id: 'n', brandId: 'b1', categoryId: 'c1', title: 'Snow', mediaSource: 'C:\\v\\Snow.mp4', caption: 'Fresh', posted: [], createdAt: 7,
+      details: { hashtags: ['snow'], youtubeTitle: 'Snow', madeWithAi: true, shareToFeed: true, madeForKids: false },
+    });
   });
 });

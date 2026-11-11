@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decided, decision, platformResults, postText, statusLabel, waiting } from './public/review.js';
+import { decided, decision, newVideoPost, newVideoProblem, parseHashtags, pick, platformResults, postText, statusLabel, waiting } from './public/review.js';
 
 const post = (fields) => ({ id: 'p', title: 'T', platforms: ['instagram', 'tiktok'], status: 'pending', submittedAt: 1, ...fields });
 
@@ -30,5 +30,30 @@ describe('review site', () => {
     ]);
     expect(statusLabel(post({ status: 'partly_posted' })).tone).toBe('warn');
     expect(platformResults(post({ status: 'rejected' }))[0].text).toBe('Not posted');
+  });
+});
+
+describe('new video form', () => {
+  const catalog = { brands: [{ id: 'b1', name: 'Animals', socials: ['instagram'], categories: [{ id: 'c1', name: 'Rabbit' }] }] };
+  const file = { type: 'video/mp4', size: 1000 };
+  it('picks the brand and its category', () => {
+    expect(pick(catalog, 'b1', 'c1').category.name).toBe('Rabbit');
+    expect(pick(catalog, 'b1', 'nope').category).toBeUndefined();
+  });
+  it('says what is missing before uploading', () => {
+    const { brand, category } = pick(catalog, 'b1', 'c1');
+    const ready = { brand, category, title: 'Snow', file, platforms: ['instagram'], description: '' };
+    expect(newVideoProblem(ready)).toBe('');
+    expect(newVideoProblem({ ...ready, category: undefined })).toBe('Pick a category.');
+    expect(newVideoProblem({ ...ready, title: '  ' })).toBe('Give the video a title.');
+    expect(newVideoProblem({ ...ready, file: { type: 'image/png', size: 1 } })).toBe('That file is not a video.');
+    expect(newVideoProblem({ ...ready, file: { type: 'video/webm', size: 1 } })).toBe('Use an MP4 or MOV video, the kinds every social takes.');
+    expect(newVideoProblem({ ...ready, platforms: [] })).toBe('Pick at least one social.');
+  });
+  it('saves a post that waits for approval', () => {
+    const { brand, category } = pick(catalog, 'b1', 'c1');
+    const saved = newVideoPost({ id: 'abc12345', email: 'P@X.com', brand, category, title: ' Snow ', description: 'Hi', hashtags: parseHashtags('#snow, cute'), platforms: ['instagram'], madeWithAi: false, mediaPath: 'uploads/u/abc12345.mp4', mediaUrl: 'https://x', now: 5 });
+    expect(saved).toMatchObject({ videoId: 'abc12345', source: 'partner', createdBy: 'p@x.com', status: 'pending', title: 'Snow', hashtags: ['snow', 'cute'], brand: 'Animals', category: 'Rabbit', submittedAt: 5 });
+    expect(saved.events).toEqual([{ at: 5, text: 'Uploaded by p@x.com' }]);
   });
 });

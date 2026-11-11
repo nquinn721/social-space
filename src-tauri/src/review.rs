@@ -406,6 +406,85 @@ pub async fn record_review_result(video_id: String, status: String, results: Val
     Ok(())
 }
 
+/// Puts the brands and categories on the review site, so a reviewer can make a video for one of them.
+#[tauri::command]
+pub async fn publish_review_catalog(brands: Value) -> Result<(), String> {
+    let key = require_key()?;
+    if !brands.is_array() {
+        return Err("The brand list isn't valid.".into());
+    }
+    let fields = json!({ "brands": brands, "updatedAt": now_ms() });
+    let body = json!({ "fields": fields_of(fields.as_object().unwrap()) });
+    firestore(&key, reqwest::Method::PATCH, format!("{}/catalog/brands", documents_url(&key)), Some(body)).await?;
+    Ok(())
+}
+
+/// `dir/name.ext`, or `dir/name (2).ext` and so on when that file already exists.
+fn free_path(dir: &std::path::Path, name: &str, ext: &str) -> std::path::PathBuf {
+    let mut path = dir.join(format!("{name}.{ext}"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{name} ({n}).{ext}"));
+        n += 1;
+    }
+    path
+}
+
+/// The file a reviewer uploaded, as a safe name and video extension, or None.
+fn upload_extension(media_path: &str) -> Option<&'static str> {
+    let rest = media_path.strip_prefix("uploads/")?;
+    if rest.contains("..") || rest.contains('\\') {
+        return None;
+    }
+    let ext = rest.rsplit('.').next()?.to_ascii_lowercase();
+    VIDEO_EXTENSIONS.iter().map(|(known, _)| *known).find(|known| *known == ext)
+}
+
+/// Downloads a video a reviewer uploaded into `Videos\SocialSpace\<brand>\<category>` and returns its path.
+#[tauri::command]
+pub async fn import_review_video(app: tauri::AppHandle, media_path: String, brand: String, category: String, title: String) -> Result<String, String> {
+    use std::io::Write;
+    use tauri::Manager;
+    let key = require_key()?;
+    let ext = upload_extension(&media_path).ok_or("That upload isn't a video Social Space can use.")?;
+    let dir = app
+        .path()
+        .video_dir()
+        .map_err(|_| "Could not find your Videos folder.".to_string())?
+        .join("SocialSpace")
+        .join(crate::video_gen::safe_name(&brand, "Brand"))
+        .join(crate::video_gen::safe_name(&category, "Category"));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    let token = access_token(&key).await?;
+    let url = format!("https://storage.googleapis.com/storage/v1/b/{}/o/{}?alt=media", bucket(&key), urlencoding(&media_path));
+    let mut response = client(UPLOAD_TIMEOUT)?.get(url).bearer_auth(token).send().await.map_err(|e| format!("Couldn't download the video: {e}"))?;
+    if !response.status().is_success() {
+        return Err(format!("The review site returned HTTP {} for the video.", response.status()));
+    }
+    let path = free_path(&dir, &crate::video_gen::safe_name(&title, "Video"), ext);
+    let partial = path.with_extension(format!("{ext}.part"));
+    let written: Result<u64, String> = async {
+        let mut file = std::fs::File::create(&partial).map_err(|e| format!("Could not save the video: {e}"))?;
+        let mut written = 0u64;
+        while let Some(chunk) = response.chunk().await.map_err(|_| "The download was interrupted.".to_string())? {
+            written += chunk.len() as u64;
+            file.write_all(&chunk).map_err(|e| format!("Could not save the video: {e}"))?;
+        }
+        Ok(written)
+    }
+    .await;
+    match written {
+        Ok(bytes) if bytes > 0 => {
+            std::fs::rename(&partial, &path).map_err(|e| format!("Could not save the video: {e}"))?;
+            Ok(path.to_string_lossy().into_owned())
+        }
+        other => {
+            let _ = std::fs::remove_file(&partial);
+            Err(other.err().unwrap_or_else(|| "The uploaded video is empty.".into()))
+        }
+    }
+}
+
 #[tauri::command]
 pub fn open_review_site(app: tauri::AppHandle) -> Result<(), String> {
     crate::browser::open_remote(&app, REVIEW_SITE, false)
@@ -435,6 +514,15 @@ mod tests {
     }
 
     #[test]
+    fn only_reviewer_video_uploads_are_imported() {
+        assert_eq!(upload_extension("uploads/uid123/abc.MP4"), Some("mp4"));
+        assert_eq!(upload_extension("uploads/uid123/abc.mov"), Some("mov"));
+        assert_eq!(upload_extension("media/x/abc.mp4"), None);
+        assert_eq!(upload_extension("uploads/../media/abc.mp4"), None);
+        assert_eq!(upload_extension("uploads/uid/abc.exe"), None);
+    }
+
+    #[test]
     fn post_ids_cannot_leave_the_collection() {
         assert!(safe_id("1b2c-3d_4").is_ok());
         assert!(safe_id("../reviewers/x").is_err());
@@ -455,6 +543,9 @@ mod tests {
             add_reviewer(email).await.unwrap();
         }
         println!("reviewers: {:?}", list_reviewers().await.unwrap());
+        if let Ok(path) = std::env::var("REVIEW_CATALOG_FILE") {
+            publish_review_catalog(serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()).await.unwrap();
+        }
         if let Ok(video) = std::env::var("REVIEW_TEST_VIDEO") {
             let post = ReviewSubmission {
                 video_id: "live-test".into(), title: "Live test clip".into(), brand: "Test brand".into(), category: "Test".into(),

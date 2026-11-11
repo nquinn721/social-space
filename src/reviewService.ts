@@ -15,7 +15,7 @@ export type ReviewEvent = { at: number; text: string };
 export type ReviewPost = {
   id: string; videoId: string; title: string; brand: string; category: string; youtubeTitle: string; description: string;
   hashtags: string[]; platforms: Platform[]; madeWithAi: boolean; coverMs?: number | null; mediaUrl?: string;
-  status: ReviewStatus; submittedAt: number; decidedBy?: string; decidedAt?: number; note?: string; postedAt?: number;
+  status: ReviewStatus; submittedAt: number; source?: 'app' | 'partner'; createdBy?: string; brandId?: string; categoryId?: string; mediaPath?: string; decidedBy?: string; decidedAt?: number; note?: string; postedAt?: number;
   results?: Partial<Record<Platform, PlatformResult>>; events?: ReviewEvent[];
 };
 export type ReviewSubmission = {
@@ -37,3 +37,8 @@ export async function recordReviewResult(videoId: string, status: ReviewStatus, 
   desktopOnly(); return invoke('record_review_result', { videoId, status, results: results ?? {}, events });
 }
 export async function openReviewSite(): Promise<void> { desktopOnly(); return invoke('open_review_site'); }
+/** The brands, their socials and categories a reviewer can make a video for. */
+export type CatalogBrand = { id: string; name: string; socials: Platform[]; categories: { id: string; name: string; defaults?: { caption: string; hashtags: string[] } }[] };
+export async function publishReviewCatalog(brands: CatalogBrand[]): Promise<void> { desktopOnly(); return invoke('publish_review_catalog', { brands }); }
+/** Downloads a reviewer's upload into the brand's category folder; returns the file path. */
+export async function importReviewVideo(mediaPath: string, brand: string, category: string, title: string): Promise<string> { desktopOnly(); return invoke('import_review_video', { mediaPath, brand, category, title }); }
