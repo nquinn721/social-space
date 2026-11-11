@@ -60,6 +60,18 @@ describe('automatic builds', () => {
     expect(updates.prepareUpdate).toHaveBeenCalledOnce();
   });
 
+  it('rebuilds on its own when the built installer is refused at restart', async () => {
+    vi.mocked(updates.checkForUpdate).mockResolvedValueOnce(available).mockResolvedValueOnce(ready).mockResolvedValue(available);
+    vi.mocked(updates.prepareUpdate).mockResolvedValue();
+    vi.mocked(updates.installPreparedUpdate).mockRejectedValue('The prepared installer was replaced after it was built, so it was not installed. Building the update again now.');
+    const { result } = renderHook(() => useAppUpdates(60_000));
+    await vi.waitFor(() => expect(updates.prepareUpdate).toHaveBeenCalledOnce());
+    await act(async () => { await result.current.check(true); });
+    expect(result.current.status?.state).toBe('ready');
+    await act(async () => { await result.current.restartToUpdate(); });
+    await vi.waitFor(() => expect(updates.prepareUpdate).toHaveBeenCalledTimes(2));
+  });
+
   it('does not build when updating is blocked or already running', async () => {
     vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, blockedReason: 'Uncommitted changes.' });
     renderHook(() => useAppUpdates(60_000));
