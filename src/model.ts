@@ -4,7 +4,8 @@ export type View = 'overview' | 'accounts' | 'inbox' | 'updates' | 'settings';
 export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'updates', 'settings'];
 /** identity: where name and username are edited (Instagram's Accounts Center). */
 export type PlatformAction = 'create' | 'manage' | 'post' | 'developer' | 'identity';
-export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
+/** platformId: the account's own ID on the social (e.g. the Instagram account ID), when known. */
+export type AccountProfile = { platformId?: string; displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
 /**
  * One profile of a brand on one social. status says whether it really exists there:
  * 'planned' is only saved in Social Space and still has to be created, 'active' is live on the social.

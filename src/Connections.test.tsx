@@ -46,7 +46,18 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
     await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
-    expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa');
+    expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa', undefined);
+    expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
+  });
+
+  it('passes a known Instagram account ID so Connect can finish without asking', async () => {
+    vi.mocked(instagram.connectInstagramApp).mockResolvedValue({ id: '17841466785898395', username: 'massagelisa' });
+    const withId = accounts.map((account) => account.id === 'ig-lisa' ? { ...account, platformId: '17841466785898395' } : account);
+    const user = userEvent.setup();
+    render(<Connections onNavigate={vi.fn()} accounts={withId} brands={brands}/>);
+    await within(row('Instagram @massagewithmia')).findByText('Connected');
+    await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
+    expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa', '17841466785898395');
     expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
   });
 

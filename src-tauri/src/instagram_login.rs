@@ -398,7 +398,8 @@ impl Drop for Busy {
 /// One click: opens Instagram's approval page with the profile's saved username and
 /// password filled in, waits for the user to press Allow, and saves the connection.
 #[tauri::command]
-pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, username: Option<String>) -> Result<crate::instagram::InstagramConnection, String> {
+/// instagram_id: the profile's Instagram account ID when it is known, used when Meta will not list the account.
+pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, username: Option<String>, instagram_id: Option<String>) -> Result<crate::instagram::InstagramConnection, String> {
     let _busy = Busy::take()?;
     // New Meta apps only offer Unified login, so an app saved without its configuration
     // (from the earlier form) is set up again instead of opening Instagram's page, which fails.
@@ -460,7 +461,17 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
             Ok(account) => account,
             // Meta connected but kept the account list behind business_management: keep the token
             // in memory and ask for the account ID instead of making the user sign in again.
-            Err(reason) => { keep_pending(&slot, &token); return Err(format!("{ID_NEEDED}: {reason}")); }
+            Err(reason) => {
+                // A known account ID finishes it straight away; Meta checks it against the token.
+                if let Some(id) = instagram_id.as_deref().map(str::trim).filter(|id| !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_digit())) {
+                    if let Ok(connection) = crate::instagram::store(&slot, id, &token, crate::instagram::LoginKind::Facebook).await {
+                        forget_pending(&slot);
+                        return Ok(connection);
+                    }
+                }
+                keep_pending(&slot, &token);
+                return Err(format!("{ID_NEEDED}: {reason}"));
+            }
         };
         forget_pending(&slot);
         return crate::instagram::store(&slot, &account.id, &token, crate::instagram::LoginKind::Facebook).await;
