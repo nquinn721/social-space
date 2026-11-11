@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-check-youtube-connection"
+description = "Enables the check_youtube_connection command without any pre-configured scope."
+commands.allow = ["check_youtube_connection"]
+
+[[permission]]
+identifier = "deny-check-youtube-connection"
+description = "Denies the check_youtube_connection command without any pre-configured scope."
+commands.deny = ["check_youtube_connection"]

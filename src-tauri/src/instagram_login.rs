@@ -245,14 +245,18 @@ async fn meta_error(response: reqwest::Response) -> String {
 #[derive(Deserialize)]
 struct DebugToken { data: DebugData }
 #[derive(Deserialize)]
-struct DebugData { #[serde(default)] granular_scopes: Vec<GranularScope> }
-#[derive(Deserialize)]
+struct DebugData {
+    #[serde(default)] granular_scopes: Vec<GranularScope>,
+    #[serde(default, rename = "type")] token_type: Option<String>,
+    #[serde(default)] scopes: Vec<String>,
+}
+#[derive(Deserialize, Clone)]
 struct GranularScope { scope: String, #[serde(default)] target_ids: Vec<String> }
 
 /// The Instagram account IDs the person granted in the approval window, as Meta records them on the token.
-fn granted_instagram_ids(debug: DebugToken) -> Vec<String> {
+fn granted_instagram_ids(debug: &DebugToken) -> Vec<String> {
     let mut ids: Vec<String> = Vec::new();
-    for scope in debug.data.granular_scopes {
+    for scope in debug.data.granular_scopes.iter().cloned() {
         if scope.scope.starts_with("instagram_") {
             for id in scope.target_ids {
                 if !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()) && !ids.contains(&id) {
@@ -264,8 +268,32 @@ fn granted_instagram_ids(debug: DebugToken) -> Vec<String> {
     ids
 }
 
+/// A short, secret-free description of the token for error messages: its type and permissions.
+fn describe_token(debug: &DebugToken) -> String {
+    let kind = debug.data.token_type.clone().unwrap_or_else(|| "unknown".into());
+    let scopes: Vec<&str> = debug.data.scopes.iter().map(String::as_str).filter(|scope| scope.starts_with("instagram") || scope.starts_with("business")).collect();
+    format!("token type {kind}, permissions {}", if scopes.is_empty() { "none for Instagram".to_string() } else { scopes.join(",") })
+}
+
+/// Reads a list of Instagram accounts from one Graph address, noting what Meta said if it fails.
+async fn list_accounts(http: &reqwest::Client, url: String, token: &str, label: &str, notes: &mut Vec<String>) -> Vec<IgAccount> {
+    match http.get(url).query(&[("fields", "id,username")]).bearer_auth(token).send().await {
+        Ok(response) if response.status().is_success() => {
+            let accounts = response.json::<IgAccounts>().await.map(|list| list.data).unwrap_or_default();
+            if accounts.is_empty() { notes.push(format!("{label}: none")); }
+            accounts
+        }
+        Ok(response) => { notes.push(format!("{label}: {}", meta_error(response).await)); Vec::new() }
+        Err(_) => { notes.push(format!("{label}: no answer")); Vec::new() }
+    }
+}
+
+#[derive(Deserialize)]
+struct ClientBusiness { #[serde(default)] client_business_id: Option<String> }
+
 /// Finds the Instagram account a Unified login token can post for. Tries, in order: the accounts
-/// granted on the token itself (debug_token), the system user's assigned accounts, and Pages.
+/// granted on the token itself (debug_token), the system user's assigned accounts, the client
+/// business's Instagram accounts, and Pages.
 /// When nothing is found, the error says what Meta answered to each, so it can be fixed.
 async fn unified_account(app: &MetaApp, token: &str, wanted: Option<&str>) -> Result<IgAccount, String> {
     let http = reqwest::Client::builder().https_only(true).timeout(HTTP_TIMEOUT).build().map_err(|_| "Could not reach Meta.")?;
@@ -277,7 +305,8 @@ async fn unified_account(app: &MetaApp, token: &str, wanted: Option<&str>) -> Re
     match http.get(format!("{base}/debug_token")).query(&[("input_token", token), ("access_token", app_token.as_str())]).send().await {
         Ok(response) if response.status().is_success() => match response.json::<DebugToken>().await {
             Ok(debug) => {
-                let ids = granted_instagram_ids(debug);
+                let ids = granted_instagram_ids(&debug);
+                notes.push(describe_token(&debug));
                 if ids.is_empty() { notes.push("token lists no Instagram account".into()); }
                 for id in ids {
                     match http.get(format!("{base}/{id}")).query(&[("fields", "id,username")]).bearer_auth(token).send().await {
@@ -296,13 +325,26 @@ async fn unified_account(app: &MetaApp, token: &str, wanted: Option<&str>) -> Re
     }
 
     if accounts.is_empty() {
-        match http.get(format!("{base}/me/assigned_instagram_accounts")).query(&[("fields", "id,username")]).bearer_auth(token).send().await {
-            Ok(response) if response.status().is_success() => {
-                accounts = response.json::<IgAccounts>().await.map(|list| list.data).unwrap_or_default();
-                if accounts.is_empty() { notes.push("assigned accounts: none".into()); }
+        accounts = list_accounts(&http, format!("{base}/me/assigned_instagram_accounts"), token, "assigned accounts", &mut notes).await;
+    }
+    if accounts.is_empty() {
+        accounts = list_accounts(&http, format!("{base}/me/instagram_accounts"), token, "my accounts", &mut notes).await;
+    }
+    if accounts.is_empty() {
+        // A business system-user token belongs to the client's business portfolio, which owns the account.
+        let business = match http.get(format!("{base}/me")).query(&[("fields", "client_business_id")]).bearer_auth(token).send().await {
+            Ok(response) if response.status().is_success() => response.json::<ClientBusiness>().await.ok().and_then(|me| me.client_business_id),
+            Ok(response) => { notes.push(format!("business: {}", meta_error(response).await)); None }
+            Err(_) => { notes.push("business: no answer".into()); None }
+        };
+        match business.filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())) {
+            Some(id) => {
+                accounts = list_accounts(&http, format!("{base}/{id}/owned_instagram_accounts"), token, "business accounts", &mut notes).await;
+                if accounts.is_empty() {
+                    accounts = list_accounts(&http, format!("{base}/{id}/instagram_accounts"), token, "business instagram", &mut notes).await;
+                }
             }
-            Ok(response) => notes.push(format!("assigned accounts: {}", meta_error(response).await)),
-            Err(_) => notes.push("assigned accounts: no answer".into()),
+            None => notes.push("business: not a business token".into()),
         }
     }
     if accounts.is_empty() {
@@ -463,7 +505,17 @@ mod tests {
             { "scope": "ads_read", "target_ids": ["999"] },
             { "scope": "business_management" }
         ] } })).unwrap();
-        assert_eq!(granted_instagram_ids(debug), vec!["17841466785898395".to_string()]);
+        assert_eq!(granted_instagram_ids(&debug), vec!["17841466785898395".to_string()]);
+    }
+
+    #[test]
+    fn token_description_names_type_and_instagram_permissions_only() {
+        let debug: DebugToken = serde_json::from_value(serde_json::json!({ "data": {
+            "type": "SYSTEM_USER", "scopes": ["instagram_basic", "instagram_content_publish", "ads_read"]
+        } })).unwrap();
+        assert_eq!(describe_token(&debug), "token type SYSTEM_USER, permissions instagram_basic,instagram_content_publish");
+        let empty: DebugToken = serde_json::from_value(serde_json::json!({ "data": {} })).unwrap();
+        assert_eq!(describe_token(&empty), "token type unknown, permissions none for Instagram");
     }
 
     #[test]
