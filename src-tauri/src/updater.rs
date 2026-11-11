@@ -61,9 +61,15 @@ pub struct UpdateStatus {
     prepared: Option<PreparedUpdate>,
     installed_commit: String,
     latest_commit: Option<String>,
+    /// When the running build's commit and main's newest commit were made, in seconds since the
+    /// Unix epoch, so the page can say when each was released without anyone reading versions.
+    installed_released_at: Option<u64>,
+    latest_released_at: Option<u64>,
     update_available: bool,
     /// Short hash and subject of each commit on main that this build does not have.
     new_commits: Vec<String>,
+    /// When each of `new_commits` was made (same order), in seconds since the Unix epoch.
+    new_commit_times: Vec<u64>,
     /// Why an update cannot be built or installed right now, if it cannot.
     blocked_reason: Option<String>,
 }
@@ -229,14 +235,14 @@ fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<
     let known_build = installed != "unknown" && git(dir, &["cat-file", "-e", &format!("{installed}^{{commit}}")]).is_ok();
     let main_is_in_build = known_build && git(dir, &["merge-base", "--is-ancestor", &latest, &installed]).is_ok();
     let update_available = needs_update(&installed, &latest, main_is_in_build);
-    let new_commits = if update_available && known_build {
-        git(dir, &["log", "--format=%h %s", "-n", MAX_LISTED_COMMITS, &format!("{installed}..{latest}")])?
-            .lines()
-            .map(str::to_string)
-            .collect()
+    let (new_commits, new_commit_times) = if update_available && known_build {
+        timed_commits(&git(dir, &["log", "--format=%ct %h %s", "-n", MAX_LISTED_COMMITS, &format!("{installed}..{latest}")])?)
     } else {
-        Vec::new()
+        (Vec::new(), Vec::new())
     };
+    let commit_time = |commit: &str| git(dir, &["log", "-1", "--format=%ct", commit]).ok().and_then(|time| time.trim().parse::<u64>().ok());
+    let installed_released_at = if known_build { commit_time(&installed) } else { None };
+    let latest_released_at = commit_time(&latest);
     let blocked_reason = if update_available {
         missing_tool_reason(find_on_path(NPM, std::env::var_os("PATH").as_deref()).is_some())
     } else {
@@ -251,10 +257,24 @@ fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<
         prepared,
         installed_commit: installed,
         latest_commit: Some(latest),
+        installed_released_at,
+        latest_released_at,
         update_available,
         new_commits,
+        new_commit_times,
         blocked_reason,
     })
+}
+
+/// Splits `git log --format="%ct %h %s"` output into the "hash subject" lines and their times.
+fn timed_commits(log: &str) -> (Vec<String>, Vec<u64>) {
+    log.lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| match line.split_once(' ') {
+            Some((time, rest)) if time.parse::<u64>().is_ok() => (rest.to_string(), time.parse().unwrap_or_default()),
+            _ => (line.to_string(), 0),
+        })
+        .unzip()
 }
 
 /// Where the updater keeps its files. The app knows them from Tauri; headless runs (no Tauri app)
@@ -1223,10 +1243,21 @@ mod tests {
             prepared: None,
             installed_commit: "a".repeat(40),
             latest_commit: Some("b".repeat(40)),
+            installed_released_at: Some(1_700_000_000),
+            latest_released_at: Some(1_700_003_600),
             update_available: state != "up_to_date",
             new_commits: vec!["bbbbbbb Add video library".into()],
+            new_commit_times: vec![1_700_003_600],
             blocked_reason: blocked.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn commit_times_are_split_from_the_log() {
+        let (lines, times) = timed_commits("1762871400 be8c39d Merge pull request #24\n1762870000 ce8dbf9 Fix a field\n\n");
+        assert_eq!(lines, ["be8c39d Merge pull request #24", "ce8dbf9 Fix a field"]);
+        assert_eq!(times, [1_762_871_400, 1_762_870_000]);
+        assert_eq!(timed_commits("odd line"), (vec!["odd line".to_string()], vec![0]));
     }
 
     #[test]

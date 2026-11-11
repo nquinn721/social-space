@@ -12,8 +12,13 @@ export type UpdateStatus = {
   prepared: PreparedUpdate | null;
   installedCommit: string;
   latestCommit: string | null;
+  /** When the running build's commit and main's newest commit were made (seconds since 1970). */
+  installedReleasedAt?: number | null;
+  latestReleasedAt?: number | null;
   updateAvailable: boolean;
   newCommits: string[];
+  /** When each of newCommits was made (same order, seconds since 1970). */
+  newCommitTimes?: number[];
   blockedReason: string | null;
 };
 export type UpdateProgress = {

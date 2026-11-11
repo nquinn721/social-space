@@ -11,6 +11,7 @@
 .update-settings .update-note{color:var(--text-2)}
 .update-settings .update-error{color:var(--danger)}
 .update-commits{margin:0 0 16px;padding-left:18px;font-size:13px;color:var(--text-2);line-height:1.7;max-height:180px;overflow:auto}
+.update-commit-time{display:inline-block;min-width:118px;margin-right:10px;color:var(--text-3,var(--text-2));opacity:.8;font-variant-numeric:tabular-nums}
 .update-actions{display:flex;gap:10px;flex-wrap:wrap}
 .update-settings .update-actions .primary-button{margin-top:0}
 .update-banner.done{border-color:var(--success-line);background:var(--success-soft)}

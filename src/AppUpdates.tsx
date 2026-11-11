@@ -12,6 +12,12 @@ const PROGRESS_POLL_MS = 1000;
 const short = (commit: string | null | undefined) => (commit && commit !== 'unknown' ? commit.slice(0, 7) : 'unknown');
 const errorText = (error: unknown) => (typeof error === 'string' ? error : error instanceof Error ? error.message : 'Something went wrong.');
 const isActive = (progress: UpdateProgress | null) => progress?.state === 'running' || progress?.state === 'restarting';
+/** "Nov 11, 12:30 PM": when a commit was released, in this computer's time zone. */
+export function releasedAt(seconds: number | null | undefined): string | null {
+  if (!seconds) return null;
+  return new Date(seconds * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+const released = (seconds: number | null | undefined) => { const when = releasedAt(seconds); return when ? `Released ${when} · ` : ''; };
 const changeCount = (status: UpdateStatus) => {
   const count = status.newCommits.length;
   return count ? `${count}${count >= 20 ? '+' : ''} new change${count === 1 ? '' : 's'}` : 'New changes';
@@ -251,15 +257,15 @@ export function UpdatesPage({ updates }: { updates: AppUpdates }) {
       <div className="update-heading"><h2 id="update-heading"><RotateCw size={17}/> Changes on main</h2><button type="button" className="icon-button" disabled={busy} onClick={() => void check()} aria-label="Check for updates" title="Check for updates"><RefreshCw size={16} className={checking ? 'spin' : undefined}/></button></div>
       {!status ? <p className="update-note">{checking ? 'Checking for updates…' : 'Update status is not available yet.'}</p> : <>
         <dl className="update-facts">
-          <dt>Running</dt><dd>SocialSpace {status.runningVersion}, build {short(status.installedCommit)}</dd>
-          <dt>Latest on main</dt><dd>{status.latestVersion ? `${status.latestVersion}, build ` : ''}{short(status.latestCommit)}</dd>
+          <dt>Running</dt><dd>{released(status.installedReleasedAt)}SocialSpace {status.runningVersion}, build {short(status.installedCommit)}</dd>
+          <dt>Latest on main</dt><dd>{released(status.latestReleasedAt)}{status.latestVersion ? `${status.latestVersion}, build ` : ''}{short(status.latestCommit)}</dd>
           <dt>Source folder</dt><dd>{status.sourceDir}</dd>
         </dl>
         {ready && status.prepared ? <p className="update-ready">Update ready: commit <strong>{short(status.prepared.commit)}</strong> is built. Restart to install it.</p>
           : status.state === 'available' && building ? <p className="update-ready">Building {changeCount(status).toLowerCase()} from main commit <strong>{short(status.latestCommit)}</strong> in the background.</p>
           : status.state === 'available' ? <p className="update-ready">{changeCount(status)} on main commit <strong>{short(status.latestCommit)}</strong>.</p>
           : <p className="update-note">SocialSpace is up to date with main.</p>}
-        {status.updateAvailable && status.newCommits.length > 0 && <ul className="update-commits" aria-label="Changes in this update">{status.newCommits.map((commit) => <li key={commit}>{commit}</li>)}</ul>}
+        {status.updateAvailable && status.newCommits.length > 0 && <ul className="update-commits" aria-label="Changes in this update">{status.newCommits.map((commit, index) => { const when = releasedAt(status.newCommitTimes?.[index]); return <li key={commit}>{when && <span className="update-commit-time">{when}</span>}{commit}</li>; })}</ul>}
         {status.blockedReason && <p className="update-error">{status.blockedReason}</p>}
       </>}
       {building && progress && <ProgressView progress={progress}/>}

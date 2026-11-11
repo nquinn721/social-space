@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FOCUS_CHECK_MIN_MS, hasUpdate, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
+import { FOCUS_CHECK_MIN_MS, hasUpdate, releasedAt, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
 import * as updates from './updateService';
 
 vi.mock('./updateService', () => ({ requestHubUpdate: vi.fn(), checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn(), updateManagement: vi.fn() }));
@@ -171,6 +171,17 @@ describe('Updates page', () => {
     expect(screen.getByText(available.sourceDir)).toBeInTheDocument();
     expect(screen.getByText('0.2.0, build bbbbbbb')).toBeInTheDocument();
     expect(screen.getByText('bbbbbbb Add video library')).toBeInTheDocument();
+  });
+
+  it('says when the running build and main were released, so versions are not needed', () => {
+    const at = (iso: string) => Date.parse(iso) / 1000;
+    const dated = { ...available, installedReleasedAt: at('2026-11-10T15:00:00'), latestReleasedAt: at('2026-11-11T12:30:00'), newCommitTimes: [at('2026-11-11T12:30:00'), at('2026-11-11T09:05:00')] };
+    render(<UpdatesPage updates={fake({ status: dated })}/>);
+    expect(releasedAt(dated.latestReleasedAt)).toMatch(/Nov 11.*12:30/);
+    expect(screen.getByText(`Released ${releasedAt(dated.installedReleasedAt)} · SocialSpace 0.1.0, build aaaaaaa`)).toBeInTheDocument();
+    expect(screen.getByText(`Released ${releasedAt(dated.latestReleasedAt)} · 0.2.0, build bbbbbbb`)).toBeInTheDocument();
+    expect(screen.getByText(releasedAt(dated.newCommitTimes[1])!)).toBeInTheDocument();
+    expect(releasedAt(null)).toBeNull();
   });
 
   it('says so when up to date and offers no update', () => {
