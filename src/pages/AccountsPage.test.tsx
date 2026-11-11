@@ -12,9 +12,11 @@ const account = (id: string, platform: Account['platform'], label: string, statu
 const accounts = [account('1', 'x', 'Soft Wings'), account('2', 'instagram', 'soft wings ', 'active'), { ...account('3', 'youtube', 'Clip Lab'), handle: 'cliplab' }, { ...account('4', 'instagram', 'Clip Lab'), handle: 'cliplab' }];
 const workspace = (list: Account[] = accounts): Workspace => migrateWorkspace({ businessName: '', brands: [], accounts: list, channels: [] });
 const renderPage = (props: Partial<Parameters<typeof AccountsPage>[0]> = {}) => render(<AccountsPage workspace={workspace()} loaded busy={false} onAddAccount={vi.fn()} onEditAccount={vi.fn()} onCreateAccounts={vi.fn()} onSignUp={vi.fn()} onOpen={vi.fn()} {...props}/>);
+/** Opens a brand on its Accounts tab (a brand opens on its posts). */
 async function openBrand(name: string) {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: `Open ${name}` }));
+  await user.click(screen.getByRole('tab', { name: 'Accounts' }));
   return user;
 }
 
@@ -94,6 +96,16 @@ describe('brands page', () => {
     renderPage({ workspace: workspace([]) });
     expect(screen.getByText('No brands yet')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'New brand' })[0]).toBeEnabled();
+  });
+  it('opens a brand on its posts, with its accounts on their own tab', async () => {
+    const user = userEvent.setup();
+    renderPage({ onSave: vi.fn(async () => true) });
+    await user.click(screen.getByRole('button', { name: 'Open Soft Wings' }));
+    expect(screen.getByRole('tab', { name: 'Posts' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('navigation', { name: 'Categories' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Soft Wings profiles' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Accounts' }));
+    expect(screen.getByRole('region', { name: 'Soft Wings profiles' })).toBeInTheDocument();
   });
   it('renames a brand', async () => {
     const onRenameBrand = vi.fn(async () => true);

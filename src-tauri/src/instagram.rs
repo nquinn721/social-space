@@ -29,6 +29,7 @@ const UPLOAD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
 const MAX_POLLS: usize = 60;
 const MAX_CAPTION_LENGTH: usize = 2_200;
+const MAX_HASHTAGS: usize = 30;
 const MAX_VIDEO_BYTES: u64 = 300 * 1024 * 1024;
 const VIDEO_EXTENSIONS: &[&str] = &["mp4", "mov"];
 /// Instagram tokens can be refreshed once they are a day old; doing it weekly keeps them far from expiry.
@@ -211,6 +212,9 @@ fn validate_media_url(value: &str) -> Result<(), String> {
 fn validate_caption(caption: &str) -> Result<(), String> {
     if caption.chars().count() > MAX_CAPTION_LENGTH {
         return Err("Instagram captions must be 2,200 characters or fewer.".into());
+    }
+    if caption.split_whitespace().filter(|word| word.starts_with('#')).count() > MAX_HASHTAGS {
+        return Err("Instagram allows at most 30 hashtags in a caption.".into());
     }
     Ok(())
 }
@@ -474,12 +478,27 @@ pub async fn publish_instagram_photo(
     publish_from_url(&slot(profile.as_deref())?, ("image_url", image_url.trim()), None, &caption).await
 }
 
+/// The Reel container's form fields. cover_ms picks the cover as that moment of the video
+/// (Meta's thumb_offset); share_to_feed also shows the Reel in the profile's main feed.
+fn reel_file_params(caption: &str, cover_ms: Option<u64>, share_to_feed: Option<bool>) -> Vec<(&'static str, String)> {
+    let mut params = vec![("media_type", "REELS".to_string()), ("upload_type", "resumable".to_string()), ("caption", caption.to_string())];
+    if let Some(ms) = cover_ms {
+        params.push(("thumb_offset", ms.to_string()));
+    }
+    if let Some(share) = share_to_feed {
+        params.push(("share_to_feed", share.to_string()));
+    }
+    params
+}
+
 /// Uploads a video from this PC as a Reel (Meta's resumable upload, Facebook Page tokens only).
 #[tauri::command]
 pub async fn publish_instagram_reel_file(
     path: String,
     caption: String,
     profile: Option<String>,
+    cover_ms: Option<u64>,
+    share_to_feed: Option<bool>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
     let slot = slot(profile.as_deref())?;
@@ -495,12 +514,9 @@ pub async fn publish_instagram_reel_file(
         .map_err(|_| "Could not read that video file.")?
         .map_err(|_| "Could not read that video file.")?;
     let http = client()?;
-    let container = create_container(
-        &http,
-        &credential,
-        &[("media_type", "REELS"), ("upload_type", "resumable"), ("caption", caption.as_str())],
-    )
-    .await?;
+    let params = reel_file_params(&caption, cover_ms, share_to_feed);
+    let borrowed: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, value.as_str())).collect();
+    let container = create_container(&http, &credential, &borrowed).await?;
     let response = client_with(UPLOAD_TIMEOUT)?
         .post(format!("{UPLOAD_HOST}/{API_VERSION}/{container}"))
         .header("Authorization", format!("OAuth {}", credential.access_token))
@@ -625,9 +641,19 @@ mod tests {
         assert!(validate_video_file(Path::new("C:/v/reel.mp4"), MAX_VIDEO_BYTES + 1).is_err());
     }
     #[test]
+    fn reel_cover_and_feed_are_sent_only_when_chosen() {
+        let plain = reel_file_params("hi", None, None);
+        assert!(!plain.iter().any(|(key, _)| *key == "thumb_offset" || *key == "share_to_feed"));
+        let chosen = reel_file_params("hi", Some(1500), Some(false));
+        assert!(chosen.contains(&("thumb_offset", "1500".to_string())));
+        assert!(chosen.contains(&("share_to_feed", "false".to_string())));
+    }
+    #[test]
     fn captions_are_limited() {
         assert!(validate_caption(&"a".repeat(MAX_CAPTION_LENGTH)).is_ok());
         assert!(validate_caption(&"a".repeat(MAX_CAPTION_LENGTH + 1)).is_err());
+        assert!(validate_caption(&"#a ".repeat(30)).is_ok());
+        assert!(validate_caption(&"#a ".repeat(31)).is_err());
     }
     #[test]
     fn client_rejects_plain_http() {

@@ -1,33 +1,39 @@
 import { useEffect, useState } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import type { Workspace } from './model';
-import { instagramConnection, publishInstagramReelFile } from './instagramService';
-
-/** The brand's connected Instagram profile, which the library can publish to in one click. */
-export type BrandInstagram = { accountId: string; username: string; canUploadFiles: boolean };
+import { normalizeHandle, type Video, type Workspace } from './model';
+import { claimInstagramConnection, publishInstagramReelFile } from './instagramService';
+import { detailsOf, postText } from './postDetails';
 
 /**
- * Finds the brand's live Instagram profile and checks that it is connected through Meta.
- * null while checking, when the brand has none, or when it is not connected yet.
+ * The brand's live Instagram profile and whether the app can publish to it.
+ * connected: signed in through Meta (null while checking). canUploadFiles: that sign-in may upload a video from this PC.
+ */
+export type BrandInstagram = { accountId: string; handle: string; username: string; connected: boolean | null; canUploadFiles: boolean };
+
+/**
+ * Finds the brand's live Instagram profile and checks its connection. A connection saved before
+ * profiles had their own is taken over when it is the same username. null when the brand has no live profile.
  */
 export function useBrandInstagram(workspace: Workspace, brandId: string | undefined): BrandInstagram | null {
   const account = workspace.accounts.find((item) => item.brandId === brandId && item.platform === 'instagram' && item.status === 'active');
-  const [connected, setConnected] = useState<BrandInstagram | null>(null);
+  const handle = account ? normalizeHandle(account.handle) : '';
+  const [state, setState] = useState<BrandInstagram | null>(null);
   useEffect(() => {
     let live = true;
-    setConnected(null);
-    if (!account || !isTauri()) return;
-    instagramConnection(account.id)
-      .then((identity) => {
-        if (live && identity) setConnected({ accountId: account.id, username: identity.username, canUploadFiles: identity.login !== 'instagram' });
-      })
-      .catch(() => { /* Not connected: the library keeps its open-in-Instagram button. */ });
+    if (!account) { setState(null); return; }
+    const base = { accountId: account.id, handle, username: handle, canUploadFiles: false };
+    setState({ ...base, connected: null });
+    if (!isTauri()) { setState({ ...base, connected: false }); return; }
+    claimInstagramConnection(account.id, handle)
+      .then((identity) => { if (live) setState(identity ? { ...base, username: identity.username, connected: true, canUploadFiles: identity.login !== 'instagram' } : { ...base, connected: false }); })
+      .catch(() => { if (live) setState({ ...base, connected: false }); });
     return () => { live = false; };
-  }, [account?.id]);
-  return connected;
+  }, [account?.id, handle]);
+  return state;
 }
 
-/** Uploads a video saved on this PC and publishes it as a Reel on that profile. */
-export function publishVideoToInstagram(target: BrandInstagram, path: string, caption: string) {
-  return publishInstagramReelFile(path, caption, target.accountId);
+/** Uploads a video saved on this PC and publishes it as a Reel with its description, hashtags, cover and feed choice. */
+export function publishVideoToInstagram(target: BrandInstagram, video: Video) {
+  const details = detailsOf(video);
+  return publishInstagramReelFile(video.mediaSource, postText(video), target.accountId, { coverMs: details.coverMs, shareToFeed: details.shareToFeed });
 }
