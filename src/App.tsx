@@ -1,4 +1,4 @@
-import { hasUpdate, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates } from './AppUpdates';
+import { hasUpdate, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates } from './AppUpdates';
 import InboxList from './InboxList';
 import CreateAccountWizard, { type WizardPrefill } from './CreateAccountWizard';
 import AccountDrawer from './AccountDrawer';
@@ -135,6 +135,7 @@ function App() {
       <header className="topbar">
         <div className="breadcrumb">Social Space <ChevronRight size={13}/> <span>{TITLES[view]}</span></div>
         <div className="topbar-right">
+          <HeaderUpdateButton updates={updates} onOpen={() => navigate('updates')}/>
           <span className="local-badge"><span className="dot"/> Local workspace</span>
           <button className={`outline-button small-button assistant-button ${assistantOpen ? 'open' : ''}`} aria-pressed={assistantOpen} onClick={() => setAssistantOpen((value) => !value)}><Bot size={15}/> Assistant</button>
         </div>

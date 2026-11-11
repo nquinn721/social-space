@@ -38,6 +38,8 @@
 .update-footnote{color:var(--text-3);font-size:12.5px;margin:16px 0 0}
 .update-banner .small-button{min-height:30px}
 .spin{animation:update-spin 1s linear infinite}
+.header-update{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.header-update.failed{color:var(--danger);border-color:var(--danger-line)}
 @keyframes update-spin{to{transform:rotate(360deg)}}
 .nav-item .update-dot{margin-left:auto;width:8px;height:8px;flex:none;border-radius:99px;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 @media (max-width: 900px){.nav-item .update-dot{position:absolute;top:7px;right:7px;margin:0}}

@@ -4,8 +4,10 @@ import { checkForUpdate, installPreparedUpdate, prepareUpdate, restartApp, takeU
 import { PageHeader } from './ui';
 import './updates.css';
 
-/** Checking is a git fetch in the source folder, so new merges to main show up within minutes. */
-export const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+/** Checking is a quick git fetch, so a new release on main is noticed within a minute. */
+export const CHECK_INTERVAL_MS = 60 * 1000;
+/** Coming back to the window checks again, but not more often than this. */
+export const FOCUS_CHECK_MIN_MS = 15 * 1000;
 const PROGRESS_POLL_MS = 1000;
 const short = (commit: string | null | undefined) => (commit && commit !== 'unknown' ? commit.slice(0, 7) : 'unknown');
 const errorText = (error: unknown) => (typeof error === 'string' ? error : error instanceof Error ? error.message : 'Something went wrong.');
@@ -90,8 +92,20 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
     if (!selfUpdating) return () => { mounted.current = false; };
     void check(true);
     void followProgress();
-    const timer = window.setInterval(() => void check(true), intervalMs);
-    return () => { mounted.current = false; window.clearInterval(timer); window.clearTimeout(pollTimer.current); };
+    let lastCheck = Date.now();
+    const timer = window.setInterval(() => { lastCheck = Date.now(); void check(true); }, intervalMs);
+    // Switching back to the app looks for a release right away instead of waiting for the timer.
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden' || Date.now() - lastCheck < FOCUS_CHECK_MIN_MS) return;
+      lastCheck = Date.now();
+      void check(true);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      mounted.current = false; window.clearInterval(timer); window.clearTimeout(pollTimer.current);
+      window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [check, followProgress, intervalMs, selfUpdating]);
 
   const startBuild = useCallback(async (commit: string) => {
@@ -153,6 +167,31 @@ export function updateNavLabel(updates: Pick<AppUpdates, 'status' | 'progress'>)
   return 'Updates';
 }
 
+/**
+ * The update button in the header, the same in every hub app: "Preparing update" while a new
+ * release is fetched and built, then "Restart to update". Hidden when there is nothing new, and
+ * when the Ava hub manages updates (it installs them while the app is closed).
+ */
+export function HeaderUpdateButton({ updates, onOpen }: { updates: AppUpdates; onOpen: () => void }) {
+  const { status, progress, restartToUpdate } = updates;
+  if (updates.managedBy || status?.blockedReason) return null;
+  if (progress?.state === 'restarting') {
+    return <button type="button" className="primary-button small-button header-update" disabled><RotateCw size={15} className="spin"/> Restarting…</button>;
+  }
+  if (status?.state === 'ready') {
+    return <button type="button" className="primary-button small-button header-update" onClick={() => void restartToUpdate()} title={changeCount(status)}><Download size={15}/> Restart to update</button>;
+  }
+  if (status?.state === 'available') {
+    const building = progress?.state === 'running';
+    const failed = progress?.state === 'failed';
+    return <button type="button" className={`outline-button small-button header-update ${failed ? 'failed' : ''}`} onClick={onOpen} title={changeCount(status)}>
+      {building ? <RefreshCw size={15} className="spin"/> : <Download size={15}/>}
+      {failed ? 'Update failed' : building ? 'Preparing update…' : 'Update available'}
+    </button>;
+  }
+  return null;
+}
+
 /** A slim notice at the top of every page: the outcome after a restart, or an update ready to install. */
 export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen: () => void }) {
   const { status, progress, restartToUpdate } = updates;
@@ -170,7 +209,8 @@ export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen:
   if (updates.managedBy) return null;
   if (progress?.state === 'restarting') return <div role="status" className="update-banner"><Download size={17}/><ProgressView progress={progress}/></div>;
   if (progress?.state === 'failed') return <div role="alert" className="update-banner failed"><Download size={17}/><span>The update didn't build.</span><button className="outline-button small-button" onClick={onOpen}>See why</button></div>;
-  // Building happens quietly; the sidebar shows it. The banner only asks once it is ready.
+  // Building happens quietly and the header button offers the restart; the banner only adds the
+  // list of what changed, once, when an update is ready.
   if (status?.state !== 'ready' || status.blockedReason || dismissed === status.latestCommit) return null;
   return <div role="status" className="update-banner">
     <Download size={17}/>

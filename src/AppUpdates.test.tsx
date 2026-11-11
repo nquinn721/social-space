@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hasUpdate, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
+import { FOCUS_CHECK_MIN_MS, hasUpdate, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
 import * as updates from './updateService';
 
 vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn(), updateManagement: vi.fn() }));
@@ -206,5 +206,46 @@ describe('Updates page', () => {
     await user.click(screen.getByRole('button', { name: 'Restart without updating' }));
     expect(updates.restartApp).toHaveBeenCalledOnce();
     expect(updates.installPreparedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('header update button', () => {
+  it('shows nothing when up to date, blocked or managed by Ava', () => {
+    const { container, rerender } = render(<HeaderUpdateButton updates={fake({ status: upToDate })} onOpen={vi.fn()}/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<HeaderUpdateButton updates={fake({ status: { ...available, blockedReason: 'npm is not on PATH.' } })} onOpen={vi.fn()}/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<HeaderUpdateButton updates={fake({ status: ready, managedBy: 'Ava' })} onOpen={vi.fn()}/>);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('says it is preparing while the release builds, then offers the restart', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const restartToUpdate = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<HeaderUpdateButton updates={fake({ progress: { ...idle, state: 'running' } })} onOpen={onOpen}/>);
+    await user.click(screen.getByRole('button', { name: /Preparing update/ }));
+    expect(onOpen).toHaveBeenCalledOnce();
+    rerender(<HeaderUpdateButton updates={fake({ status: ready, progress: { ...idle, state: 'ready' }, restartToUpdate })} onOpen={onOpen}/>);
+    await user.click(screen.getByRole('button', { name: /Restart to update/ }));
+    expect(restartToUpdate).toHaveBeenCalledOnce();
+  });
+
+  it('checks again when the window comes back into focus, at most every few seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(updates.checkForUpdate).mockResolvedValue(upToDate);
+      renderHook(() => useAppUpdates(60 * 60 * 1000));
+      await settle();
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+      await act(async () => { vi.advanceTimersByTime(FOCUS_CHECK_MIN_MS + 1); });
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      await settle();
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
