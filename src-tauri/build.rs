@@ -41,6 +41,7 @@ fn main() {
         "instagram_app_ready",
         "save_instagram_app",
         "connect_instagram_app",
+        "finish_instagram_connection",
         "instagram_connection",
         "disconnect_instagram",
         "publish_instagram_reel",

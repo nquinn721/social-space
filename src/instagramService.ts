@@ -26,4 +26,8 @@ export async function saveInstagramApp(appId: string, appSecret: string, configI
 /** Address to add under Valid OAuth Redirect URIs in the Meta app. */
 export const INSTAGRAM_REDIRECT_URI = 'https://nquinn721.github.io/socialspace/instagram';
 /** Opens Instagram's approval window with the profile's saved sign-in filled in. Rejects with SETUP_NEEDED until the Meta app is saved. */
+/** Finishes a Connect that Meta approved without saying which account, using the account ID from Business Settings. */
+export async function finishInstagramConnection(profile: string, instagramId: string): Promise<InstagramIdentity> { desktopOnly(); return invoke('finish_instagram_connection', { profile, instagramId }); }
+/** Marks a Connect error that the account ID can finish; see finishInstagramConnection. */
+export const INSTAGRAM_ID_NEEDED = 'INSTAGRAM_ID_NEEDED';
 export async function connectInstagramApp(accountId: string | null, username: string | null): Promise<InstagramIdentity> { desktopOnly(); return invoke('connect_instagram_app', { accountId, username }); }

@@ -379,6 +379,7 @@ pub fn run() {
             instagram_login::instagram_app_ready,
             instagram_login::save_instagram_app,
             instagram_login::connect_instagram_app,
+            instagram_login::finish_instagram_connection,
             instagram::instagram_connection,
             instagram::disconnect_instagram,
             instagram::publish_instagram_reel,

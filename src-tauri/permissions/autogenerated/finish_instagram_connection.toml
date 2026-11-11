@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-finish-instagram-connection"
+description = "Enables the finish_instagram_connection command without any pre-configured scope."
+commands.allow = ["finish_instagram_connection"]
+
+[[permission]]
+identifier = "deny-finish-instagram-connection"
+description = "Denies the finish_instagram_connection command without any pre-configured scope."
+commands.deny = ["finish_instagram_connection"]
