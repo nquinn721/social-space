@@ -69,7 +69,8 @@ function KeyedAppSetup({ provider, working, onSave, onCancel }: { provider: 'goo
  * Connections in two layers: each social's developer app is set up once, then every live profile
  * connects on its own with one button, and posts through its own connection.
  */
-export default function Connections({ onNavigate, accounts = [], brands = [] }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[] }) {
+/** profilesOnly: just the profiles' own connections, as on a brand's Accounts tab (one-time app setup still opens when needed). */
+export default function Connections({ onNavigate, accounts = [], brands = [], profilesOnly = false }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; profilesOnly?: boolean }) {
   const { state, loading, refresh } = useConnectionState();
   const profiles = useProfileConnections(accounts);
   const [apps, setApps] = useState<Record<string, string | null>>({});
@@ -124,7 +125,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [] }: 
 
   const other: Row[] = [
     { key: 'inbox', icon: <span className="connection-icon"><Mail size={16}/></span>, name: 'Email inbox', what: 'Reads sign-up codes so they fill in by themselves.', connected: state.inbox, go: () => onNavigate('settings', 'email'), connect: () => void connectInbox() },
-    { key: 'sources', icon: <span className="connection-icon"><Clapperboard size={16}/></span>, name: 'Video makers', what: 'Kling or Grok keys used to make AI videos.', connected: state.videoSources ? `${state.videoSources} ready` : null, go: () => onNavigate('sources') },
+    { key: 'sources', icon: <span className="connection-icon"><Clapperboard size={16}/></span>, name: 'Video makers', what: 'Kling or Grok keys used to make AI videos.', connected: state.videoSources ? `${state.videoSources} ready` : null, go: () => onNavigate('settings', 'video-sources') },
   ];
   const appRows: { provider: Provider; name: string; what: string }[] = [
     { provider: 'meta', name: 'Meta app (Instagram)', what: 'Every Instagram profile connects through it.' },
@@ -176,7 +177,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [] }: 
         </div>)}
     </div>
 
-    <div className="conn-columns">
+    {!profilesOnly && <div className="conn-columns">
       <div className="card conn-card" aria-label="Developer apps">
         <div className="conn-card-head"><h3>Set up once</h3><small>One developer app per social</small></div>
         {appRows.map((row) => <div className="conn-row" key={row.provider}>
@@ -195,6 +196,6 @@ export default function Connections({ onNavigate, accounts = [], brands = [] }: 
           <span className="conn-action"><button type="button" className={row.connected ? 'ghost-button small-button' : 'primary-button small-button'} disabled={working} onClick={!row.connected && row.connect ? row.connect : row.go}>{row.connected ? 'Manage' : 'Connect'}</button></span>
         </div>)}
       </div>
-    </div>
+    </div>}
   </section>;
 }

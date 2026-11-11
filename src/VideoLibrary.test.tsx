@@ -23,6 +23,10 @@ vi.mock('./videoSourcesService', () => ({
   getVideo: vi.fn(),
   saveGeneratedVideo: vi.fn(),
 }));
+vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(async () => null), publishInstagramReelFile: vi.fn() }));
+import * as instagram from './instagramService';
+vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }) }));
+import * as ai from './assistant/postSuggest';
 const mocked = vi.mocked(sources);
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 beforeEach(() => { vi.clearAllMocks(); });
@@ -41,8 +45,9 @@ function setup(workspace = base) {
   const onSave = vi.fn(async (_next: Workspace, _message: string) => true as boolean | undefined);
   const onOpen = vi.fn();
   const onManageSources = vi.fn();
-  const view = render(<VideoLibrary workspace={workspace} loaded busy={false} onSave={onSave} onOpen={onOpen} onManageSources={onManageSources}/>);
-  return { onSave, onOpen, onManageSources, view, user: userEvent.setup() };
+  const onConnectInstagram = vi.fn();
+  const view = render(<VideoLibrary workspace={workspace} loaded busy={false} onSave={onSave} onOpen={onOpen} onManageSources={onManageSources} onConnectInstagram={onConnectInstagram}/>);
+  return { onSave, onOpen, onManageSources, onConnectInstagram, view, user: userEvent.setup() };
 }
 
 describe('video library', () => {
@@ -59,8 +64,10 @@ describe('video library', () => {
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
     expect(within(video).getByText('bunny.mp4 · 1 of 3 socials')).toBeInTheDocument();
     expect(within(video).getByRole('button', { name: 'Instagram' })).toHaveAttribute('aria-pressed', 'true');
-    await user.click(within(video).getByRole('button', { name: 'Upload to TikTok' }));
+    await user.click(within(video).getByRole('button', { name: /Edit post/ }));
+    await user.click(within(video).getByRole('button', { name: 'Open TikTok' }));
     expect(onOpen).toHaveBeenCalledWith('tiktok', 'post');
+    await user.click(within(video).getByRole('button', { name: 'Cancel' }));
     await user.click(within(video).getByRole('button', { name: 'TikTok' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
   });
@@ -74,10 +81,10 @@ describe('video library', () => {
     await user.click(screen.getByRole('button', { name: 'Add' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ categories: [base.categories![0], expect.objectContaining({ brandId: 'mia', name: 'Cats' })] }), 'Added the Cats category.');
     await user.click(screen.getByRole('button', { name: /Add a file/ }));
-    expect(screen.queryByLabelText('Caption')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Description')).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Title'), 'Rabbit nap');
-    await user.click(screen.getByRole('button', { name: /Add a caption/ }));
-    await user.type(screen.getByLabelText('Caption'), 'So sleepy');
+    await user.click(screen.getByRole('button', { name: /Add a description/ }));
+    await user.type(screen.getByLabelText('Description'), 'So sleepy');
     await user.click(screen.getByRole('button', { name: 'Add video' }));
     expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ videos: [bunny, expect.objectContaining({ title: 'Rabbit nap', caption: 'So sleepy', posted: [] })] }), 'Added "Rabbit nap" to Rabbit.');
   });
@@ -141,5 +148,136 @@ describe('video library', () => {
     const title = titleFromPrompt('A fluffy white rabbit hops slowly through a sunny spring garden full of bright tulips and daisies');
     expect(title.length).toBeLessThanOrEqual(61);
     expect(title.endsWith('…')).toBe(true);
+  });
+});
+
+describe('approving a post', () => {
+  const fresh: Video = { ...bunny, id: 'v2', title: 'Carrot crunch', mediaSource: 'C:\\clips\\carrot.mp4', caption: 'Crunchy', posted: [] };
+  const workspace = { ...base, videos: [fresh] };
+  const connected = () => vi.mocked(instagram.claimInstagramConnection).mockResolvedValue({ id: '178', username: 'animals', login: 'facebook' });
+
+  it('shows the whole post and posts it to Instagram when approved', async () => {
+    connected();
+    vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1' });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { onSave, user } = setup(workspace);
+    const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
+    expect(within(row).getByText('To approve')).toBeInTheDocument();
+    expect(within(row).getByLabelText('Post')).toHaveTextContent('Crunchy');
+    await user.click(await within(row).findByRole('button', { name: /Approve and post/ }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('@animals'));
+    expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('1', 'mia');
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1', { coverMs: undefined, shareToFeed: true });
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'] })] }), 'Posted "Carrot crunch" to @animals on Instagram.');
+  });
+
+  it('does nothing when the confirmation is cancelled', async () => {
+    connected();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { onSave, user } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: /Approve and post/ }));
+    expect(instagram.publishInstagramReelFile).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('shows the Instagram error and keeps the video unposted', async () => {
+    connected();
+    vi.mocked(instagram.publishInstagramReelFile).mockRejectedValue('Instagram refused the video upload (HTTP 400).');
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const { onSave, user } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: /Approve and post/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 400');
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('asks to connect Instagram instead of opening the site when the profile is not connected', async () => {
+    vi.mocked(instagram.claimInstagramConnection).mockResolvedValue(null);
+    const { onConnectInstagram, onOpen, user } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: /Connect Instagram to post/ }));
+    expect(onConnectInstagram).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Approve and post/ })).not.toBeInTheDocument();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('posts with the edited hashtags, cover and feed choice, and saves them as the category defaults', async () => {
+    connected();
+    vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1' });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const detailed: Video = { ...fresh, details: { hashtags: ['bunny'], youtubeTitle: '', coverMs: 2500, madeWithAi: true, shareToFeed: true, madeForKids: false } };
+    const { onSave, user } = setup({ ...base, videos: [detailed] });
+    const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
+    await user.click(within(row).getByRole('button', { name: /Edit post/ }));
+    await user.type(within(row).getByLabelText('Hashtags'), ' snow');
+    await user.click(within(row).getByLabelText(/main feed/));
+    expect(within(row).getByLabelText(/Start new Rabbit videos/)).toBeChecked();
+    await user.click(await within(row).findByRole('button', { name: /Approve and post/ }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Crunchy\n\n#bunny #snow'));
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith(fresh.mediaSource, 'Crunchy\n\n#bunny #snow', '1', { coverMs: 2500, shareToFeed: false });
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ categories: [expect.objectContaining({ id: 'rabbit', defaults: { caption: 'Crunchy', hashtags: ['bunny', 'snow'] } })] }), expect.any(String));
+  });
+});
+
+describe('post details', () => {
+  it('starts a new video with its category defaults', async () => {
+    const withDefaults: Workspace = { ...base, categories: [{ id: 'rabbit', brandId: 'mia', name: 'Rabbit', defaults: { caption: 'Hop hop', hashtags: ['bunny'] } }] };
+    const { onSave, user } = setup(withDefaults);
+    await user.click(screen.getByRole('button', { name: /Add a file/ }));
+    await user.type(screen.getByLabelText('Title'), 'Rabbit nap');
+    await user.click(screen.getByRole('button', { name: 'Add video' }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ videos: [bunny, expect.objectContaining({ title: 'Rabbit nap', caption: 'Hop hop', details: expect.objectContaining({ hashtags: ['bunny'] }) })] }), expect.any(String));
+  });
+
+  it('writes the post with AI on request', async () => {
+    vi.mocked(ai.suggestPost).mockResolvedValueOnce({ description: 'Snow day for this bunny', hashtags: ['bunny', 'snow'] });
+    const { user } = setup({ ...base, videos: [{ ...bunny, caption: 'x' }] });
+    const row = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(row).getByRole('button', { name: /Edit post/ }));
+    await user.click(within(row).getByRole('button', { name: /Suggest with AI/ }));
+    expect(ai.suggestPost).toHaveBeenCalledWith(expect.objectContaining({ brand: 'Massage With Mia', category: 'Rabbit', title: 'Bunny hop' }));
+    expect(within(row).getByLabelText('Description')).toHaveValue('Snow day for this bunny');
+    expect(within(row).getByLabelText('Hashtags')).toHaveValue('#bunny #snow');
+  });
+
+  it('fills in a new post with AI by itself', async () => {
+    vi.mocked(ai.suggestPost).mockResolvedValueOnce({ description: 'Hoppy', hashtags: ['bunny'] });
+    const { onSave } = setup();
+    await act(async () => {});
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v1', caption: 'Hoppy', details: expect.objectContaining({ hashtags: ['bunny'] }) })] }), 'Wrote the post for "Bunny hop". Check it and approve it to post.');
+  });
+
+  it('saves the description, hashtags, YouTube title and labels', async () => {
+    const withYoutube: Workspace = { ...base, accounts: [...base.accounts, profile('4', 'youtube')] };
+    const { onSave, user } = setup(withYoutube);
+    const row = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(row).getByRole('button', { name: /Edit post/ }));
+    await user.type(within(row).getByLabelText('Description'), 'Snow day');
+    await user.type(within(row).getByLabelText('Hashtags'), 'bunny, #Snow bunny');
+    expect(within(row).getByLabelText('YouTube title')).toHaveValue('Bunny hop');
+    await user.click(within(row).getByLabelText(/Made with AI/));
+    await user.click(within(row).getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ caption: 'Snow day', details: expect.objectContaining({ hashtags: ['bunny', 'Snow'], youtubeTitle: 'Bunny hop', madeWithAi: true, shareToFeed: true }) })] }), 'Saved the post details of "Bunny hop".');
+  });
+
+  it('blocks saving when X would get more than 280 characters', async () => {
+    const withX: Workspace = { ...base, accounts: [profile('1', 'instagram'), profile('3', 'x')] };
+    const { user } = setup(withX);
+    const row = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(row).getByRole('button', { name: /Edit post/ }));
+    await user.click(within(row).getByLabelText('Description'));
+    await user.paste('a'.repeat(281));
+    expect(within(row).getByRole('alert')).toHaveTextContent('X post is 281 characters');
+    expect(within(row).getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+});
+
+describe('content stages', () => {
+  it('filters posts by stage', async () => {
+    const review: Video = { ...bunny, id: 'v3', title: 'Hop review', posted: [], createdAt: 3 };
+    const { user } = setup({ ...base, accounts: [profile('1', 'instagram')], videos: [bunny, review] });
+    await user.click(screen.getByRole('button', { name: 'To approve 1' }));
+    expect(screen.getByRole('listitem', { name: 'Hop review' })).toBeInTheDocument();
+    expect(screen.queryByRole('listitem', { name: 'Bunny hop' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Posted 1' }));
+    expect(screen.getByRole('listitem', { name: 'Bunny hop' })).toBeInTheDocument();
   });
 });
