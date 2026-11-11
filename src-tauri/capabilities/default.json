@@ -48,6 +48,7 @@
     "allow-instagram-app-ready",
     "allow-save-instagram-app",
     "allow-connect-instagram-app",
+    "allow-finish-instagram-connection",
     "allow-instagram-connection",
     "allow-disconnect-instagram",
     "allow-publish-instagram-reel",
