@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs, io::Write, path::Path, sync::Mutex};
+use std::{collections::{BTreeMap, HashSet}, fs, io::Write, path::Path, sync::Mutex};
 
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
@@ -18,6 +18,7 @@ mod social_connect;
 mod kling;
 mod ollama;
 mod queue;
+mod setup_pages;
 mod updater;
 mod video_files;
 mod video_gen;
@@ -29,6 +30,7 @@ const MAX_ACCOUNTS: usize = 200;
 const MAX_FIELD_LENGTH: usize = 1_000;
 const MAX_VIDEOS: usize = 20_000;
 const MAX_CAPTION_LENGTH: usize = 4_000;
+const MAX_SETUP_MARKS: usize = 2_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -43,6 +45,10 @@ struct Workspace {
     categories: Vec<VideoCategory>,
     #[serde(default)]
     videos: Vec<Video>,
+    /// Setup steps the user marked done by hand (developer plans, app reviews, account settings
+    /// the app cannot see), keyed by step id, with when they were marked (ms since 1970).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    setup: BTreeMap<String, u64>,
 }
 
 /// A kind of video inside a brand, e.g. "Rabbit".
@@ -159,6 +165,9 @@ struct StorageLock(Mutex<()>);
 fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS || workspace.brands.len() > MAX_ACCOUNTS {
         return Err("The workspace is too large to save.".into());
+    }
+    if workspace.setup.len() > MAX_SETUP_MARKS || workspace.setup.keys().any(|key| key.trim().is_empty() || key.len() > 200) {
+        return Err("The setup checklist is too large to save.".into());
     }
     let mut brand_ids = HashSet::new();
     for brand in &workspace.brands {
@@ -359,6 +368,10 @@ pub fn run() {
             social_connect::connect_tiktok,
             social_connect::tiktok_connection,
             social_connect::disconnect_tiktok,
+            social_connect::check_youtube_connection,
+            social_connect::check_tiktok_connection,
+            x_integration::check_x_connection,
+            setup_pages::open_setup_page,
             dev_apps::save_developer_app,
             dev_apps::remove_developer_app,
             x_integration::post_to_x,
@@ -455,6 +468,7 @@ mod tests {
             channels: vec![],
             categories: vec![],
             videos: vec![],
+            setup: Default::default(),
         };
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -483,7 +497,7 @@ mod tests {
 
     #[test]
     fn accounts_must_belong_to_a_saved_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new() }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![] };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new() }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default() };
         workspace.accounts[0].brand_id = Some("b".into());
         let json = serde_json::to_string(&workspace).unwrap();
         assert!(json.contains(r#""brandId":"b""#));
@@ -495,7 +509,7 @@ mod tests {
 
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![] };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![], setup: Default::default() };
         workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -509,7 +523,7 @@ mod tests {
 
     #[test]
     fn videos_can_carry_an_ai_generation_in_progress() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![] };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![], setup: Default::default() };
         let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
         workspace.videos.push(serde_json::from_value(json).unwrap());
         assert!(validate_workspace(&workspace).is_ok());
@@ -556,6 +570,7 @@ mod tests {
             channels: vec![],
             categories: vec![],
             videos: vec![],
+            setup: Default::default(),
         };
         write_workspace(&path, &workspace).unwrap();
         assert_eq!(read_workspace(&path).unwrap(), workspace);

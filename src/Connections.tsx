@@ -9,6 +9,8 @@ import { canConnect, connectProfile, disconnectProfile, PROVIDER_OF, useProfileC
 import { TIKTOK_REDIRECT_URI, YOUTUBE_REDIRECT_URI } from './socialConnectService';
 import { getPlatform, normalizeHandle, type Account, type Brand, type Platform, type View } from './model';
 import { BrandMark, errorText } from './ui';
+import SetupTracker from './SetupTracker';
+import { useSetupStatus } from './setupService';
 
 /** What the app is really connected to. null means not connected (or it could not be checked). */
 export type ConnectionState = {
@@ -70,13 +72,19 @@ function KeyedAppSetup({ provider, working, onSave, onCancel }: { provider: 'goo
  * connects on its own with one button, and posts through its own connection.
  */
 /** profilesOnly: just the profiles' own connections, as on a brand's Accounts tab (one-time app setup still opens when needed). */
-export default function Connections({ onNavigate, accounts = [], brands = [], profilesOnly = false }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; profilesOnly?: boolean }) {
+/**
+ * marks/onMark: the setup checklist's hand-ticked steps, saved in the workspace.
+ * onEditAccount: opens a profile to add its username and password.
+ */
+export default function Connections({ onNavigate, accounts = [], brands = [], profilesOnly = false, marks = {}, onMark, onEditAccount }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; profilesOnly?: boolean; marks?: Record<string, number>; onMark?: (id: string, done: boolean) => void; onEditAccount?: (account: Account) => void }) {
   const { state, loading, refresh } = useConnectionState();
   const profiles = useProfileConnections(accounts);
   const [apps, setApps] = useState<Record<string, string | null>>({});
   const [working, setWorking] = useState(false);
   const [note, setNote] = useState('');
   const [setup, setSetup] = useState<Setup>(null);
+  const [checked, setChecked] = useState(0);
+  const status = useSetupStatus(accounts, checked);
   const loadApps = () => listDeveloperApps().then((list) => setApps(Object.fromEntries(list.map((item) => [item.provider, item.id])))).catch(() => undefined);
   useEffect(() => { void loadApps(); }, []);
   const live = accounts.filter((account) => account.status === 'active').sort((a, b) => brandName(a).localeCompare(brandName(b)));
@@ -96,7 +104,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
     setWorking(true); setNote('');
     try {
       const username = await connectProfile(account);
-      setSetup(null); await profiles.refresh();
+      setSetup(null); await profiles.refresh(); setChecked((value) => value + 1);
       setNote(`${getPlatform(account.platform).name} connected as @${normalizeHandle(username)} for ${brandName(account)}.`);
     } catch (reason) {
       const text = errorText(reason);
@@ -107,7 +115,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
   async function disconnect(account: Account) {
     if (working || !window.confirm(`Disconnect ${getPlatform(account.platform).name} @${account.handle}? The app won't be able to post for it until you connect again.`)) return;
     setWorking(true); setNote('');
-    try { await disconnectProfile(account); await profiles.refresh(); }
+    try { await disconnectProfile(account); await profiles.refresh(); setChecked((value) => value + 1); }
     catch (reason) { setNote(errorText(reason)); } finally { setWorking(false); }
   }
   async function saveApp(provider: Provider, id: string, secret: string, configId?: string) {
@@ -116,7 +124,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
     try {
       // The Meta app also needs its Unified login configuration, which only the Instagram command stores.
       await (provider === 'meta' ? saveInstagramApp(id, secret, configId) : saveDeveloperApp(provider, id, secret));
-      await loadApps();
+      await loadApps(); setChecked((value) => value + 1);
       const retry = setup?.retry;
       setSetup(null); setWorking(false);
       if (retry) await connect(retry);
@@ -146,13 +154,17 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
   return <section className="connections" aria-label="Connections">
     <div className="sign-ins-head">
       <div><h2><Link2 size={16}/> Connections</h2><p>Connect each profile so the app can post as it.</p></div>
-      <button type="button" className="ghost-button small-button" disabled={loading || profiles.loading} onClick={() => { refresh(); void profiles.refresh(); void loadApps(); }}><RefreshCw size={14}/> Check again</button>
+      <button type="button" className="ghost-button small-button" disabled={loading || profiles.loading} onClick={() => { refresh(); void profiles.refresh(); void loadApps(); setChecked((value) => value + 1); }}><RefreshCw size={14}/> Check again</button>
     </div>
 
     {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
     {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret, configId) => saveApp('meta', id, secret, configId)} onCancel={() => setSetup(null)}/>}
     {setup?.provider === 'x' && <XAppSetup working={working} onSave={(id) => saveApp('x', id, '')} onCancel={() => setSetup(null)}/>}
     {(setup?.provider === 'google' || setup?.provider === 'tiktok') && <KeyedAppSetup key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret) => saveApp(setup.provider, id, secret)} onCancel={() => setSetup(null)}/>}
+
+    <SetupTracker accounts={accounts} brands={brands} apps={status.apps} connections={status.connections} passwords={status.passwords} marks={marks}
+      onMark={onMark} onConnect={(account) => void connect(account)} onSetupApp={(provider) => setSetup({ provider })} onEditAccount={onEditAccount} working={working}
+      scope={profilesOnly && brands.length === 1 ? brands[0].name : undefined}/>
 
     <div className="card conn-card" aria-label="Profile connections">
       <div className="conn-card-head"><h3>Profiles</h3><small>{profiles.loading ? 'Checking…' : `${connectedCount} of ${live.length} connected`}</small></div>
