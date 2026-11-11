@@ -11,6 +11,8 @@ import { publishVideoToInstagram, useBrandInstagram, type BrandInstagram } from 
 import { isLocalVideo, openVideoFile, showVideoInFolder, videoPreviewUrl } from './videoFileService';
 import { detailProblems, detailsOf, formatMs, newPost, hashtagText, LIMITS, parseHashtags, postText, startingPost, STAGES, videoStage, YOUTUBE_TITLE_LIMIT, type Stage } from './postDetails';
 import { suggestPost } from './assistant/postSuggest';
+import { useConfirm } from './ConfirmDialog';
+import { openInstagramPost } from './instagramService';
 import './library.css';
 
 type Props = {
@@ -92,14 +94,16 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   /** Posts the video as a Reel on the brand's connected Instagram profile, then saves its details and marks it posted there. */
   async function post(draft: Video, saveDefaults: boolean) {
     if (!instagram) return;
-    try { await publishVideoToInstagram(instagram, draft); }
+    let link: string | undefined;
+    try { link = (await publishVideoToInstagram(instagram, draft)).permalink; }
     catch (reason) {
       // Keep edits made in the Post panel even when Instagram refuses the video.
       const saved = (workspace.videos ?? []).find((item) => item.id === draft.id);
       if (saveDefaults || JSON.stringify(saved) !== JSON.stringify(draft)) await savePost(draft, saveDefaults, `Saved the post details of "${draft.title}".`);
       throw reason;
     }
-    await savePost(draft, saveDefaults, `Posted "${draft.title}" to @${instagram.username} on Instagram.`, draft.posted.includes('instagram') ? draft.posted : [...draft.posted, 'instagram']);
+    const posted = link ? { ...draft, links: { ...draft.links, instagram: link } } : draft;
+    await savePost(posted, saveDefaults, `Posted "${draft.title}" to @${instagram.username} on Instagram.`, draft.posted.includes('instagram') ? draft.posted : [...draft.posted, 'instagram']);
   }
   function removeVideo(video: Video) {
     const note = video.generation?.status === 'working' ? ' The source may still finish it, but it will not be saved here.' : ' This does not delete it from any social or from your PC.';
@@ -215,13 +219,21 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   const automatic = canPostAutomatically(video, socials, instagram, !!onPost);
   const needsConnect = !job && socials.includes('instagram') && !video.posted.includes('instagram') && instagram?.connected === false && !!onConnectInstagram;
   const tags = detailsOf(video).hashtags;
+  const { confirm, dialog } = useConfirm();
+  const instagramLink = video.links?.instagram;
+  const openPost = () => { if (instagramLink) openInstagramPost(instagramLink).catch((reason) => setError(errorText(reason))); };
   /** Approving posts it: straight to every social the app can post to, after one confirmation. */
   async function approve(draft: Video, saveDefaults: boolean) {
     if (!onPost || !instagram || working) return false;
     const problems = detailProblems(draft, socials);
     if (problems.length) { setEditing(true); setError(problems[0]); return false; }
     const caption = postText(draft);
-    if (!window.confirm(`Approve "${draft.title}" and post it to @${instagram.username} on Instagram now? It goes live right away.\n\n${caption ? `Caption:\n${caption}` : 'No caption.'}`)) return false;
+    const ok = await confirm({
+      title: `Post "${draft.title}" to Instagram?`,
+      body: <><p>It goes live on <strong>@{instagram.username}</strong> right away.</p>{caption ? <p className="confirm-caption">{caption}</p> : <p className="post-empty">No caption.</p>}</>,
+      confirmLabel: 'Post to Instagram',
+    });
+    if (!ok) return false;
     setWorking(true); setError('');
     try { await onPost(draft, saveDefaults); return true; }
     catch (reason) { setError(errorText(reason, 'Instagram did not publish this video.')); return false; }
@@ -238,10 +250,13 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     </div>
     {!job && socials.length > 0 && <div className="library-posted" role="group" aria-label="Posted on">{socials.map((platform) => {
       const done = video.posted.includes(platform);
+      const live = done && platform === 'instagram' && instagramLink;
+      if (live) return <button type="button" key={platform} className="posted-chip done" aria-label="View on Instagram" title="Posted on Instagram. Click to view the post." onClick={openPost}><BrandMark platform={platform} small/><Check size={12}/></button>;
       return <button type="button" key={platform} className={`posted-chip ${done ? 'done' : ''}`} aria-pressed={done} aria-label={getPlatform(platform).name} title={done ? `Posted on ${getPlatform(platform).name}. Click to unmark.` : `Mark as posted on ${getPlatform(platform).name}`} disabled={disabled} onClick={() => onToggle(platform)}><BrandMark platform={platform} small/>{done && <Check size={12}/>}</button>;
     })}</div>}
     <div className="library-video-actions">
       {playable && <button type="button" className="ghost-button small-button" aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <><X size={14}/> Close</> : <><Play size={14}/> Watch</>}</button>}
+      {instagramLink && video.posted.includes('instagram') && <button type="button" className="ghost-button small-button" onClick={openPost}><ExternalLink size={14}/> View on Instagram</button>}
       {!job && onSavePost && <button type="button" className="ghost-button small-button" aria-expanded={editing} onClick={() => setEditing(!editing)}><Pencil size={14}/> Edit post</button>}
       {stage === 'review' && automatic && !editing && <button type="button" className="primary-button small-button" disabled={busy || working} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={14} className="spin"/> Posting…</> : <><Send size={14}/> Approve and post</>}</button>}
       {stage === 'review' && needsConnect && !editing && <button type="button" className="outline-button small-button" onClick={onConnectInstagram}><Link2 size={14}/> Connect Instagram to post</button>}
@@ -252,7 +267,8 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       {video.caption.trim() ? <p>{video.caption.trim()}</p> : <p className="post-empty">No description yet. Edit the post or use Suggest with AI.</p>}
       {tags.length > 0 && <p className="post-tags">{hashtagText(tags)}</p>}
     </div>}
-    {working && <p className="library-hint" role="status">Uploading to Instagram. This can take a few minutes; keep the app open.</p>}
+    {working && !video.posted.includes('instagram') && <p className="library-hint" role="status">Uploading to Instagram. This can take a few minutes; keep the app open.</p>}
+    {dialog}
     {error && !editing && <div className="error-message" role="alert">{error}</div>}
     {editing && onSavePost && <PostPanel video={video} category={category} brandName={brandName} socials={socials} busy={busy || working} disabled={disabled} instagram={instagram} onOpen={onOpen}
       error={error} working={working} onSave={onSavePost} onApprove={onPost ? approve : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}/>}

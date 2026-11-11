@@ -14,7 +14,11 @@ export async function publishInstagramReel(videoUrl: string, caption: string, pr
 export async function publishInstagramPhoto(imageUrl: string, caption: string, profile?: string): Promise<{ id: string }> { desktopOnly(); return invoke('publish_instagram_photo', { imageUrl, caption, profile: profile ?? null }); }
 /** coverMs: the moment of the video used as the Reel's cover. shareToFeed: also show it in the main feed. */
 export type ReelOptions = { coverMs?: number; shareToFeed?: boolean };
-export async function publishInstagramReelFile(path: string, caption: string, profile?: string, options: ReelOptions = {}): Promise<{ id: string }> {
+/** Opens a published post (an instagram.com /reel/ or /p/ link) in an app window. */
+export async function openInstagramPost(url: string): Promise<void> { desktopOnly(); return invoke('open_instagram_post', { url }); }
+/** permalink: the live post on instagram.com, when Meta gives it. */
+export type PublishedPost = { id: string; permalink?: string };
+export async function publishInstagramReelFile(path: string, caption: string, profile?: string, options: ReelOptions = {}): Promise<PublishedPost> {
   desktopOnly();
   return invoke('publish_instagram_reel_file', { path, caption, profile: profile ?? null, coverMs: options.coverMs == null ? null : Math.max(0, Math.round(options.coverMs)), shareToFeed: options.shareToFeed ?? null });
 }

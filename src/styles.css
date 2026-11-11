@@ -572,3 +572,8 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .gmail-connect { display: grid; gap: 10px; }
 .inbox.empty .gmail-connect { padding: 12px; }
 .gmail-connect p { font-size: 13px; color: var(--text-2); line-height: 1.5; margin: 0; }
+
+.confirm-dialog h2 { margin: 0 0 10px; font-size: 17px; }
+.confirm-dialog .confirm-body p { margin: 0 0 10px; color: var(--text-2); }
+.confirm-dialog .confirm-caption { white-space: pre-wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; max-height: 200px; overflow: auto; font-size: 13px; }
+.confirm-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

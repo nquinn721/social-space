@@ -47,6 +47,7 @@ fn main() {
         "publish_instagram_reel",
         "publish_instagram_photo",
         "publish_instagram_reel_file",
+        "open_instagram_post",
         "choose_instagram_video",
         "list_queue",
         "add_queue_job",

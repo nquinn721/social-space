@@ -507,6 +507,12 @@
           "markdownDescription": "Enables the open_gmail_signup command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_instagram_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-instagram-post",
+          "markdownDescription": "Enables the open_instagram_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-kling",
@@ -1039,6 +1045,12 @@
           "type": "string",
           "const": "deny-open-gmail-signup",
           "markdownDescription": "Denies the open_gmail_signup command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_instagram_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-instagram-post",
+          "markdownDescription": "Denies the open_instagram_post command without any pre-configured scope."
         },
         {
           "description": "Denies the open_kling command without any pre-configured scope.",

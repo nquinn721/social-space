@@ -54,6 +54,7 @@
     "allow-publish-instagram-reel",
     "allow-publish-instagram-photo",
     "allow-publish-instagram-reel-file",
+    "allow-open-instagram-post",
     "allow-choose-instagram-video",
     "allow-list-queue",
     "allow-add-queue-job",
