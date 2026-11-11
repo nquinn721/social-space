@@ -268,6 +268,74 @@ fn disconnect(social: Social, profile: &str) -> Result<(), String> {
     { let _ = (social, profile); Ok(()) }
 }
 
+/// How a saved connection is doing, as the setup tracker shows it.
+/// state: "none" (not connected), "ok" (works and renews by itself), "expired" (the social
+/// stopped accepting it: connect again), "unchecked" (the social could not be reached just now).
+#[derive(Clone, Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ConnectionCheck {
+    pub state: &'static str,
+    pub username: String,
+    pub detail: String,
+}
+impl ConnectionCheck {
+    pub fn none() -> Self { Self { state: "none", username: String::new(), detail: String::new() } }
+    pub fn ok(username: String) -> Self { Self { state: "ok", username, detail: "Renews by itself.".into() } }
+    pub fn expired(username: String, detail: String) -> Self { Self { state: "expired", username, detail } }
+    pub fn unchecked(username: String, detail: String) -> Self { Self { state: "unchecked", username, detail } }
+}
+/// Access tokens are renewed when they have less than this left.
+const RENEW_MARGIN: u64 = 10 * 60;
+
+fn shown_name(connection: &SocialConnection) -> String {
+    if connection.username.is_empty() { connection.name.clone() } else { connection.username.clone() }
+}
+
+/// What to tell the user when the social refuses to renew a connection.
+fn expired_detail(social: Social) -> String {
+    match social {
+        Social::Youtube => "Google stopped accepting this connection. Press Connect again. If the Google app's consent screen is still in Testing, Google ends connections after 7 days: publish the app to stop that.".into(),
+        Social::Tiktok => "TikTok stopped accepting this connection. Press Connect again.".into(),
+    }
+}
+
+/// Renews the connection's access token when it is about to run out, so posting never finds it
+/// expired, and reports whether the social still accepts it.
+async fn check(social: Social, profile: &str) -> Result<ConnectionCheck, String> {
+    let Some(mut credential) = load(social, profile)? else { return Ok(ConnectionCheck::none()) };
+    let username = shown_name(&credential.connection);
+    if credential.expires_at > now().saturating_add(RENEW_MARGIN) { return Ok(ConnectionCheck::ok(username)); }
+    let Some(dev) = dev_apps::get(social.provider())? else {
+        return Ok(ConnectionCheck::expired(username, format!("The {} developer app is no longer set up. Set it up again, then connect.", social.name())));
+    };
+    let id_field = match social { Social::Youtube => "client_id", Social::Tiktok => "client_key" };
+    let url = match social { Social::Youtube => GOOGLE_TOKEN_URL, Social::Tiktok => TIKTOK_TOKEN_URL };
+    let form = [(id_field, dev.id.as_str()), ("client_secret", dev.secret.as_str()), ("grant_type", "refresh_token"), ("refresh_token", credential.refresh_token.as_str())];
+    let response = match client()?.post(url).form(&form).send().await {
+        Ok(response) => response,
+        Err(_) => return Ok(ConnectionCheck::unchecked(username, format!("Could not reach {} to check. Try again later.", social.name()))),
+    };
+    let status = response.status();
+    if status.is_server_error() || status.as_u16() == 429 {
+        return Ok(ConnectionCheck::unchecked(username, format!("{} is busy right now (HTTP {}). Try again later.", social.name(), status.as_u16())));
+    }
+    if !status.is_success() { return Ok(ConnectionCheck::expired(username, expired_detail(social))); }
+    // TikTok answers refusals with HTTP 200 and no access token, so a missing token counts as refused.
+    let Ok(tokens) = response.json::<TokenResponse>().await else { return Ok(ConnectionCheck::expired(username, expired_detail(social))) };
+    credential.access_token = tokens.access_token;
+    if let Some(refresh) = tokens.refresh_token.filter(|value| !value.is_empty()) { credential.refresh_token = refresh; }
+    credential.expires_at = now().saturating_add(tokens.expires_in.unwrap_or(3600));
+    save(social, profile, &credential)?;
+    Ok(ConnectionCheck::ok(username))
+}
+
+/// Checks this profile's YouTube connection and renews it when due.
+#[tauri::command]
+pub async fn check_youtube_connection(profile: String) -> Result<ConnectionCheck, String> { check(Social::Youtube, &profile).await }
+/// Checks this profile's TikTok connection and renews it when due.
+#[tauri::command]
+pub async fn check_tiktok_connection(profile: String) -> Result<ConnectionCheck, String> { check(Social::Tiktok, &profile).await }
+
 /// Connects a YouTube channel to this profile. emailHint pre-selects the Google account.
 #[tauri::command]
 pub async fn connect_youtube(app: AppHandle, profile: String, email_hint: Option<String>) -> Result<SocialConnection, String> {

@@ -37,6 +37,8 @@ type Props = {
   onRemoveBrand?: (brand: Brand) => void;
   /** Renames a brand and its profiles in the app (usernames on the socials are changed separately). */
   onRenameBrand?: (brand: Brand, name: string) => Promise<boolean | undefined>;
+  /** Opens on this tab of the brands list, e.g. Setup from the overview. */
+  startTab?: 'brands' | 'sign-ins' | 'connections';
 };
 type BrandGroup = { key: string; brand: Brand; accounts: Account[] };
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -48,9 +50,9 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, openBrand, onOpenBrand, onSave, onRemoveAccount, onRemoveBrand, onRenameBrand, onNavigate }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, openBrand, onOpenBrand, onSave, onRemoveAccount, onRemoveBrand, onRenameBrand, onNavigate, startTab }: Props) {
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<'brands' | 'sign-ins' | 'connections'>('brands');
+  const [tab, setTab] = useState<'brands' | 'sign-ins' | 'connections'>(startTab ?? 'brands');
   // The open brand lives in the app when it passes one in, so the overview can open a brand's posts.
   const [localOpen, setLocalOpen] = useState<OpenBrand>(null);
   const opened = onOpenBrand ? openBrand ?? null : localOpen;
@@ -68,12 +70,18 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       || group.accounts.some((account) => account.handle.toLowerCase().includes(text) || (account.displayName ?? '').toLowerCase().includes(text)));
   }, [groups, query]);
   const open = groups.find((group) => group.brand.id === openId);
+  const marks = workspace.setup ?? {};
+  const mark = onSave ? (id: string, done: boolean) => {
+    const next = { ...marks };
+    if (done) next[id] = Date.now(); else delete next[id];
+    void onSave({ ...workspace, setup: next }, done ? 'Marked done.' : 'Marked not done.');
+  } : undefined;
 
   const actions = <>
     <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
     <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
   </>;
-  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button>{onNavigate && <button type="button" role="tab" aria-selected={tab === 'connections'} aria-pressed={tab === 'connections'} onClick={() => setTab('connections')}>Connections</button>}</div>;
+  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button>{onNavigate && <button type="button" role="tab" aria-selected={tab === 'connections'} aria-pressed={tab === 'connections'} onClick={() => setTab('connections')}>Setup</button>}</div>;
 
   if (open && tab === 'brands') {
     const { brand, accounts } = open;
@@ -122,7 +130,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
           return <button key={platform.id} className="chip-button" title={plan.reason} disabled={!loaded || busy} onClick={() => onCreateAccounts([platform.id], { brandId: brand.id, label: brand.name, handle: lead?.handle, displayName: lead?.displayName, bio: lead?.bio, website: lead?.website, signupEmail: baseEmail, imagePath: lead?.imagePath, birthday: lead?.birthday })}><Plus size={13}/> {platform.name}</button>;
         })}</div>}
       </section>
-      {onNavigate && <div id="brand-connections"><Connections onNavigate={onNavigate} accounts={accounts} brands={[brand]} profilesOnly/></div>}
+      {onNavigate && <div id="brand-connections"><Connections onNavigate={onNavigate} accounts={accounts} brands={[brand]} profilesOnly marks={marks} onMark={mark} onEditAccount={onEditAccount}/></div>}
       <SignIns workspace={{ ...workspace, accounts }} busy={busy} onEdit={onEditAccount} onRestore={async () => false} showBackup={false}/>
       {onRemoveBrand && <div className="danger-zone"><button type="button" className="remove-button" disabled={!loaded || busy} onClick={() => onRemoveBrand(brand)}><Trash2 size={14}/> Delete {brand.name}</button><small>{accounts.some((account) => account.status === 'active') ? 'Live profiles stay on the socials; only their saved details here are removed.' : 'Removes the brand, its profiles and its videos from the app.'}</small></div>}
       </>}
@@ -132,7 +140,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   return <>
     <PageHeader eyebrow="Your brands" title="Brands" description="A brand is one account on every social. Open a brand to see its posts by category, and its accounts." actions={actions}/>
     {tabs}
-    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all} brands={groups.map((group) => group.brand)}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
+    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all} brands={groups.map((group) => group.brand)} marks={marks} onMark={mark} onEditAccount={onEditAccount}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
       <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>

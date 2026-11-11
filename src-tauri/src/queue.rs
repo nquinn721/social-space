@@ -461,6 +461,7 @@ mod tests {
             accounts: vec![],
             categories: vec![],
             videos: vec![],
+            setup: Default::default(),
             channels: vec![crate::Channel {
                 id: "channel-1".into(),
                 platform: crate::Platform::Instagram,

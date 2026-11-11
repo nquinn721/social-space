@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bot, Check, ChevronRight, Mail, Plus, UserPlus } from 'lucide-react';
+import { Bot, Check, ChevronRight, ClipboardCheck, Mail, Plus, UserPlus } from 'lucide-react';
 import { brandSocials } from '../VideoLibrary';
 import { videoStage } from '../postDetails';
 import InboxList from '../InboxList';
@@ -7,6 +7,8 @@ import { emailConnection } from '../emailService';
 import { listModels, loadSettings } from '../assistant/ollamaClient';
 import { PLATFORMS, type Platform, type View, type Workspace } from '../model';
 import { BrandMark } from '../ui';
+import { useSetupStatus } from '../setupService';
+import { openCount, platformName, setupNeeds } from '../setupNeeds';
 
 type Props = {
   workspace: Workspace;
@@ -58,6 +60,10 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onOpenBran
     { id: 'accounts', done: workspace.accounts.length > 0, title: 'Create your first brand', detail: 'One form sets up its profile on every social.', action: () => onCreateAccounts(), label: 'Start' },
   ];
   const done = steps.filter((step) => step.done).length;
+  const status = useSetupStatus(workspace.accounts);
+  const needs = setupNeeds({ accounts: workspace.accounts, brands: workspace.brands ?? [], ...status, marks: workspace.setup ?? {} });
+  const needed = openCount(needs);
+  const checking = needs.some((group) => group.needs.some((need) => need.status === 'checking'));
 
   return <>
     <div className="page-heading">
@@ -85,6 +91,16 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onOpenBran
             <div><strong>{step.title}</strong><small>{step.detail}</small></div>
             {!step.done && <button className="outline-button small-button" disabled={step.id === 'accounts' && !loaded} onClick={step.action}>{step.label}</button>}
           </li>)}</ul>
+        </section>}
+
+        {needs.length > 0 && <section className="card" aria-label="Before you can post">
+          <div className="card-title"><div><h2>Before you can post</h2><p>{needed ? `${needed} ${needed === 1 ? 'step' : 'steps'} left across your socials${checking ? ' (still checking)' : ''}.` : checking ? 'Checking…' : 'Every social is ready to post.'}</p></div></div>
+          <div className="quick-actions">
+            {needs.map((group) => <button key={group.platform} className="quick-action" onClick={() => onNavigate('accounts', 'setup')}>
+              <BrandMark platform={group.platform} small/><div><strong>{platformName(group.platform)}</strong><small>{group.open ? `${group.open} ${group.open === 1 ? 'step' : 'steps'} left` : 'Ready'}</small></div><ChevronRight size={16}/>
+            </button>)}
+            <button className="quick-action" onClick={() => onNavigate('accounts', 'setup')}><ClipboardCheck size={18}/><div><strong>See what's needed</strong><small>Developer apps, reviews, plans, account settings and connections</small></div><ChevronRight size={16}/></button>
+          </div>
         </section>}
 
         <section className="card" aria-label="Posts to approve">

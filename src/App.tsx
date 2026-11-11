@@ -35,6 +35,8 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [wizard, setWizard] = useState<Wizard | null>(null);
   const [openBrand, setOpenBrand] = useState<OpenBrand>(null);
+  // Brands opens on its Setup tab when another page sends you there; the count remounts it.
+  const [brandsStart, setBrandsStart] = useState<{ tab: 'brands' | 'connections'; count: number }>({ tab: 'brands', count: 0 });
   const updates = useAppUpdates();
   const updateWaiting = hasUpdate(updates.status) || updates.progress?.state === 'running';
   const workspaceRef = useRef(workspace);
@@ -106,6 +108,8 @@ function App() {
   function navigate(next: View, section?: string) {
     setView(next);
     if (next !== 'accounts') setOpenBrand(null);
+    if (next === 'accounts' && section === 'setup') { setOpenBrand(null); setBrandsStart((current) => ({ tab: 'connections', count: current.count + 1 })); return; }
+    if (next !== 'accounts') setBrandsStart((current) => current.tab === 'brands' ? current : { ...current, tab: 'brands' });
     if (section) window.setTimeout(() => document.getElementById(section)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
     else document.documentElement.scrollTop = 0;
   }
@@ -135,7 +139,7 @@ function App() {
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id) => { setOpenBrand({ id, tab: 'content' }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
+        {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'updates' && <UpdatesPage updates={updates}/>}
         {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded}/>}

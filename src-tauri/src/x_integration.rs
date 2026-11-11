@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use url::Url;
 
+use crate::social_connect::ConnectionCheck;
+
 const REDIRECT_URI: &str = "http://127.0.0.1:49173/callback";
 const LISTEN_ADDRESS: &str = "127.0.0.1:49173";
 const AUTH_URL: &str = "https://x.com/i/oauth2/authorize";
@@ -325,6 +327,33 @@ pub fn disconnect_x(profile: Option<String>) -> Result<(), String> {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(_) => Err("Could not remove X credentials from secure storage.".into()),
     }
+}
+
+/// Checks this profile's X connection, renewing it when due, so posting never finds it expired.
+#[tauri::command]
+pub async fn check_x_connection(profile: String) -> Result<ConnectionCheck, String> {
+    let _guard = OperationGuard::acquire()?;
+    let slot = slot(Some(&profile))?;
+    let Some(mut credential) = load(&slot)? else { return Ok(ConnectionCheck::none()) };
+    let username = credential.username.clone();
+    if credential.expires_at > now()?.saturating_add(TOKEN_REFRESH_MARGIN) { return Ok(ConnectionCheck::ok(username)); }
+    let form = [("grant_type", "refresh_token"), ("client_id", credential.client_id.as_str()), ("refresh_token", credential.refresh_token.as_str())];
+    let response = match client()?.post(TOKEN_URL).form(&form).send().await {
+        Ok(response) => response,
+        Err(_) => return Ok(ConnectionCheck::unchecked(username, "Could not reach X to check. Try again later.".into())),
+    };
+    let status = response.status();
+    if status.is_server_error() || status.as_u16() == 429 {
+        return Ok(ConnectionCheck::unchecked(username, format!("X is busy right now (HTTP {}). Try again later.", status.as_u16())));
+    }
+    let refused = || ConnectionCheck::expired(credential.username.clone(), "X stopped accepting this connection. Press Connect again.".into());
+    if !status.is_success() { return Ok(refused()); }
+    let Ok(token) = response.json::<TokenResponse>().await else { return Ok(refused()) };
+    credential.access_token = token.access_token;
+    if let Some(refresh) = token.refresh_token { credential.refresh_token = refresh; }
+    credential.expires_at = now()?.saturating_add(token.expires_in);
+    save(&slot, &credential)?;
+    Ok(ConnectionCheck::ok(username))
 }
 
 #[tauri::command]
