@@ -76,7 +76,9 @@ describe('workspace account management', () => {
     const user = userEvent.setup();
     render(<App />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Could not load your workspace.');
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('Could not load your workspace.');
+    expect(banner).toHaveClass('notice-error');
     expect(screen.getByRole('button', { name: 'Add an existing account' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Brands' }));
     expect(screen.getAllByRole('button', { name: 'Add an existing account' })[0]).toBeDisabled();

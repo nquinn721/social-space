@@ -8,7 +8,7 @@ import AccountsPage from './pages/AccountsPage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Check, ChevronRight, Home, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
+import { AlertTriangle, Bot, Check, ChevronRight, Home, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText } from './brands';
 import appIcon from './assets/app-icon.png';
@@ -29,6 +29,9 @@ function App() {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
+  const showMessage = (text: string) => { setMessageIsError(false); setMessage(text); };
+  const showError = (text: string) => { setMessageIsError(true); setMessage(text); };
   const [showAccount, setShowAccount] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [businessName, setBusinessName] = useState('');
@@ -43,12 +46,12 @@ function App() {
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
 
-  useEffect(() => { loadWorkspace().then((data) => { setWorkspace(data); setBusinessName(data.businessName); setLoaded(true); }).catch(() => setMessage('Could not load your workspace. Restart the app and try again.')); }, []);
+  useEffect(() => { loadWorkspace().then((data) => { setWorkspace(data); setBusinessName(data.businessName); setLoaded(true); }).catch(() => showError('Could not load your workspace. Restart the app and try again.')); }, []);
   async function persist(next: Workspace, success: string) {
     if (busy || !loaded) return;
     setBusy(true); setMessage('');
-    try { const saved = await saveWorkspace(next); setWorkspace(saved); setBusinessName(saved.businessName); setMessage(success); return true; }
-    catch { setMessage('Could not save your changes. Please try again.'); return false; }
+    try { const saved = await saveWorkspace(next); setWorkspace(saved); setBusinessName(saved.businessName); showMessage(success); return true; }
+    catch { showError('Could not save your changes. Please try again.'); return false; }
     finally { setBusy(false); }
   }
   // The assistant saves directly so several tool calls in one reply build on each other.
@@ -68,7 +71,7 @@ function App() {
     if (busy) return;
     setBusy(true); setMessage('');
     try { await openPlatformAction(platform, action); }
-    catch { setMessage('Could not open the platform page. Please try again.'); }
+    catch { showError('Could not open the platform page. Please try again.'); }
     finally { setBusy(false); }
   }
   async function saveAccount(account: Account) {
@@ -138,7 +141,7 @@ function App() {
       </header>
       <div className="page-content">
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
-        {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
+        {message && <div role={messageIsError ? 'alert' : 'status'} className={messageIsError ? 'notice notice-error' : 'notice'}>{messageIsError ? <AlertTriangle size={16}/> : <Check size={16}/>}{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id) => { setOpenBrand({ id, tab: 'content' }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
         {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}

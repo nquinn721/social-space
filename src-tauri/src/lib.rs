@@ -34,7 +34,7 @@ const MAX_CAPTION_LENGTH: usize = 4_000;
 const MAX_SETUP_MARKS: usize = 2_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct Workspace {
     business_name: String,
     #[serde(default)]
@@ -54,7 +54,7 @@ struct Workspace {
 
 /// A kind of video inside a brand, e.g. "Rabbit".
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct VideoCategory {
     id: String,
     brand_id: String,
@@ -63,7 +63,7 @@ struct VideoCategory {
 
 /// One video of a category, posted to every social of its brand. `posted` lists the socials it is up on.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct Video {
     id: String,
     brand_id: String,
@@ -84,7 +84,7 @@ struct Video {
 
 /// An AI generation in progress for a library video.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct Generation {
     source_id: String,
     source_name: String,
@@ -98,7 +98,7 @@ struct Generation {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct Channel {
     id: String,
     platform: Platform,
@@ -110,7 +110,7 @@ struct Channel {
 
 /// A brand or category that owns one profile per social.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct Brand {
     id: String,
     name: String,
@@ -119,7 +119,7 @@ struct Brand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct Account {
     id: String,
     platform: Platform,
@@ -142,6 +142,9 @@ struct Account {
     /// Older workspaces have none; the app assigns one by name when it loads them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     brand_id: Option<String>,
+    /// The account's own ID on the social (e.g. the Instagram account ID), when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    platform_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -179,6 +182,9 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     }
     if workspace.accounts.iter().any(|account| account.brand_id.as_ref().is_some_and(|id| !brand_ids.contains(id))) {
         return Err("An account belongs to a brand that does not exist.".into());
+    }
+    if workspace.accounts.iter().any(|account| account.platform_id.as_ref().is_some_and(|id| id.len() > MAX_FIELD_LENGTH)) {
+        return Err("An account's platform ID is too long to save.".into());
     }
     if workspace.categories.len() > MAX_ACCOUNTS * 10 || workspace.videos.len() > MAX_VIDEOS {
         return Err("The workspace has too many categories or videos to save.".into());
@@ -468,6 +474,7 @@ mod tests {
             image_path: String::new(),
             birthday: String::new(),
             brand_id: None,
+            platform_id: None,
         }
     }
 
@@ -555,6 +562,24 @@ mod tests {
         );
         assert_eq!(platform_url(Platform::X, "https://example.com"), None);
         assert_eq!(platform_url(Platform::Youtube, "unknown"), None);
+    }
+
+    #[test]
+    fn workspaces_with_fields_this_version_does_not_know_still_load() {
+        // A newer build (or a rolled-back one reading newer data) must never lock the user out of
+        // their workspace: unknown fields are ignored, and the account's platform ID is kept.
+        let json = br#"{"businessName":"Example LLC","brands":[{"id":"b1","name":"Brand","notes":"","colour":"red"}],
+            "accounts":[{"id":"a1","platform":"instagram","label":"Main","handle":"example","status":"active","notes":"",
+            "brandId":"b1","platformId":"17841400000000000","somethingNew":true}],"futureSection":[1,2]}"#;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("workspace.json");
+        fs::write(&path, json).unwrap();
+        let workspace = read_workspace(&path).unwrap();
+        assert_eq!(workspace.accounts[0].platform_id.as_deref(), Some("17841400000000000"));
+        assert_eq!(workspace.brands[0].name, "Brand");
+        write_workspace(&path, &workspace).unwrap();
+        assert_eq!(read_workspace(&path).unwrap(), workspace);
+        assert!(fs::read_to_string(&path).unwrap().contains("\"platformId\": \"17841400000000000\""));
     }
 
     #[test]
