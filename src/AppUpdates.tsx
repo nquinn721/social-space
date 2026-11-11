@@ -115,9 +115,15 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
     if (acting.current) return;
     acting.current = true; setError('');
     try { await installPreparedUpdate(); await followProgress(); }
-    catch (reason) { setError(errorText(reason)); }
+    catch (reason) {
+      setError(errorText(reason));
+      // The built installer was refused (for example, a manual build replaced it). Check again so
+      // the update reads as available and is rebuilt on its own instead of dead-ending.
+      autoBuilt.current = null;
+      void check(true);
+    }
     finally { acting.current = false; }
-  }, [followProgress]);
+  }, [followProgress, check]);
 
   return { managedBy, status, progress, checking, error, check, followProgress, buildNow, restartToUpdate };
 }

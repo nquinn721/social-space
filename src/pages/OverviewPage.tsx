@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Bot, Check, ChevronRight, Mail, Plus, Sparkles, UserPlus } from 'lucide-react';
-import { ChannelOverview } from '../ChannelManagement';
+import { Bot, Check, ChevronRight, ClipboardCheck, Mail, Plus, UserPlus } from 'lucide-react';
+import { brandSocials } from '../VideoLibrary';
+import { videoStage } from '../postDetails';
 import InboxList from '../InboxList';
 import { emailConnection } from '../emailService';
 import { listModels, loadSettings } from '../assistant/ollamaClient';
 import { PLATFORMS, type Platform, type View, type Workspace } from '../model';
 import { BrandMark } from '../ui';
+import { useSetupStatus } from '../setupService';
+import { openCount, platformName, setupNeeds } from '../setupNeeds';
 
 type Props = {
   workspace: Workspace;
   loaded: boolean;
   onNavigate: (view: View, section?: string) => void;
+  /** Opens a brand's page on its posts. */
+  onOpenBrand?: (brandId: string) => void;
   onCreateAccounts: (platforms?: Platform[]) => void;
   onAddAccount: () => void;
   onOpenAssistant: () => void;
@@ -33,7 +38,17 @@ function greeting() {
   return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 }
 
-export default function OverviewPage({ workspace, loaded, onNavigate, onCreateAccounts, onAddAccount, onOpenAssistant }: Props) {
+/** Posts waiting for approval, per brand. */
+export function postsToApprove(workspace: Workspace) {
+  return workspace.brands.map((brand) => {
+    const socials = brandSocials(workspace, brand.id);
+    return { brand, count: (workspace.videos ?? []).filter((video) => video.brandId === brand.id && videoStage(video, socials) === 'review').length };
+  }).filter((item) => item.count > 0);
+}
+
+export default function OverviewPage({ workspace, loaded, onNavigate, onOpenBrand, onCreateAccounts, onAddAccount, onOpenAssistant }: Props) {
+  const waiting = postsToApprove(workspace);
+  const openBrand = (id: string) => onOpenBrand ? onOpenBrand(id) : onNavigate('accounts');
   const { email, model } = useConnections();
   const brands = workspace.brands?.length ?? new Set(workspace.accounts.map((account) => account.label.trim().toLowerCase())).size;
   const live = workspace.accounts.filter((account) => account.status === 'active').length;
@@ -45,6 +60,10 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onCreateAc
     { id: 'accounts', done: workspace.accounts.length > 0, title: 'Create your first brand', detail: 'One form sets up its profile on every social.', action: () => onCreateAccounts(), label: 'Start' },
   ];
   const done = steps.filter((step) => step.done).length;
+  const status = useSetupStatus(workspace.accounts);
+  const needs = setupNeeds({ accounts: workspace.accounts, brands: workspace.brands ?? [], ...status, marks: workspace.setup ?? {} });
+  const needed = openCount(needs);
+  const checking = needs.some((group) => group.needs.some((need) => need.status === 'checking'));
 
   return <>
     <div className="page-heading">
@@ -74,12 +93,27 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onCreateAc
           </li>)}</ul>
         </section>}
 
+        {needs.length > 0 && <section className="card" aria-label="Before you can post">
+          <div className="card-title"><div><h2>Before you can post</h2><p>{needed ? `${needed} ${needed === 1 ? 'step' : 'steps'} left across your socials${checking ? ' (still checking)' : ''}.` : checking ? 'Checking…' : 'Every social is ready to post.'}</p></div></div>
+          <div className="quick-actions">
+            {needs.map((group) => <button key={group.platform} className="quick-action" onClick={() => onNavigate('accounts', 'setup')}>
+              <BrandMark platform={group.platform} small/><div><strong>{platformName(group.platform)}</strong><small>{group.open ? `${group.open} ${group.open === 1 ? 'step' : 'steps'} left` : 'Ready'}</small></div><ChevronRight size={16}/>
+            </button>)}
+            <button className="quick-action" onClick={() => onNavigate('accounts', 'setup')}><ClipboardCheck size={18}/><div><strong>See what's needed</strong><small>Developer apps, reviews, plans, account settings and connections</small></div><ChevronRight size={16}/></button>
+          </div>
+        </section>}
+
+        <section className="card" aria-label="Posts to approve">
+          <div className="card-title"><h2>Posts to approve</h2></div>
+          {waiting.length === 0 ? <p className="footnote">Nothing waiting. New videos show up here as posts, written for you, ready to check and approve.</p>
+            : <div className="quick-actions">{waiting.map(({ brand, count }) => <button key={brand.id} className="quick-action" onClick={() => openBrand(brand.id)}><Check size={18}/><div><strong>{brand.name}</strong><small>{count} {count === 1 ? 'post' : 'posts'} to approve</small></div><ChevronRight size={16}/></button>)}</div>}
+        </section>
         <section aria-label="Your brands">
-          <div className="section-heading"><div><h2>Your brands</h2><p>Each brand has one profile on every social.</p></div><button className="text-button" onClick={() => onNavigate('accounts')}>All brands <ChevronRight size={15}/></button></div>
+          <div className="section-heading"><div><h2>Your brands</h2><p>Each brand is one account on every social.</p></div><button className="text-button" onClick={() => onNavigate('accounts')}>All brands <ChevronRight size={15}/></button></div>
           <div className="brand-grid">{(workspace.brands ?? []).map((brand) => {
             const profiles = workspace.accounts.filter((account) => account.brandId === brand.id);
             const liveHere = profiles.filter((account) => account.status === 'active').length;
-            return <button type="button" key={brand.id} className="brand-tile" aria-label={`Open ${brand.name}`} onClick={() => onNavigate('accounts')}>
+            return <button type="button" key={brand.id} className="brand-tile" aria-label={`Open ${brand.name}`} onClick={() => openBrand(brand.id)}>
               <strong>{brand.name}</strong><small>{liveHere} of {profiles.length} live</small>
               <span className="tile-socials">{PLATFORMS.map((platform) => {
                 const profile = profiles.find((account) => account.platform === platform.id);
@@ -92,7 +126,6 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onCreateAc
           </div>
         </section>
 
-        <ChannelOverview workspace={workspace} onView={() => onNavigate('channels')}/>
       </div>
 
       <div className="overview-col">
@@ -102,7 +135,6 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onCreateAc
             <button className="quick-action" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={18}/><div><strong>New brand</strong><small>Set up its profile on every social in one pass</small></div><ChevronRight size={16}/></button>
             <button className="quick-action" onClick={() => onNavigate('inbox')}><Mail size={18}/><div><strong>Check verification codes</strong><small>Newest mail from your inbox</small></div><ChevronRight size={16}/></button>
             <button className="quick-action" onClick={onOpenAssistant}><Bot size={18}/><div><strong>Ask the assistant</strong><small>Draft profiles, find codes, post to X</small></div><ChevronRight size={16}/></button>
-            <button className="quick-action" onClick={() => onNavigate('creative')}><Sparkles size={18}/><div><strong>Creative tools</strong><small>Make videos with Kling AI</small></div><ChevronRight size={16}/></button>
           </div>
         </section>
         {email && <section aria-label="Latest mail">

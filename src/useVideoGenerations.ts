@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Video, VideoCategory, Workspace } from './model';
+import { newPost } from './postDetails';
 import { errorText } from './ui';
 import { generateVideo, getVideo, saveGeneratedVideo } from './videoSourcesService';
 
@@ -49,7 +50,7 @@ export function useVideoGenerations(workspace: Workspace, onSave: Save) {
         const brand = current.brands.find((item) => item.id === video.brandId)?.name ?? 'Brand';
         const category = current.categories?.find((item) => item.id === video.categoryId)?.name ?? 'Category';
         const path = await saveGeneratedVideo(job.sourceId, job.taskId, brand, category, video.title);
-        await update(video.id, (item) => ({ ...item, mediaSource: path, generation: undefined }), `"${video.title}" is ready and saved to ${category}.`);
+        await update(video.id, (item) => ({ ...item, mediaSource: path, prompt: job.prompt, generation: undefined }), `"${video.title}" is ready and saved to ${category}.`);
       } else if (FAILED.test(task.status)) {
         await update(video.id, (item) => ({ ...item, generation: { ...job, status: 'failed', message: task.message ?? `${job.sourceName} could not make this video.` } }), `"${video.title}" could not be made.`);
       } else {
@@ -75,7 +76,7 @@ export function useVideoGenerations(workspace: Workspace, onSave: Save) {
     const started = await generateVideo(request.sourceId, request.prompt, request.aspectRatio, request.duration);
     const title = request.title.trim() || titleFromPrompt(request.prompt);
     const video: Video = {
-      id: crypto.randomUUID(), brandId: request.category.brandId, categoryId: request.category.id, title, mediaSource: '', caption: '', posted: [], createdAt: Date.now(),
+      id: crypto.randomUUID(), brandId: request.category.brandId, categoryId: request.category.id, title, mediaSource: '', posted: [], createdAt: Date.now(), ...newPost(request.category, true),
       generation: { sourceId: started.sourceId, sourceName: started.sourceName, provider: started.provider, taskId: started.id, prompt: request.prompt, status: 'working' },
     };
     const current = latest.current;

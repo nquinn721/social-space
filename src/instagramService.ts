@@ -12,7 +12,12 @@ export async function connectInstagram(accountId: string, accessToken: string, p
 export async function disconnectInstagram(profile?: string): Promise<void> { desktopOnly(); return invoke('disconnect_instagram', { profile: profile ?? null }); }
 export async function publishInstagramReel(videoUrl: string, caption: string, profile?: string): Promise<{ id: string }> { desktopOnly(); return invoke('publish_instagram_reel', { videoUrl, caption, profile: profile ?? null }); }
 export async function publishInstagramPhoto(imageUrl: string, caption: string, profile?: string): Promise<{ id: string }> { desktopOnly(); return invoke('publish_instagram_photo', { imageUrl, caption, profile: profile ?? null }); }
-export async function publishInstagramReelFile(path: string, caption: string, profile?: string): Promise<{ id: string }> { desktopOnly(); return invoke('publish_instagram_reel_file', { path, caption, profile: profile ?? null }); }
+/** coverMs: the moment of the video used as the Reel's cover. shareToFeed: also show it in the main feed. */
+export type ReelOptions = { coverMs?: number; shareToFeed?: boolean };
+export async function publishInstagramReelFile(path: string, caption: string, profile?: string, options: ReelOptions = {}): Promise<{ id: string }> {
+  desktopOnly();
+  return invoke('publish_instagram_reel_file', { path, caption, profile: profile ?? null, coverMs: options.coverMs == null ? null : Math.max(0, Math.round(options.coverMs)), shareToFeed: options.shareToFeed ?? null });
+}
 export async function chooseInstagramVideo(): Promise<string | null> { desktopOnly(); return invoke('choose_instagram_video'); }
 /** Whether the one-time Meta app details are saved, so Connect is a single click. */
 export async function instagramAppReady(): Promise<boolean> { desktopOnly(); return invoke('instagram_app_ready'); }

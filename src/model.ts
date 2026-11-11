@@ -1,7 +1,7 @@
 import type { Channel } from './channelModel';
 export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
-export type View = 'overview' | 'accounts' | 'inbox' | 'library' | 'channels' | 'queue' | 'publishing' | 'creative' | 'sources' | 'updates' | 'settings';
-export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'library', 'channels', 'queue', 'publishing', 'creative', 'sources', 'updates', 'settings'];
+export type View = 'overview' | 'accounts' | 'inbox' | 'updates' | 'settings';
+export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'updates', 'settings'];
 /** identity: where name and username are edited (Instagram's Accounts Center). */
 export type PlatformAction = 'create' | 'manage' | 'post' | 'developer' | 'identity';
 export type AccountProfile = { displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
@@ -15,13 +15,23 @@ export type Account = { id: string; platform: Platform; label: string; handle: s
 export type Brand = { id: string; name: string; notes: string };
 /** Profile description limits on each platform, used to keep drafts postable. */
 export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160 };
-/** A kind of video inside a brand, e.g. "Rabbit". */
-export type VideoCategory = { id: string; brandId: string; name: string };
+/** What a category's new posts start with: a short description and its usual hashtags. */
+export type PostDefaults = { caption: string; hashtags: string[] };
+/** A segment of a brand, e.g. "Bunny" inside "Animals". It has no accounts of its own: its videos post to the brand's profiles. */
+export type VideoCategory = { id: string; brandId: string; name: string; defaults?: PostDefaults };
 /** One video of a category. It goes to every social of its brand; posted lists where it is up. */
 /** An AI video source still making a library video. Cleared once the finished file is saved. */
 export type VideoGeneration = { sourceId: string; sourceName: string; provider: 'kling' | 'grok'; taskId: string; prompt: string; status: 'working' | 'failed'; message?: string };
-export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration };
-export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[] };
+/**
+ * What goes out with a video besides the file. The description is the video's caption.
+ * coverMs: the moment of the video used as its cover. madeWithAi: labels it as AI-made where the social asks.
+ * shareToFeed: an Instagram Reel also shows in the main feed. madeForKids: YouTube asks this of every upload.
+ */
+export type PostDetails = { hashtags: string[]; youtubeTitle: string; coverMs?: number; madeWithAi: boolean; shareToFeed: boolean; madeForKids: boolean };
+/** prompt: what an AI-made video was asked to show, kept to help write its description. */
+export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration; details?: PostDetails; prompt?: string };
+/** setup: steps of the setup checklist ticked by hand, by step id, with when (ms). */
+export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[]; setup?: Record<string, number> };
 export const EMPTY_WORKSPACE: Workspace = { businessName: '', brands: [], accounts: [], channels: [] };
 export const PLATFORMS: { id: Platform; name: string; description: string; color: string; mark: string; postLabel: string }[] = [
   { id: 'instagram', name: 'Instagram', description: 'Photos, reels & stories', color: '#fa5a8d', mark: '◎', postLabel: 'Open Instagram' },

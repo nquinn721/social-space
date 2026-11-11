@@ -1,9 +1,3 @@
-import PostAs from './PostAs';
-import ChannelManagement from './ChannelManagement';
-import VideoQueue from './VideoQueue';
-import VideoLibrary from './VideoLibrary';
-import VideoStudio from './VideoStudio';
-import VideoSources from './VideoSources';
 import { hasUpdate, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates } from './AppUpdates';
 import InboxList from './InboxList';
 import CreateAccountWizard, { type WizardPrefill } from './CreateAccountWizard';
@@ -14,19 +8,19 @@ import AccountsPage from './pages/AccountsPage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
-import { Film, AppWindow, ArrowDownLeft, ArrowUpRight, Bot, CalendarClock, Check, ChevronRight, Clapperboard, Home, Mail, Radio, RotateCw, Settings2, Sparkles, UsersRound, X as Close } from 'lucide-react';
+import { Bot, Check, ChevronRight, Home, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText } from './brands';
 import appIcon from './assets/app-icon.png';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
-import { BrandMark, initialOf, PageHeader } from './ui';
+import { initialOf, PageHeader } from './ui';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
-  { label: 'Workspace', items: [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }] },
-  { label: 'Content', items: [{ id: 'library', label: 'Video library', icon: Film }, { id: 'channels', label: 'Channels', icon: Radio }, { id: 'queue', label: 'Video queue', icon: CalendarClock }, { id: 'publishing', label: 'Publishing', icon: ArrowUpRight }, { id: 'creative', label: 'Creative tools', icon: Sparkles }, { id: 'sources', label: 'Video sources', icon: Clapperboard }] },
-];
-const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', inbox: 'Inbox', library: 'Video library', channels: 'Channels', queue: 'Video queue', publishing: 'Publishing', creative: 'Creative tools', sources: 'Video sources', updates: 'Updates', settings: 'Settings' };
+/** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
+const NAV_ITEMS: NavItem[] = [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }];
+const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', inbox: 'Inbox', updates: 'Updates', settings: 'Settings' };
+/** Which brand page is open, and on which tab. */
+export type OpenBrand = { id: string; tab: 'content' | 'accounts' } | null;
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
@@ -40,6 +34,9 @@ function App() {
   const [businessName, setBusinessName] = useState('');
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [wizard, setWizard] = useState<Wizard | null>(null);
+  const [openBrand, setOpenBrand] = useState<OpenBrand>(null);
+  // Brands opens on its Setup tab when another page sends you there; the count remounts it.
+  const [brandsStart, setBrandsStart] = useState<{ tab: 'brands' | 'connections'; count: number }>({ tab: 'brands', count: 0 });
   const updates = useAppUpdates();
   const updatesManaged = Boolean(updates.managedBy);
   const updateWaiting = !updatesManaged && (hasUpdate(updates.status) || updates.progress?.state === 'running');
@@ -80,6 +77,12 @@ function App() {
     const channels = workspace.channels.map((channel) => channel.accountId === account.id && channel.platform !== account.platform ? { ...channel, accountId: null } : channel);
     if (await persist({ ...workspace, accounts, channels }, exists ? 'Account details saved.' : 'Account added to your workspace.')) { setShowAccount(false); setEditingAccount(null); }
   }
+  async function renameBrand(brand: Brand, name: string) {
+    const old = brand.name;
+    const accounts = workspace.accounts.map((account) => account.brandId === brand.id
+      ? { ...account, label: name, ...(account.displayName === old ? { displayName: name } : {}) } : account);
+    return persist({ ...workspace, brands: workspace.brands.map((item) => item.id === brand.id ? { ...item, name } : item), accounts }, `Renamed ${old} to ${name}. To change a username on a social, open that profile and use Fill profile.`);
+  }
   async function removeBrand(brand: Brand) {
     const profiles = workspace.accounts.filter((account) => account.brandId === brand.id);
     const live = profiles.filter((account) => account.status === 'active');
@@ -105,17 +108,20 @@ function App() {
   const signUp = (accounts: Account[]) => { setShowAccount(false); setEditingAccount(null); setWizard({ platforms: accounts.map((item) => item.platform), resume: accounts }); };
   function navigate(next: View, section?: string) {
     setView(next);
+    if (next !== 'accounts') setOpenBrand(null);
+    if (next === 'accounts' && section === 'setup') { setOpenBrand(null); setBrandsStart((current) => ({ tab: 'connections', count: current.count + 1 })); return; }
+    if (next !== 'accounts') setBrandsStart((current) => current.tab === 'brands' ? current : { ...current, tab: 'brands' });
     if (section) window.setTimeout(() => document.getElementById(section)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
     else document.documentElement.scrollTop = 0;
   }
-  const navButton = ({ id, label, icon: Icon }: NavItem) => <button key={id} className={`nav-item ${view === id ? 'selected' : ''}`} aria-current={view === id ? "page" : undefined} aria-label={label} title={label} onClick={() => navigate(id)}>
+  const navButton = ({ id, label, icon: Icon }: NavItem) => <button key={id} className={`nav-item ${view === id ? 'selected' : ''}`} aria-current={view === id ? "page" : undefined} aria-label={label} title={label} onClick={() => { navigate(id); if (id === 'accounts') setOpenBrand(null); }}>
     <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.brands.length > 0 && <span className="nav-badge">{workspace.brands.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
   </button>;
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img className="brand-symbol" src={appIcon} alt=""/><div><strong>Social <span>Space</span></strong><small>Your social workspace</small></div></div>
-      <nav aria-label="Main navigation">{NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><div className="nav-label">{group.label}</div>{group.items.map(navButton)}</div>)}</nav>
+      <nav aria-label="Main navigation"><div className="nav-group">{NAV_ITEMS.map(navButton)}</div></nav>
       <div className="sidebar-bottom">
         {!updatesManaged && navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
@@ -133,15 +139,9 @@ function App() {
       <div className="page-content">
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role="status" className="notice"><Check size={16}/>{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
-        {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage workspace={workspace} loaded={loaded} busy={busy} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onOpenLibrary={() => navigate('library')} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onNavigate={navigate}/>}
+        {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id) => { setOpenBrand({ id, tab: 'content' }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
+        {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
-        {view === 'library' && <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpen={launch} onManageSources={() => navigate('sources')}/>}
-        {view === 'channels' && <ChannelManagement workspace={workspace} busy={busy} loaded={loaded} onSave={persist} onOpen={launch}/>}
-        {view === 'queue' && <><PageHeader eyebrow="Your content, lined up" title="Video queue" description="Plan videos for your channels in one place."/><VideoQueue workspace={workspace}/></>}
-        {view === 'publishing' && <><PageHeader eyebrow="Ready when you are" title="Publishing" description="Create and publish in each platform's own tools, or post to X and Instagram from here."/><div className="info-banner"><ArrowDownLeft size={18}/><span>Publishing opens the platform in an app window. Sign in there to create or upload your content.</span></div><div className="publish-list">{PLATFORMS.map((platform) => <section className="publish-row" key={platform.id}><BrandMark platform={platform.id}/><div><h2>{platform.name}</h2><p>{platform.description}</p></div><button className="outline-button" disabled={busy} onClick={() => launch(platform.id, 'post')}>{platform.postLabel} <AppWindow size={15}/></button></section>)}</div><PostAs accounts={workspace.accounts} brands={workspace.brands}/><div className="footnote">Scheduling and direct publishing to TikTok and YouTube are not connected yet. Platform availability and approvals vary.</div></>}
-        {view === 'creative' && <><PageHeader eyebrow="From idea to something real" title="Creative tools" description="A home for the tools that help bring your content to life."/><VideoStudio onManageSources={() => navigate('sources')}/></>}
-        {view === 'sources' && <><PageHeader eyebrow="Where your videos come from" title="Video sources" description="Connect AI video providers with your own API keys. Each key is verified with the provider and kept in Windows Credential Manager."/><VideoSources/></>}
         {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
         {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy}/>}
       </div>

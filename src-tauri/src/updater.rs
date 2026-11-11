@@ -10,6 +10,8 @@
 //!    target so builds stay incremental), then `npm install` and `npm run tauri:build`. So a source
 //!    checkout on a feature branch or with local edits no longer blocks an update. The finished
 //!    installer is recorded with its commit and SHA-256 so the app reports the update as ready.
+//!    The installer is copied into the app's own data folder, so a manual build cannot replace it
+//!    while it waits.
 //! 2. `install_prepared_update` verifies that installer again, then a hidden helper installs it
 //!    silently once the app exits and (in the app, not headless) starts it again.
 //! The UI polls `update_progress`, and the restarted app reads `take_update_result`.
@@ -206,9 +208,17 @@ fn update_state(update_available: bool, prepared_matches: bool) -> &'static str 
     }
 }
 
-/// A prepared build only counts while it is still the newest main and its installer is still there.
+/// True while the recorded installer is still there, byte for byte as it was built.
+fn installer_intact(prepared: &PreparedUpdate) -> bool {
+    let installer = Path::new(&prepared.installer);
+    installer.is_file() && sha256_of(installer).is_ok_and(|sha| sha == prepared.sha256)
+}
+
+/// A prepared build only counts while it is still the newest main and its installer is unchanged.
+/// Anything else reads as "available", so the app builds it again on its own instead of
+/// offering an install that would be refused.
 fn prepared_for(prepared: Option<PreparedUpdate>, latest: &str) -> Option<PreparedUpdate> {
-    prepared.filter(|item| item.commit == latest && Path::new(&item.installer).is_file())
+    prepared.filter(|item| item.commit == latest && installer_intact(item))
 }
 
 fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<UpdateStatus, String> {
@@ -469,6 +479,26 @@ fn installer_dir(dir: &Path) -> PathBuf {
     dir.join("src-tauri/target/release/bundle/nsis")
 }
 
+/// Folder in the app's data where finished update installers wait to be installed.
+const UPDATES_DIR: &str = "updates";
+
+/// Copies a freshly built installer out of the build folder into `store`, so a later manual build
+/// (which rewrites the build folder) cannot change it. Older kept installers are removed.
+fn keep_installer(built: &Path, store: &Path, commit: &str) -> Result<PathBuf, String> {
+    fs::create_dir_all(store).map_err(|error| format!("Could not create {}: {error}", store.display()))?;
+    if let Ok(entries) = fs::read_dir(store) {
+        for entry in entries.filter_map(Result::ok) {
+            if entry.file_name().to_string_lossy().ends_with("-setup.exe") {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+    }
+    let short = commit.get(..12).unwrap_or(commit);
+    let kept = store.join(format!("socialspace-{short}-setup.exe"));
+    fs::copy(built, &kept).map_err(|error| format!("Could not keep the installer: {error}"))?;
+    Ok(kept)
+}
+
 /// Old installers pile up with every build; only the one being built is needed. Installing itself
 /// overwrites the app in place, so no old copy of the app is left behind.
 fn remove_old_installers(dir: &Path) {
@@ -576,7 +606,8 @@ fn build_update(paths: &UpdatePaths, source: &Path, expected_commit: &str) -> Re
     let package_json = fs::read_to_string(build.join("package.json")).unwrap_or_default();
     let source_text = source.display().to_string();
     run_logged(&build, NPM, &build_script_args(&package_json), &[(COMMIT_ENV, expected_commit), (SOURCE_ENV, &source_text)], &log)?;
-    let installer = newest_installer(&build, started).ok_or("The build finished but no new installer was found.")?;
+    let built = newest_installer(&build, started).ok_or("The build finished but no new installer was found.")?;
+    let installer = keep_installer(&built, &paths.data_file(UPDATES_DIR), expected_commit)?;
 
     let built_at = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or_default();
     let app_exe = built_program(&build);
@@ -683,11 +714,11 @@ const NPM: &str = "npm";
 fn install_prepared(paths: &UpdatePaths, restart: bool) -> Result<PreparedUpdate, String> {
     let prepared = read_prepared(paths).ok_or("No update is ready to install. Build it first.")?;
     let installer = PathBuf::from(&prepared.installer);
-    if !installer.is_file() {
-        return Err("The prepared installer is gone. Build the update again.".into());
-    }
-    if sha256_of(&installer)? != prepared.sha256 {
-        return Err("The prepared installer changed after it was built. Build the update again.".into());
+    if !installer_intact(&prepared) {
+        // Forget the broken build so the next check reports the update as available and it is
+        // built again.
+        let _ = fs::remove_file(paths.data_file(PREPARED_FILE));
+        return Err("The prepared installer was replaced after it was built, so it was not installed. Building the update again now.".into());
     }
     let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: prepared.commit.clone(), succeeded: false };
     write_data(&paths.data_file(RESULT_FILE), &serde_json::to_vec(&result).unwrap_or_default())?;
@@ -1256,9 +1287,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let installer = dir.path().join("SocialSpace-setup.exe");
         fs::write(&installer, b"installer").unwrap();
-        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: String::new(), built_at: 1, app_exe: None, app_sha256: None };
+        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: sha256_of(&installer).unwrap(), built_at: 1, app_exe: None, app_sha256: None };
         assert!(prepared_for(Some(prepared.clone()), &"b".repeat(40)).is_some());
         assert!(prepared_for(Some(prepared.clone()), &"c".repeat(40)).is_none(), "main moved on since the build");
+        fs::write(&installer, b"rebuilt by hand").unwrap();
+        assert!(prepared_for(Some(prepared.clone()), &"b".repeat(40)).is_none(), "installer was replaced");
         fs::remove_file(&installer).unwrap();
         assert!(prepared_for(Some(prepared), &"b".repeat(40)).is_none(), "installer was deleted");
     }
@@ -1278,6 +1311,21 @@ mod tests {
         assert!(!is_commit("a1b2c3d"));
         assert!(!is_commit(&"z".repeat(40)));
         assert!(!is_commit("origin/main; rm -rf"));
+    }
+
+    #[test]
+    fn a_finished_installer_is_kept_outside_the_build_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let built = dir.path().join("Social Space_0.1.0_x64-setup.exe");
+        fs::write(&built, b"new build").unwrap();
+        let store = dir.path().join("updates");
+        fs::create_dir_all(&store).unwrap();
+        fs::write(store.join("socialspace-aaaaaaaaaaaa-setup.exe"), b"older").unwrap();
+        let kept = keep_installer(&built, &store, &"c".repeat(40)).unwrap();
+        assert_eq!(kept, store.join("socialspace-cccccccccccc-setup.exe"));
+        fs::write(&built, b"a manual build overwrote the build folder").unwrap();
+        assert_eq!(fs::read(&kept).unwrap(), b"new build");
+        assert!(!store.join("socialspace-aaaaaaaaaaaa-setup.exe").exists(), "older kept installers are removed");
     }
 
     #[test]

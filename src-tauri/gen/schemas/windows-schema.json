@@ -195,10 +195,28 @@
           "markdownDescription": "Enables the check_for_update command without any pre-configured scope."
         },
         {
+          "description": "Enables the check_tiktok_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-tiktok-connection",
+          "markdownDescription": "Enables the check_tiktok_connection command without any pre-configured scope."
+        },
+        {
           "description": "Enables the check_video_source command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check-video-source",
           "markdownDescription": "Enables the check_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the check_x_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-x-connection",
+          "markdownDescription": "Enables the check_x_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the check_youtube_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-check-youtube-connection",
+          "markdownDescription": "Enables the check_youtube_connection command without any pre-configured scope."
         },
         {
           "description": "Enables the choose_image_file command without any pre-configured scope.",
@@ -495,6 +513,12 @@
           "markdownDescription": "Enables the open_platform_action command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_setup_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-setup-page",
+          "markdownDescription": "Enables the open_setup_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_video command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-video",
@@ -693,10 +717,28 @@
           "markdownDescription": "Denies the check_for_update command without any pre-configured scope."
         },
         {
+          "description": "Denies the check_tiktok_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-tiktok-connection",
+          "markdownDescription": "Denies the check_tiktok_connection command without any pre-configured scope."
+        },
+        {
           "description": "Denies the check_video_source command without any pre-configured scope.",
           "type": "string",
           "const": "deny-check-video-source",
           "markdownDescription": "Denies the check_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_x_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-x-connection",
+          "markdownDescription": "Denies the check_x_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the check_youtube_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-check-youtube-connection",
+          "markdownDescription": "Denies the check_youtube_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the choose_image_file command without any pre-configured scope.",
@@ -991,6 +1033,12 @@
           "type": "string",
           "const": "deny-open-platform-action",
           "markdownDescription": "Denies the open_platform_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_setup_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-setup-page",
+          "markdownDescription": "Denies the open_setup_page command without any pre-configured scope."
         },
         {
           "description": "Denies the open_video command without any pre-configured scope.",
