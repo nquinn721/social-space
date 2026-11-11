@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hasUpdate, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
 import * as updates from './updateService';
 
-vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn() }));
+vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn(), updateManagement: vi.fn() }));
 
 const MAIN = 'b'.repeat(40);
 const available: updates.UpdateStatus = {
-  state: 'available', runningVersion: '0.1.0', sourceDir: 'D:\\Projects\\SocialManager-release', prepared: null,
+  state: 'available', runningVersion: '0.1.0', latestVersion: '0.2.0', sourceDir: 'D:\\Projects\\SocialManager-release', prepared: null,
   installedCommit: 'a'.repeat(40), latestCommit: MAIN, updateAvailable: true,
   newCommits: ['bbbbbbb Add video library', 'ccccccc Fix queue'], blockedReason: null,
 };
@@ -25,7 +25,13 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(updates.updateProgress).mockResolvedValue(idle);
   vi.mocked(updates.takeUpdateResult).mockResolvedValue(null);
+  vi.mocked(updates.updateManagement).mockResolvedValue({ managedBy: null });
 });
+
+/** Lets the management lookup, then the first check, settle. */
+async function settle() {
+  for (let i = 0; i < 4; i++) await act(async () => { await Promise.resolve(); });
+}
 afterEach(cleanup);
 
 describe('update checks', () => {
@@ -34,10 +40,26 @@ describe('update checks', () => {
     try {
       vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
       const { result } = renderHook(() => useAppUpdates(1000));
-      await act(async () => { await Promise.resolve(); });
+      await settle();
       expect(result.current.status).toEqual(available);
+      expect(result.current.managedBy).toBeNull();
       await act(async () => { vi.advanceTimersByTime(1000); await Promise.resolve(); });
       expect(updates.checkForUpdate).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('never checks, builds or polls while Ava manages updates', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(updates.updateManagement).mockResolvedValue({ managedBy: 'Ava' });
+      vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
+      const { result } = renderHook(() => useAppUpdates(1000));
+      await settle();
+      await act(async () => { vi.advanceTimersByTime(5000); await Promise.resolve(); });
+      expect(result.current.managedBy).toBe('Ava');
+      expect(updates.checkForUpdate).not.toHaveBeenCalled();
+      expect(updates.updateProgress).not.toHaveBeenCalled();
+      expect(updates.prepareUpdate).not.toHaveBeenCalled();
     } finally { vi.useRealTimers(); }
   });
 
@@ -45,7 +67,7 @@ describe('update checks', () => {
     expect(hasUpdate(available)).toBe(true);
     expect(hasUpdate(ready)).toBe(true);
     expect(hasUpdate(upToDate)).toBe(false);
-    expect(hasUpdate({ ...available, blockedReason: 'Uncommitted changes.' })).toBe(false);
+    expect(hasUpdate({ ...available, blockedReason: 'npm is not on PATH.' })).toBe(false);
     expect(hasUpdate(null)).toBe(false);
   });
 });
@@ -73,7 +95,7 @@ describe('automatic builds', () => {
   });
 
   it('does not build when updating is blocked or already running', async () => {
-    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, blockedReason: 'Uncommitted changes.' });
+    vi.mocked(updates.checkForUpdate).mockResolvedValue({ ...available, blockedReason: 'npm is not on PATH.' });
     renderHook(() => useAppUpdates(60_000));
     await vi.waitFor(() => expect(updates.checkForUpdate).toHaveBeenCalled());
     await act(async () => { await Promise.resolve(); });
@@ -120,6 +142,17 @@ describe('update banner', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'Dismiss update' }));
     expect(screen.queryByText(/is updated/)).not.toBeInTheDocument();
   });
+
+  it('never offers an update while Ava manages updates, but still says one landed', async () => {
+    const { container } = render(<UpdateBanner updates={fake({ managedBy: 'Ava', status: ready })} onOpen={vi.fn()}/>);
+    await act(async () => { await Promise.resolve(); });
+    expect(container).toBeEmptyDOMElement();
+    cleanup();
+    vi.mocked(updates.takeUpdateResult).mockResolvedValue({ fromCommit: 'a'.repeat(40), toCommit: MAIN, succeeded: false });
+    render(<UpdateBanner updates={fake({ managedBy: 'Ava', status: ready })} onOpen={vi.fn()}/>);
+    expect(await screen.findByText(/didn't install/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Updates' })).not.toBeInTheDocument();
+  });
 });
 
 describe('Updates page', () => {
@@ -127,6 +160,7 @@ describe('Updates page', () => {
     render(<UpdatesPage updates={fake()}/>);
     expect(screen.getByText('SocialSpace 0.1.0, build aaaaaaa')).toBeInTheDocument();
     expect(screen.getByText(available.sourceDir)).toBeInTheDocument();
+    expect(screen.getByText('0.2.0, build bbbbbbb')).toBeInTheDocument();
     expect(screen.getByText('bbbbbbb Add video library')).toBeInTheDocument();
   });
 
@@ -158,8 +192,8 @@ describe('Updates page', () => {
   });
 
   it('explains why updating is blocked', () => {
-    render(<UpdatesPage updates={fake({ status: { ...available, blockedReason: 'The source folder has uncommitted changes (src/App.tsx).' } })}/>);
-    expect(screen.getByText(/uncommitted changes/)).toBeInTheDocument();
+    render(<UpdatesPage updates={fake({ status: { ...available, blockedReason: 'npm (npm.cmd) is not on PATH, so the update cannot be built.' } })}/>);
+    expect(screen.getByText(/npm .* is not on PATH/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Build now' })).not.toBeInTheDocument();
   });
 

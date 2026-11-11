@@ -1,19 +1,26 @@
-//! Self-update from the `main` branch of the local source checkout.
+//! Self-update from the `main` branch of the local source repository.
 //!
-//! The app is built and installed from a git clone on this machine, so the build
-//! records which commit it came from and which folder it was built in. Checking
-//! for an update fetches `origin/main` in that folder. Updating has two steps, each one
-//! confirmed on the Updates page:
-//! 1. `prepare_update` builds in the background with no console windows: fetch and check out
-//!    origin/main (detached), `npm install`, `tauri build`. The finished installer is recorded
-//!    with its commit and SHA-256 so the app reports the update as ready.
-//!    The installer is copied into the app's own data folder, so a manual build in the source
-//!    folder cannot replace it while it waits.
+//! The app is built and installed from a git clone on this machine, so the build records which
+//! commit it came from and which repository owns that commit. Checking for an update fetches
+//! `origin/main` there (falling back to the local `main` when the fetch fails). Updating has two
+//! steps, each confirmed on the Updates page or run together by `--update apply`:
+//! 1. `prepare_update` builds in the background with no console windows, in the updater's own
+//!    worktree (`<app local data>/updates/build`), never in the source checkout: the worktree is
+//!    reset to the reviewed commit (detached, `git clean -fdx` keeping `node_modules` and the cargo
+//!    target so builds stay incremental), then `npm install` and `npm run tauri:build`. So a source
+//!    checkout on a feature branch or with local edits no longer blocks an update. The finished
+//!    installer is recorded with its commit and SHA-256 so the app reports the update as ready.
+//!    The installer is copied into the app's own data folder, so a manual build cannot replace it
+//!    while it waits.
 //! 2. `install_prepared_update` verifies that installer again, then a hidden helper installs it
-//!    silently once the app exits and starts it again.
+//!    silently once the app exits and (in the app, not headless) starts it again.
 //! The UI polls `update_progress`, and the restarted app reads `take_update_result`.
+//!
+//! The same flow runs without a window for the Ava hub: `social-manager.exe --update check --json`
+//! and `--update apply --json` print one JSON line (see [`CliReport`]) and exit.
 
 use std::{
+    ffi::OsStr,
     fs,
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
@@ -27,10 +34,20 @@ use tauri::{AppHandle, Manager};
 
 /// Commit the running build was compiled from ("unknown" if git was unavailable).
 pub const BUILD_COMMIT: &str = env!("SOCIALSPACE_BUILD_COMMIT");
-/// Repository root the running build was compiled in.
+/// Repository the running build came from. Its git objects are fetched into and its worktree
+/// list gets the updater's build worktree; its own working tree is never touched.
 pub const SOURCE_DIR: &str = env!("SOCIALSPACE_SOURCE_DIR");
+/// Version of the running build; `scripts/app-version.mjs` keeps it equal to tauri.conf.json.
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Bundle identifier from tauri.conf.json. App data lives in folders named after it.
+pub const IDENTIFIER: &str = "com.socialmanager.desktop";
 const BRANCH: &str = "main";
+const REMOTE_BRANCH: &str = "origin/main";
 const MAX_LISTED_COMMITS: &str = "20";
+const CONF_PATH: &str = "src-tauri/tauri.conf.json";
+const COMMIT_ENV: &str = "SOCIALSPACE_BUILD_COMMIT";
+const SOURCE_ENV: &str = "SOCIALSPACE_SOURCE_DIR";
+const DEFAULT_EXE: &str = "social-manager.exe";
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +55,8 @@ pub struct UpdateStatus {
     /// "available" (main has new commits), "ready" (they are built and waiting to install) or "up_to_date".
     state: &'static str,
     running_version: String,
+    /// Version in main's tauri.conf.json, when it could be read.
+    latest_version: Option<String>,
     source_dir: String,
     prepared: Option<PreparedUpdate>,
     installed_commit: String,
@@ -45,22 +64,71 @@ pub struct UpdateStatus {
     update_available: bool,
     /// Short hash and subject of each commit on main that this build does not have.
     new_commits: Vec<String>,
-    /// Why an update cannot be installed right now, if it cannot.
+    /// Why an update cannot be built or installed right now, if it cannot.
     blocked_reason: Option<String>,
 }
 
-fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
-    let mut command = Command::new("git");
-    command.arg("-C").arg(dir).args(args);
+fn hidden(command: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    let output = command
+    command
+}
+
+/// Hides the console window of a helper program (git, npm, reg, the app checking itself).
+pub(crate) fn hide_window(command: &mut Command) -> &mut Command {
+    hidden(command)
+}
+
+/// The fetch behind a check: long enough for a slow connection, short enough that `--update check`
+/// answers within the hub's 30 seconds even offline.
+const FETCH_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// `git fetch` with a time limit; a hung network counts as offline.
+fn git_with_timeout(dir: &Path, args: &[&str], timeout: Duration) -> Result<(), String> {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(dir).args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
+    let mut child = hidden(&mut command)
+        .spawn()
+        .map_err(|error| format!("Could not run git ({error}). Install Git for Windows and make sure it is on PATH."))?;
+    let mut stderr = child.stderr.take();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(stream) = stderr.as_mut() {
+            let _ = stream.read_to_string(&mut text);
+        }
+        text
+    });
+    let began = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if began.elapsed() >= timeout => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("git {} took longer than {} s", args.join(" "), timeout.as_secs()));
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(error) => return Err(format!("Could not wait for git: {error}")),
+        }
+    };
+    let stderr = reader.join().unwrap_or_default();
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("git {} failed: {}", args.join(" "), stderr.trim()))
+    }
+}
+
+fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(dir).args(args).stdin(Stdio::null());
+    let output = hidden(&mut command)
         .output()
-        .map_err(|error| format!("Could not run git: {error}"))?;
+        .map_err(|error| format!("Could not run git ({error}). Install Git for Windows and make sure it is on PATH."))?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
@@ -69,49 +137,51 @@ fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     }
 }
 
+/// The source repository, or why it cannot be used.
 fn source_dir() -> Result<PathBuf, String> {
     let dir = PathBuf::from(SOURCE_DIR);
-    if dir.join(".git").exists() {
-        Ok(dir)
-    } else {
-        Err(format!("The source folder {SOURCE_DIR} is not a git checkout any more."))
+    if !dir.is_dir() {
+        return Err(format!("The source folder {SOURCE_DIR} is gone, so there is nothing to update from."));
     }
+    git(&dir, &["rev-parse", "--git-dir"])
+        .map(|_| dir)
+        .map_err(|error| format!("The source folder {SOURCE_DIR} is not a git repository. {error}"))
 }
 
-/// True when `latest` (origin/main) has commits the installed build lacks.
+/// True when `latest` (main) has commits the installed build lacks.
 /// A build made from a branch that already contains main is not out of date.
 fn needs_update(installed: &str, latest: &str, main_is_in_build: bool) -> bool {
     installed != latest && !main_is_in_build
 }
 
-/// The updater moves its source folder to origin/main, so it must not be a checkout someone
-/// is working in on another branch. `main` or a detached checkout (the dedicated app folder) is fine.
-fn other_branch_reason(branch: &str) -> Option<String> {
-    let branch = branch.trim();
-    if branch.is_empty() || branch == BRANCH {
-        None
-    } else {
-        Some(format!(
-            "The source folder {SOURCE_DIR} is on branch {branch}, not {BRANCH}. Updating would move it off that branch, so it was skipped."
-        ))
-    }
+/// Why a check that could not reach GitHub is blocked. A release is a push to `main` on GitHub,
+/// so without the fetch there is no telling whether an update exists.
+fn offline_reason(error: &str) -> String {
+    format!("Could not reach GitHub to check for updates (offline?). {error}")
 }
 
-/// Tracked files with local edits would make `git pull` unsafe, so they block an install.
-fn local_changes_reason(porcelain: &str) -> Option<String> {
-    let changed: Vec<&str> = porcelain
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| line.get(3..).unwrap_or(line).trim())
-        .collect();
-    if changed.is_empty() {
-        return None;
-    }
-    let shown = changed.iter().take(3).copied().collect::<Vec<_>>().join(", ");
-    let more = if changed.len() > 3 { format!(" and {} more", changed.len() - 3) } else { String::new() };
-    Some(format!(
-        "The source folder has uncommitted changes ({shown}{more}). Commit or stash them, then update."
-    ))
+/// Fetches main and returns the ref to build (`origin/main`). Offline, the check is blocked.
+fn fetch_main(dir: &Path) -> Result<&'static str, String> {
+    git_with_timeout(dir, &["fetch", "--quiet", "origin", BRANCH], FETCH_TIMEOUT).map_err(|error| offline_reason(&error))?;
+    git(dir, &["rev-parse", "--verify", "--quiet", &format!("{REMOTE_BRANCH}^{{commit}}")])
+        .map(|_| REMOTE_BRANCH)
+        .map_err(|_| format!("{REMOTE_BRANCH} does not exist in {}.", dir.display()))
+}
+
+/// The `"version"` of a tauri.conf.json.
+fn conf_version(conf: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(conf).ok()?;
+    value.get("version")?.as_str().map(str::to_string)
+}
+
+/// `name` in one of the PATH folders, as `Command` would find it.
+fn find_on_path(name: &str, path_var: Option<&OsStr>) -> Option<PathBuf> {
+    std::env::split_paths(path_var?).map(|dir| dir.join(name)).find(|candidate| candidate.is_file())
+}
+
+/// Building needs npm (git was already needed to get this far).
+fn missing_tool_reason(npm_found: bool) -> Option<String> {
+    (!npm_found).then(|| format!("npm ({NPM}) is not on PATH, so the update cannot be built. Install Node.js and try again."))
 }
 
 /// A build of main that finished and is waiting to be installed.
@@ -123,6 +193,11 @@ pub struct PreparedUpdate {
     sha256: String,
     /// Seconds since the Unix epoch.
     built_at: u64,
+    /// The built program itself, which a headless install swaps in (see hub.rs). Older records lack it.
+    #[serde(default)]
+    app_exe: Option<String>,
+    #[serde(default)]
+    app_sha256: Option<String>,
 }
 
 fn update_state(update_available: bool, prepared_matches: bool) -> &'static str {
@@ -148,14 +223,14 @@ fn prepared_for(prepared: Option<PreparedUpdate>, latest: &str) -> Option<Prepar
 
 fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<UpdateStatus, String> {
     let installed = BUILD_COMMIT.to_string();
-    git(dir, &["fetch", "--quiet", "origin", BRANCH])?;
-    let latest = git(dir, &["rev-parse", &format!("origin/{BRANCH}")])?;
+    let reference = fetch_main(dir)?;
+    let latest = git(dir, &["rev-parse", &format!("{reference}^{{commit}}")])?;
+    let latest_version = git(dir, &["show", &format!("{latest}:{CONF_PATH}")]).ok().and_then(|conf| conf_version(&conf));
     let known_build = installed != "unknown" && git(dir, &["cat-file", "-e", &format!("{installed}^{{commit}}")]).is_ok();
-    let main_is_in_build = known_build
-        && git(dir, &["merge-base", "--is-ancestor", &format!("origin/{BRANCH}"), &installed]).is_ok();
+    let main_is_in_build = known_build && git(dir, &["merge-base", "--is-ancestor", &latest, &installed]).is_ok();
     let update_available = needs_update(&installed, &latest, main_is_in_build);
     let new_commits = if update_available && known_build {
-        git(dir, &["log", "--format=%h %s", "-n", MAX_LISTED_COMMITS, &format!("{installed}..origin/{BRANCH}")])?
+        git(dir, &["log", "--format=%h %s", "-n", MAX_LISTED_COMMITS, &format!("{installed}..{latest}")])?
             .lines()
             .map(str::to_string)
             .collect()
@@ -163,9 +238,7 @@ fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<
         Vec::new()
     };
     let blocked_reason = if update_available {
-        let branch = git(dir, &["branch", "--show-current"])?;
-        other_branch_reason(&branch)
-            .or(local_changes_reason(&git(dir, &["status", "--porcelain", "--untracked-files=no"])?))
+        missing_tool_reason(find_on_path(NPM, std::env::var_os("PATH").as_deref()).is_some())
     } else {
         None
     };
@@ -173,6 +246,7 @@ fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<
     Ok(UpdateStatus {
         state: update_state(update_available, prepared.is_some()),
         running_version: version.to_string(),
+        latest_version,
         source_dir: dir.display().to_string(),
         prepared,
         installed_commit: installed,
@@ -183,13 +257,53 @@ fn check(dir: &Path, version: &str, prepared: Option<PreparedUpdate>) -> Result<
     })
 }
 
-fn check_app(app: &AppHandle) -> Result<UpdateStatus, String> {
-    check(&source_dir()?, &app.package_info().version.to_string(), read_prepared(app))
+/// Where the updater keeps its files. The app knows them from Tauri; headless runs (no Tauri app)
+/// work them out the same way Tauri does on Windows: roaming and local app data + identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpdatePaths {
+    data_dir: PathBuf,
+    local_data_dir: PathBuf,
+}
+
+impl UpdatePaths {
+    fn from_app(app: &AppHandle) -> Result<Self, String> {
+        let resolver = app.path();
+        let data_dir = resolver.app_data_dir().map_err(|error| format!("Could not locate app data: {error}"))?;
+        let local_data_dir = resolver.app_local_data_dir().map_err(|error| format!("Could not locate app data: {error}"))?;
+        Ok(Self { data_dir, local_data_dir })
+    }
+
+    fn from_env() -> Result<Self, String> {
+        let folder = |name: &str| {
+            std::env::var_os(name)
+                .filter(|value| !value.is_empty())
+                .map(|value| PathBuf::from(value).join(IDENTIFIER))
+                .ok_or_else(|| format!("{name} is not set, so app data cannot be found."))
+        };
+        Ok(Self { data_dir: folder("APPDATA")?, local_data_dir: folder("LOCALAPPDATA")? })
+    }
+
+    fn data_file(&self, name: &str) -> PathBuf {
+        self.data_dir.join(name)
+    }
+
+    fn build_dir(&self) -> PathBuf {
+        build_worktree_dir(&self.local_data_dir)
+    }
+}
+
+/// The updater's own worktree. It lives with the app's local data, outside every checkout.
+pub fn build_worktree_dir(local_data_dir: &Path) -> PathBuf {
+    local_data_dir.join("updates").join("build")
+}
+
+fn check_with(paths: &UpdatePaths) -> Result<UpdateStatus, String> {
+    check(&source_dir()?, APP_VERSION, read_prepared(paths))
 }
 
 #[tauri::command]
 pub async fn check_for_update(app: AppHandle) -> Result<UpdateStatus, String> {
-    tauri::async_runtime::spawn_blocking(move || check_app(&app))
+    tauri::async_runtime::spawn_blocking(move || check_with(&UpdatePaths::from_app(&app)?))
         .await
         .map_err(|error| format!("Update check stopped: {error}"))?
 }
@@ -270,20 +384,16 @@ fn clean_output_line(line: &str) -> String {
     cleaned.chars().take(200).collect()
 }
 
-fn hidden(command: &mut Command) -> &mut Command {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-    command
-}
-
 /// Runs a step with no console window, streaming its output to the progress detail and the log.
-fn run_logged(dir: &Path, program: &str, args: &[&str], log: &Arc<Mutex<fs::File>>) -> Result<(), String> {
+fn run_logged(dir: &Path, program: &str, args: &[&str], envs: &[(&str, &str)], log: &Arc<Mutex<fs::File>>) -> Result<(), String> {
+    if let Ok(mut file) = log.lock() {
+        let _ = writeln!(file, "> {program} {} (in {})", args.join(" "), dir.display());
+    }
     let mut command = Command::new(program);
     command.args(args).current_dir(dir).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    for (key, value) in envs {
+        command.env(key, value);
+    }
     let mut child = hidden(&mut command)
         .spawn()
         .map_err(|error| format!("Could not run {program}: {error}"))?;
@@ -329,17 +439,6 @@ fn newest_installer(dir: &Path, since: SystemTime) -> Option<PathBuf> {
         .map(|(_, path)| path)
 }
 
-fn data_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
-    app.path()
-        .app_data_dir()
-        .map(|dir| dir.join(name))
-        .map_err(|error| format!("Could not locate app data: {error}"))
-}
-
-fn result_path(app: &AppHandle) -> Result<PathBuf, String> {
-    data_file(app, RESULT_FILE)
-}
-
 fn write_data(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
@@ -347,8 +446,8 @@ fn write_data(path: &Path, bytes: &[u8]) -> Result<(), String> {
     fs::write(path, bytes).map_err(|error| format!("Could not save {}: {error}", path.display()))
 }
 
-fn read_prepared(app: &AppHandle) -> Option<PreparedUpdate> {
-    let contents = fs::read(data_file(app, PREPARED_FILE).ok()?).ok()?;
+fn read_prepared(paths: &UpdatePaths) -> Option<PreparedUpdate> {
+    let contents = fs::read(paths.data_file(PREPARED_FILE)).ok()?;
     serde_json::from_slice(&contents).ok()
 }
 
@@ -369,6 +468,11 @@ fn sha256_of(path: &Path) -> Result<String, String> {
 
 fn log_path() -> PathBuf {
     std::env::temp_dir().join("socialspace-update.log")
+}
+
+/// The program `tauri build` produced; the installer carries exactly this file.
+fn built_program(dir: &Path) -> Option<PathBuf> {
+    Some(dir.join("src-tauri/target/release").join(crate::hub::EXE_NAME)).filter(|path| path.is_file())
 }
 
 fn installer_dir(dir: &Path) -> PathBuf {
@@ -406,35 +510,119 @@ fn remove_old_installers(dir: &Path) {
     }
 }
 
-/// Builds the reviewed main commit and records the installer. Nothing is installed yet.
-fn build_update(app: &AppHandle, dir: &Path, expected_commit: &str) -> Result<(), String> {
+/// Paths as git prints them and as Windows spells them can differ in slashes and case.
+fn same_dir(a: &str, b: &str) -> bool {
+    let normalize = |path: &str| {
+        let path = path.trim().replace('\\', "/");
+        let path = path.trim_end_matches('/');
+        if cfg!(windows) {
+            path.to_lowercase()
+        } else {
+            path.to_string()
+        }
+    };
+    !a.trim().is_empty() && normalize(a) == normalize(b)
+}
+
+fn common_dir(dir: &Path) -> Result<String, String> {
+    git(dir, &["rev-parse", "--path-format=absolute", "--git-common-dir"])
+}
+
+/// The build folder can be reused when it is a worktree of the same repository.
+fn is_worktree_of(source: &Path, build: &Path) -> bool {
+    build.join(".git").is_file()
+        && match (common_dir(source), common_dir(build)) {
+            (Ok(a), Ok(b)) => same_dir(&a, &b),
+            _ => false,
+        }
+}
+
+/// Kept between builds so `npm install` and cargo only redo what changed.
+const KEPT_BUILD_FOLDERS: [&str; 2] = ["node_modules", "/src-tauri/target"];
+
+fn clean_args() -> Vec<&'static str> {
+    let mut args = vec!["clean", "-fdx"];
+    for folder in KEPT_BUILD_FOLDERS {
+        args.extend(["-e", folder]);
+    }
+    args
+}
+
+/// Puts the updater's worktree on exactly `commit` with no leftovers, creating it when needed.
+/// Only the build folder's files change; the source checkout keeps its branch and edits.
+fn prepare_worktree(source: &Path, build: &Path, commit: &str, log: &Arc<Mutex<fs::File>>) -> Result<(), String> {
+    let _ = git(source, &["worktree", "prune"]);
+    if is_worktree_of(source, build) {
+        run_logged(build, "git", &["checkout", "--detach", "--force", commit], &[], log)?;
+        run_logged(build, "git", &clean_args(), &[], log)?;
+    } else {
+        if build.exists() {
+            fs::remove_dir_all(build).map_err(|error| format!("Could not clear the old build folder {}: {error}", build.display()))?;
+        }
+        if let Some(parent) = build.parent() {
+            fs::create_dir_all(parent).map_err(|error| format!("Could not create {}: {error}", parent.display()))?;
+        }
+        let target = build.display().to_string();
+        run_logged(source, "git", &["worktree", "add", "--detach", "--force", &target, commit], &[], log)?;
+    }
+    let head = git(build, &["rev-parse", "HEAD"])?;
+    if head != commit {
+        return Err(format!("The build folder is on {head}, not the reviewed commit {commit}."));
+    }
+    Ok(())
+}
+
+/// `npm run tauri:build` stamps the commit; main from before that script existed used `tauri build`.
+fn build_script_args(package_json: &str) -> Vec<&'static str> {
+    let has_wrapper = serde_json::from_str::<serde_json::Value>(package_json)
+        .ok()
+        .and_then(|value| value.get("scripts")?.get("tauri:build").cloned())
+        .is_some();
+    if has_wrapper {
+        vec!["run", "tauri:build"]
+    } else {
+        vec!["run", "tauri", "build"]
+    }
+}
+
+/// Builds the reviewed main commit in the updater's worktree and records the installer.
+/// Nothing is installed yet.
+fn build_update(paths: &UpdatePaths, source: &Path, expected_commit: &str) -> Result<PreparedUpdate, String> {
     let log = Arc::new(Mutex::new(fs::File::create(log_path()).map_err(|error| format!("Could not create the update log: {error}"))?));
     let started = SystemTime::now();
+    let build = paths.build_dir();
 
     begin_step(1, "Getting the latest changes");
-    run_logged(dir, "git", &["fetch", "origin", BRANCH], &log)?;
-    // Check out exactly the reviewed commit, detached, so it also works in a worktree while
-    // `main` is checked out somewhere else.
-    run_logged(dir, "git", &["checkout", "--detach", expected_commit], &log)?;
-    let new_commit = git(dir, &["rev-parse", "HEAD"])?;
-    if new_commit != expected_commit {
-        return Err(format!("The source folder is on {new_commit}, not the reviewed commit {expected_commit}."));
-    }
+    fetch_main(source)?;
+    prepare_worktree(source, &build, expected_commit, &log)?;
 
     begin_step(2, "Installing dependencies");
-    run_logged(dir, NPM, &["install", "--no-audit", "--no-fund"], &log)?;
+    run_logged(&build, NPM, &["install", "--no-audit", "--no-fund"], &[], &log)?;
+    // npm may rewrite the lockfile; the stamping build script only builds a clean main.
+    run_logged(&build, "git", &["checkout", "--", "package-lock.json"], &[], &log)?;
 
     begin_step(3, "Building the new version");
-    remove_old_installers(dir);
-    run_logged(dir, NPM, &["run", "tauri", "build"], &log)?;
-    let built = newest_installer(dir, started).ok_or("The build finished but no new installer was found.")?;
-    let installer = keep_installer(&built, &data_file(app, UPDATES_DIR)?, &new_commit)?;
+    remove_old_installers(&build);
+    let package_json = fs::read_to_string(build.join("package.json")).unwrap_or_default();
+    let source_text = source.display().to_string();
+    run_logged(&build, NPM, &build_script_args(&package_json), &[(COMMIT_ENV, expected_commit), (SOURCE_ENV, &source_text)], &log)?;
+    let built = newest_installer(&build, started).ok_or("The build finished but no new installer was found.")?;
+    let installer = keep_installer(&built, &paths.data_file(UPDATES_DIR), expected_commit)?;
 
     let built_at = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or_default();
-    let prepared = PreparedUpdate { commit: new_commit, sha256: sha256_of(&installer)?, installer: installer.display().to_string(), built_at };
-    write_data(&data_file(app, PREPARED_FILE)?, &serde_json::to_vec(&prepared).unwrap_or_default())?;
+    let app_exe = built_program(&build);
+    let app_sha256 = app_exe.as_deref().map(sha256_of).transpose()?;
+    let prepared = PreparedUpdate {
+        commit: expected_commit.to_string(),
+        sha256: sha256_of(&installer)?,
+        installer: installer.display().to_string(),
+        built_at,
+        app_exe: app_exe.map(|path| path.display().to_string()),
+        app_sha256,
+    };
+    write_data(&paths.data_file(PREPARED_FILE), &serde_json::to_vec(&prepared).unwrap_or_default())?;
     set_progress(|progress| progress.state = "ready");
-    Ok(())
+    Ok(prepared)
 }
 
 /// Where the installer is copied before installing, so a build started by the restarted app
@@ -447,13 +635,14 @@ const INSTALL_LOG: &str = "socialspace-install.log";
 const UNINSTALL_KEY: &str = r"HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Social Space";
 
 /// The script the hidden helper runs. It waits for the app to close, runs the installer and
-/// waits for it to really finish (the NSIS installer can hand off to a child process), and only
-/// then starts the app again. Every step is logged so a failed install can be explained.
-fn install_script(pid: u32, installer: &Path, app_exe: &Path, log: &Path) -> String {
+/// waits for it to really finish (the NSIS installer can hand off to a child process), and then,
+/// unless `restart` is false (headless installs for the hub), starts the app again. Every step is
+/// logged so a failed install can be explained.
+fn install_script(pid: u32, installer: &Path, app_exe: &Path, log: &Path, restart: bool) -> String {
     let quote = |path: &Path| path.display().to_string().replace('\'', "''");
     let exe_name = app_exe.file_stem().map(|stem| stem.to_string_lossy().replace('\'', "''")).unwrap_or_default();
     let installer_name = installer.file_stem().map(|stem| stem.to_string_lossy().replace('\'', "''")).unwrap_or_default();
-    format!(
+    let install = format!(
         r#"$log = '{log}'
 function Log($m) {{ Add-Content -Path $log -Value ("{{0:o}} {{1}}" -f (Get-Date), $m) }}
 Log 'Waiting for SocialSpace to close'
@@ -464,34 +653,46 @@ Log 'Running the installer'
 $i = Start-Process -FilePath '{installer}' -ArgumentList '/S' -PassThru -Wait
 Log ("Installer exited with " + $i.ExitCode)
 for ($n = 0; $n -lt 180 -and (Get-Process -Name '{installer_name}' -ErrorAction SilentlyContinue); $n++) {{ Start-Sleep -Seconds 1 }}
-Start-Sleep -Seconds 1
+"#,
+        log = quote(log),
+        installer = quote(installer),
+    );
+    if !restart {
+        return install + "Log 'Installed; not restarting (headless update)'\n";
+    }
+    install
+        + &format!(
+            r#"Start-Sleep -Seconds 1
 $app = '{app}'
 $dir = (Get-ItemProperty -Path '{uninstall_key}' -Name InstallLocation -ErrorAction SilentlyContinue).InstallLocation
 if ($dir) {{ $new = Join-Path $dir.Trim('"') '{exe_file}'; if (Test-Path $new) {{ $app = $new }} }}
 Log ("Starting SocialSpace from " + $app)
 Start-Process -FilePath $app
 "#,
-        log = quote(log),
-        installer = quote(installer),
-        app = quote(app_exe),
-        uninstall_key = UNINSTALL_KEY,
-        exe_file = app_exe.file_name().map(|name| name.to_string_lossy().replace('\'', "''")).unwrap_or_default(),
-    )
+            app = quote(app_exe),
+            uninstall_key = UNINSTALL_KEY,
+            exe_file = app_exe.file_name().map(|name| name.to_string_lossy().replace('\'', "''")).unwrap_or_default(),
+        )
 }
 
-/// A hidden helper waits for this process to exit, installs silently, and starts the app again
-/// (the old version if the install failed, which the next launch reports).
+/// A hidden helper waits for this process to exit, installs silently, and (when `restart`)
+/// starts the app again (the old version if the install failed, which the next launch reports).
 #[cfg(windows)]
-fn launch_installer(installer: &Path) -> Result<(), String> {
+fn launch_installer(installer: &Path, restart: bool) -> Result<(), String> {
     let app_exe = std::env::current_exe().map_err(|error| format!("Could not find the app: {error}"))?;
     let temp = std::env::temp_dir();
     let staged = temp.join(STAGED_INSTALLER);
     fs::copy(installer, &staged).map_err(|error| format!("Could not stage the installer: {error}"))?;
     let script_path = temp.join("socialspace-install.ps1");
-    fs::write(&script_path, install_script(std::process::id(), &staged, &app_exe, &temp.join(INSTALL_LOG)))
+    fs::write(&script_path, install_script(std::process::id(), &staged, &app_exe, &temp.join(INSTALL_LOG), restart))
         .map_err(|error| format!("Could not write the install helper: {error}"))?;
     let mut command = Command::new("powershell.exe");
-    command.args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"]).arg(&script_path);
+    command
+        .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"])
+        .arg(&script_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
     hidden(&mut command)
         .spawn()
         .map_err(|error| format!("Could not start the installer: {error}"))?;
@@ -499,7 +700,7 @@ fn launch_installer(installer: &Path) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-fn launch_installer(_installer: &Path) -> Result<(), String> {
+fn launch_installer(_installer: &Path, _restart: bool) -> Result<(), String> {
     Err("Installing updates is only supported on Windows.".into())
 }
 
@@ -507,6 +708,24 @@ fn launch_installer(_installer: &Path) -> Result<(), String> {
 const NPM: &str = "npm.cmd";
 #[cfg(not(windows))]
 const NPM: &str = "npm";
+
+/// Verifies the prepared installer and hands it to the hidden helper. The same path serves the
+/// in-app "Restart to update" (`restart`) and the headless `--update apply` (no restart).
+fn install_prepared(paths: &UpdatePaths, restart: bool) -> Result<PreparedUpdate, String> {
+    let prepared = read_prepared(paths).ok_or("No update is ready to install. Build it first.")?;
+    let installer = PathBuf::from(&prepared.installer);
+    if !installer_intact(&prepared) {
+        // Forget the broken build so the next check reports the update as available and it is
+        // built again.
+        let _ = fs::remove_file(paths.data_file(PREPARED_FILE));
+        return Err("The prepared installer was replaced after it was built, so it was not installed. Building the update again now.".into());
+    }
+    let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: prepared.commit.clone(), succeeded: false };
+    write_data(&paths.data_file(RESULT_FILE), &serde_json::to_vec(&result).unwrap_or_default())?;
+    launch_installer(&installer, restart)?;
+    let _ = fs::remove_file(paths.data_file(PREPARED_FILE));
+    Ok(prepared)
+}
 
 fn claim_progress(label: &str) -> Result<(), String> {
     let mut guard = PROGRESS.lock().map_err(|_| "Update state is unavailable.")?;
@@ -529,6 +748,20 @@ fn is_commit(value: &str) -> bool {
     value.len() == 40 && value.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+/// Checks that the reviewed commit is still the one to build.
+fn buildable(status: &UpdateStatus, expected_commit: &str) -> Result<(), String> {
+    if !status.update_available {
+        return Err("SocialSpace is already up to date.".into());
+    }
+    if let Some(reason) = &status.blocked_reason {
+        return Err(reason.clone());
+    }
+    if status.latest_commit.as_deref() != Some(expected_commit) {
+        return Err("Main changed since you reviewed the update. Check again and review the new changes.".into());
+    }
+    Ok(())
+}
+
 /// Builds the main commit the user reviewed, in the background. Progress is read with
 /// `update_progress`, which reports "ready" when the installer is waiting.
 #[tauri::command]
@@ -536,20 +769,12 @@ pub async fn prepare_update(app: AppHandle, expected_commit: String) -> Result<(
     if !is_commit(&expected_commit) {
         return Err("The update commit could not be verified.".into());
     }
+    let paths = UpdatePaths::from_app(&app)?;
     claim_progress("Checking for changes")?;
     std::thread::spawn(move || {
         let outcome = source_dir().and_then(|dir| {
-            let status = check(&dir, "", None)?;
-            if !status.update_available {
-                return Err("SocialSpace is already up to date.".into());
-            }
-            if let Some(reason) = status.blocked_reason {
-                return Err(reason);
-            }
-            if status.latest_commit.as_deref() != Some(expected_commit.as_str()) {
-                return Err("Main changed since you reviewed the update. Check again and review the new changes.".into());
-            }
-            build_update(&app, &dir, &expected_commit)
+            buildable(&check(&dir, APP_VERSION, None)?, &expected_commit)?;
+            build_update(&paths, &dir, &expected_commit)
         });
         if let Err(error) = outcome {
             fail_progress(error);
@@ -561,27 +786,11 @@ pub async fn prepare_update(app: AppHandle, expected_commit: String) -> Result<(
 /// Verifies the prepared installer again, then closes the app, installs it silently and restarts.
 #[tauri::command]
 pub async fn install_prepared_update(app: AppHandle) -> Result<(), String> {
-    let prepared = read_prepared(&app).ok_or("No update is ready to install. Building it again now.")?;
-    let installer = PathBuf::from(&prepared.installer);
-    if !installer_intact(&prepared) {
-        // Forget the broken build so the next check reports the update as available and the
-        // app rebuilds it on its own.
-        if let Ok(path) = data_file(&app, PREPARED_FILE) {
-            let _ = fs::remove_file(path);
-        }
-        return Err("The prepared installer was replaced after it was built, so it was not installed. Building the update again now.".into());
-    }
+    let paths = UpdatePaths::from_app(&app)?;
     claim_progress("Installing and restarting")?;
-    let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: prepared.commit, succeeded: false };
-    let outcome = result_path(&app)
-        .and_then(|path| write_data(&path, &serde_json::to_vec(&result).unwrap_or_default()))
-        .and_then(|_| launch_installer(&installer));
-    if let Err(error) = outcome {
+    if let Err(error) = install_prepared(&paths, true) {
         fail_progress(error.clone());
         return Err(error);
-    }
-    if let Ok(path) = data_file(&app, PREPARED_FILE) {
-        let _ = fs::remove_file(path);
     }
     set_progress(|progress| progress.state = "restarting");
     std::thread::spawn(move || {
@@ -606,7 +815,7 @@ pub fn update_progress() -> UpdateProgress {
 /// Returns the outcome of the update that restarted the app, once, then forgets it.
 #[tauri::command]
 pub fn take_update_result(app: AppHandle) -> Option<UpdateResult> {
-    let path = result_path(&app).ok()?;
+    let path = UpdatePaths::from_app(&app).ok()?.data_file(RESULT_FILE);
     let contents = fs::read(&path).ok()?;
     let _ = fs::remove_file(&path);
     let mut result: UpdateResult = serde_json::from_slice(&contents).ok()?;
@@ -614,9 +823,411 @@ pub fn take_update_result(app: AppHandle) -> Option<UpdateResult> {
     Some(result)
 }
 
+// ---------------------------------------------------------------------------------------------
+// Headless command line for the Ava hub (its update contract; see hub.rs for the pieces).
+//
+//   social-manager.exe --version --json         {"id", "version", "commit"}
+//   social-manager.exe --update check --json    state up_to_date | available | ready | blocked
+//   social-manager.exe --update apply --json    installed | up_to_date (exit 0), failed (exit 1,
+//                                               the previous version stays), blocked (exit 2, nothing
+//                                               changed: another copy is open, offline, ...)
+//   social-manager.exe --update rollback --json rolled_back (0), failed (1) or blocked (2)
+//
+// Nothing here opens a window or restarts the app.
+// ---------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CliAction {
+    Check,
+    Apply,
+    Rollback,
+    Version,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CliRequest {
+    pub action: CliAction,
+    pub json: bool,
+}
+
+const USAGE: &str = "Usage: --update check|apply|rollback [--json], or --version [--json]";
+
+/// `--update check|apply|rollback [--json]` (also `--update=check`) or `--version [--json]`.
+/// `None` means a normal launch (`--hub` alone is a normal launch in managed mode).
+pub fn parse_cli(args: &[String]) -> Option<Result<CliRequest, String>> {
+    let Some(position) = args.iter().position(|arg| arg == "--update" || arg.starts_with("--update=")) else {
+        if !args.iter().any(|arg| arg == "--version") {
+            return None;
+        }
+        let json = args.iter().any(|arg| arg == "--json");
+        return Some(match args.iter().find(|arg| !matches!(arg.as_str(), "--version" | "--json" | "--hub")) {
+            Some(other) => Err(format!("Unknown argument '{other}'. {USAGE}")),
+            None => Ok(CliRequest { action: CliAction::Version, json }),
+        });
+    };
+    Some((|| {
+        let mut action = None;
+        let mut json = false;
+        let mut rest = args.iter().enumerate().filter(|(index, _)| *index != position).map(|(_, arg)| arg.as_str()).peekable();
+        let inline = args[position].strip_prefix("--update=");
+        let action_word = match inline {
+            Some(word) => Some(word.to_string()),
+            None => args.get(position + 1).filter(|word| !word.starts_with("--")).cloned(),
+        };
+        if let Some(word) = &action_word {
+            action = Some(match word.as_str() {
+                "check" => CliAction::Check,
+                "apply" => CliAction::Apply,
+                "rollback" => CliAction::Rollback,
+                other => return Err(format!("Unknown update action '{other}'. {USAGE}")),
+            });
+        }
+        let mut skipped_action = inline.is_some();
+        while let Some(arg) = rest.next() {
+            match arg {
+                "--json" => json = true,
+                "--hub" => {}
+                word if !skipped_action && Some(word) == action_word.as_deref() => skipped_action = true,
+                other => return Err(format!("Unknown argument '{other}'. {USAGE}")),
+            }
+        }
+        action.map(|action| CliRequest { action, json }).ok_or_else(|| format!("Missing update action. {USAGE}"))
+    })())
+}
+
+/// The one line `--update ... --json` prints.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CliReport {
+    /// check: "up_to_date", "available", "ready" or "blocked". apply: "installed", "up_to_date",
+    /// "failed" or "blocked". rollback: "rolled_back", "failed" or "blocked".
+    pub state: &'static str,
+    /// The version installed now (after an apply or rollback that worked, the new one).
+    pub current: String,
+    /// The version on main, when known.
+    pub latest: Option<String>,
+    pub notes: Vec<String>,
+    pub reason: Option<String>,
+    // The same facts under the names the first hub release read.
+    pub version: String,
+    pub latest_version: Option<String>,
+    pub commit: String,
+    pub latest_commit: Option<String>,
+}
+
+impl CliReport {
+    fn blocked(reason: String) -> Self {
+        Self {
+            state: "blocked",
+            current: APP_VERSION.into(),
+            latest: None,
+            notes: Vec::new(),
+            reason: Some(reason),
+            version: APP_VERSION.into(),
+            latest_version: None,
+            commit: BUILD_COMMIT.into(),
+            latest_commit: None,
+        }
+    }
+
+    fn with_blocked(mut self, reason: String) -> Self {
+        self.state = "blocked";
+        self.reason = Some(reason);
+        self
+    }
+
+    fn failed(mut self, reason: String) -> Self {
+        self.state = "failed";
+        self.reason = Some(reason);
+        self
+    }
+
+    /// Exit code for apply and rollback: 0 done, 1 failed (previous version kept), 2 refused.
+    pub fn exit_code(&self) -> i32 {
+        match self.state {
+            "blocked" => EXIT_BLOCKED,
+            "failed" => EXIT_FAILED,
+            _ => EXIT_OK,
+        }
+    }
+}
+
+pub const EXIT_OK: i32 = 0;
+pub const EXIT_FAILED: i32 = 1;
+pub const EXIT_BLOCKED: i32 = 2;
+
+/// Turns a check into the hub's shape: anything that stops an update is "blocked" with a reason.
+fn report_from_check(result: Result<UpdateStatus, String>) -> CliReport {
+    match result {
+        Err(reason) => CliReport::blocked(reason),
+        Ok(status) => CliReport {
+            state: if status.blocked_reason.is_some() { "blocked" } else { status.state },
+            current: status.running_version.clone(),
+            latest: status.latest_version.clone(),
+            notes: status.new_commits,
+            reason: status.blocked_reason,
+            version: status.running_version,
+            latest_version: status.latest_version,
+            commit: status.installed_commit,
+            latest_commit: status.latest_commit,
+        },
+    }
+}
+
+/// PIDs in `tasklist /FO CSV /NH` output other than `own_pid`.
+fn other_pids(tasklist_csv: &str, own_pid: u32) -> Vec<u32> {
+    tasklist_csv
+        .lines()
+        .filter(|line| line.starts_with('"'))
+        .filter_map(|line| line.split("\",\"").nth(1)?.trim_matches('"').parse::<u32>().ok())
+        .filter(|pid| *pid != own_pid)
+        .collect()
+}
+
+fn own_exe_name() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| DEFAULT_EXE.into())
+}
+
+/// Installing replaces the exe, so it must not run while someone has the app open.
+fn other_copy_running() -> Result<bool, String> {
+    let mut command = Command::new("tasklist");
+    command.args(["/FI", &format!("IMAGENAME eq {}", own_exe_name()), "/FO", "CSV", "/NH"]).stdin(Stdio::null());
+    let output = hidden(&mut command).output().map_err(|error| format!("Could not list running programs: {error}"))?;
+    Ok(!other_pids(&String::from_utf8_lossy(&output.stdout), std::process::id()).is_empty())
+}
+
+const OPEN_REASON: &str = "Social Space is open. Close it, then update.";
+
+/// The installed program this command runs as, or why a headless install must not touch it.
+fn installed_program() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|error| format!("Could not find the app: {error}"))?;
+    if !crate::hub::is_installed_copy(&exe) {
+        return Err(format!("{} is not an installed Social Space (no uninstall.exe next to it), so it is never replaced.", exe.display()));
+    }
+    Ok(exe)
+}
+
+fn previous_dir(paths: &UpdatePaths) -> PathBuf {
+    paths.local_data_dir.join("updates").join("previous")
+}
+
+/// The version running now, which an install or rollback keeps as the previous one.
+fn running_as_previous() -> crate::hub::Previous {
+    crate::hub::Previous { version: APP_VERSION.into(), commit: BUILD_COMMIT.into() }
+}
+
+/// After a swap: keep "Apps & features" in step and let the next launch say it was updated.
+fn after_swap(paths: &UpdatePaths, program: &Path, installed: &crate::hub::VersionInfo) {
+    if let Some(dir) = program.parent() {
+        crate::hub::record_installed_version(dir, &installed.version);
+    }
+    let result = UpdateResult { from_commit: BUILD_COMMIT.into(), to_commit: installed.commit.clone(), succeeded: false };
+    let _ = write_data(&paths.data_file(RESULT_FILE), &serde_json::to_vec(&result).unwrap_or_default());
+}
+
+/// Verifies the built program against its record, then swaps it in (keeping this version).
+fn install_built(paths: &UpdatePaths, program: &Path, prepared: &PreparedUpdate) -> Result<crate::hub::VersionInfo, String> {
+    let built = prepared.app_exe.as_deref().map(PathBuf::from).ok_or("The prepared update has no program to install. Build it again.")?;
+    if prepared.app_sha256.as_deref() != Some(sha256_of(&built)?.as_str()) {
+        return Err("The built program changed after it was built. Build the update again.".into());
+    }
+    let installed = std::cell::RefCell::new(None);
+    crate::hub::install_keeping_previous(program, &built, &previous_dir(paths), &running_as_previous(), &|exe| {
+        *installed.borrow_mut() = Some(crate::hub::verify_program(exe, &prepared.commit)?);
+        Ok(())
+    })?;
+    let _ = fs::remove_file(paths.data_file(PREPARED_FILE));
+    installed.into_inner().ok_or_else(|| "The new program was not checked.".to_string())
+}
+
+fn apply(paths: &UpdatePaths) -> CliReport {
+    let source = match source_dir() {
+        Ok(dir) => dir,
+        Err(reason) => return CliReport::blocked(reason),
+    };
+    let status = check(&source, APP_VERSION, read_prepared(paths));
+    let report = report_from_check(status.clone());
+    let Ok(status) = status else { return report };
+    if !matches!(report.state, "available" | "ready") {
+        return report;
+    }
+    let program = match installed_program() {
+        Ok(program) => program,
+        Err(reason) => return report.with_blocked(reason),
+    };
+    match other_copy_running() {
+        Ok(false) => {}
+        Ok(true) => return report.with_blocked(OPEN_REASON.into()),
+        Err(reason) => return report.with_blocked(reason),
+    }
+    crate::hub::remove_aside(&program);
+    let Some(latest) = status.latest_commit.clone() else { return report.with_blocked("Main could not be resolved.".into()) };
+    let prepared = match read_prepared(paths).filter(|prepared| status.state == "ready" && prepared.commit == latest && prepared.app_exe.is_some()) {
+        Some(prepared) => prepared,
+        None => match buildable(&status, &latest).and_then(|_| build_update(paths, &source, &latest)) {
+            Ok(prepared) => prepared,
+            Err(reason) => return report.failed(format!("The update did not build, so nothing changed. {reason} Full log: {}", log_path().display())),
+        },
+    };
+    match install_built(paths, &program, &prepared) {
+        Ok(installed) => {
+            after_swap(paths, &program, &installed);
+            CliReport { state: "installed", current: installed.version.clone(), version: installed.version, ..report }
+        }
+        Err(reason) => report.failed(format!("The update was not installed; Social Space {APP_VERSION} is still installed. {reason}")),
+    }
+}
+
+/// Puts back the version the last headless install (or rollback) replaced.
+fn rollback(paths: &UpdatePaths) -> CliReport {
+    let mut report = CliReport::blocked(String::new());
+    report.state = "rolled_back";
+    report.reason = None;
+    let program = match installed_program() {
+        Ok(program) => program,
+        Err(reason) => return report.with_blocked(reason),
+    };
+    let dir = previous_dir(paths);
+    let Some(previous) = crate::hub::read_previous(&dir) else {
+        return report.with_blocked("There is no earlier version to go back to. One is kept after each update Ava installs.".into());
+    };
+    match other_copy_running() {
+        Ok(false) => {}
+        Ok(true) => return report.with_blocked(OPEN_REASON.into()),
+        Err(reason) => return report.with_blocked(reason),
+    }
+    crate::hub::remove_aside(&program);
+    let installed = std::cell::RefCell::new(None);
+    let swapped = crate::hub::install_keeping_previous(&program, &crate::hub::previous_exe(&dir), &dir, &running_as_previous(), &|exe| {
+        *installed.borrow_mut() = Some(crate::hub::verify_program(exe, &previous.commit)?);
+        Ok(())
+    });
+    match (swapped, installed.into_inner()) {
+        (Ok(()), Some(installed)) => {
+            after_swap(paths, &program, &installed);
+            CliReport { current: installed.version.clone(), version: installed.version, commit: installed.commit, ..report }
+        }
+        (Ok(()), None) => report.failed("The earlier program was not checked.".into()),
+        (Err(reason), _) => report.failed(format!("Rollback failed; Social Space {APP_VERSION} is still installed. {reason}")),
+    }
+}
+
+fn human(report: &CliReport) -> String {
+    let mut lines = vec![format!("Social Space {} ({}): {}", report.current, short(&report.commit), report.state)];
+    if let Some(commit) = &report.latest_commit {
+        lines.push(format!("main: {} ({})", report.latest.as_deref().unwrap_or("?"), short(commit)));
+    }
+    lines.extend(report.notes.iter().map(|note| format!("  {note}")));
+    if let Some(reason) = &report.reason {
+        lines.push(format!("reason: {reason}"));
+    }
+    lines.join("\n")
+}
+
+fn short(commit: &str) -> &str {
+    commit.get(..7).unwrap_or(commit)
+}
+
+/// A release build is a GUI program with no console. When it was started from a console without
+/// redirected output, write to that console; when stdout is a pipe (the hub), it already works.
+#[cfg(windows)]
+fn connect_stdout() {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetStdHandle(which: u32) -> isize;
+        fn SetStdHandle(which: u32, handle: isize) -> i32;
+        fn AttachConsole(pid: u32) -> i32;
+        fn CreateFileW(name: *const u16, access: u32, share: u32, security: *const u8, disposition: u32, flags: u32, template: isize) -> isize;
+    }
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+    const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
+    const GENERIC_READ_WRITE: u32 = 0x8000_0000 | 0x4000_0000;
+    const FILE_SHARE_READ_WRITE: u32 = 0x1 | 0x2;
+    const OPEN_EXISTING: u32 = 3;
+    const INVALID: isize = -1;
+    // SAFETY: plain Win32 calls with valid constant arguments and a NUL-terminated UTF-16 name.
+    unsafe {
+        let current = GetStdHandle(STD_OUTPUT_HANDLE);
+        if current != 0 && current != INVALID {
+            return;
+        }
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            return;
+        }
+        let name: Vec<u16> = "CONOUT$\0".encode_utf16().collect();
+        let console = CreateFileW(name.as_ptr(), GENERIC_READ_WRITE, FILE_SHARE_READ_WRITE, std::ptr::null(), OPEN_EXISTING, 0, 0);
+        if console != INVALID {
+            SetStdHandle(STD_OUTPUT_HANDLE, console);
+            SetStdHandle(STD_ERROR_HANDLE, console);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn connect_stdout() {}
+
+fn print_line(text: &str) {
+    let mut stdout = std::io::stdout().lock();
+    let _ = writeln!(stdout, "{text}");
+    let _ = stdout.flush();
+}
+
+/// Runs `--version` or `--update ...` without opening a window and returns the process exit code:
+/// check and version 0 once they printed; apply and rollback 0 done, 1 failed, 2 refused (blocked);
+/// 2 for bad arguments.
+pub fn run_cli(request: Result<CliRequest, String>) -> i32 {
+    connect_stdout();
+    let request = match request {
+        Ok(request) => request,
+        Err(message) => {
+            eprintln!("{message}");
+            return EXIT_BLOCKED;
+        }
+    };
+    if request.action == CliAction::Version {
+        let info = crate::hub::version_info();
+        print_line(&if request.json { serde_json::to_string(&info).unwrap_or_default() } else { format!("Social Space {} ({})", info.version, short(&info.commit)) });
+        return EXIT_OK;
+    }
+    let report = match UpdatePaths::from_env() {
+        Err(reason) => CliReport::blocked(reason),
+        Ok(paths) => match request.action {
+            CliAction::Check => report_from_check(check_with(&paths)),
+            CliAction::Apply => apply(&paths),
+            CliAction::Rollback => rollback(&paths),
+            CliAction::Version => unreachable!("handled above"),
+        },
+    };
+    print_line(&if request.json { serde_json::to_string(&report).unwrap_or_default() } else { human(&report) });
+    if request.action == CliAction::Check { EXIT_OK } else { report.exit_code() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|arg| arg.to_string()).collect()
+    }
+
+    fn status(state: &'static str, blocked: Option<&str>) -> UpdateStatus {
+        UpdateStatus {
+            state,
+            running_version: "0.2.0".into(),
+            latest_version: Some("0.3.0".into()),
+            source_dir: "D:/repo".into(),
+            prepared: None,
+            installed_commit: "a".repeat(40),
+            latest_commit: Some("b".repeat(40)),
+            update_available: state != "up_to_date",
+            new_commits: vec!["bbbbbbb Add video library".into()],
+            blocked_reason: blocked.map(str::to_string),
+        }
+    }
 
     #[test]
     fn update_is_needed_only_when_main_has_new_commits() {
@@ -627,20 +1238,37 @@ mod tests {
     }
 
     #[test]
-    fn work_on_another_branch_blocks_the_install() {
-        assert_eq!(other_branch_reason(""), None);
-        assert_eq!(other_branch_reason("main\n"), None);
-        assert!(other_branch_reason("brand-hierarchy").unwrap().contains("on branch brand-hierarchy"));
+    fn an_offline_check_is_blocked_quickly_with_a_reason() {
+        let dir = tempfile::tempdir().unwrap();
+        let git_in = |args: &[&str]| assert!(Command::new("git").arg("-C").arg(dir.path()).args(args).output().unwrap().status.success());
+        git_in(&["init", "-q", "-b", "main"]);
+        git_in(&["remote", "add", "origin", &dir.path().join("nowhere").display().to_string()]);
+        let started = std::time::Instant::now();
+        let reason = fetch_main(dir.path()).unwrap_err();
+        assert!(reason.starts_with("Could not reach GitHub"), "{reason}");
+        assert!(started.elapsed() < FETCH_TIMEOUT + Duration::from_secs(5));
+        let report = report_from_check(Err(reason));
+        assert_eq!(report.state, "blocked");
+        assert!(FETCH_TIMEOUT < Duration::from_secs(30), "check must answer within 30 s");
     }
 
     #[test]
-    fn local_edits_block_the_install() {
-        assert_eq!(local_changes_reason(""), None);
-        assert_eq!(local_changes_reason("\n"), None);
-        let reason = local_changes_reason(" M src/App.tsx\nM  src-tauri/src/lib.rs\n").unwrap();
-        assert!(reason.contains("src/App.tsx, src-tauri/src/lib.rs"));
-        let many = local_changes_reason(" M a\n M b\n M c\n M d\n M e\n").unwrap();
-        assert!(many.contains("a, b, c and 2 more"));
+    fn main_version_comes_from_tauri_conf() {
+        assert_eq!(conf_version(r#"{"productName":"Social Space","version":"0.3.1"}"#).as_deref(), Some("0.3.1"));
+        assert_eq!(conf_version("not json"), None);
+        assert_eq!(conf_version("{}"), None);
+    }
+
+    #[test]
+    fn missing_npm_blocks_the_build() {
+        assert_eq!(missing_tool_reason(true), None);
+        assert!(missing_tool_reason(false).unwrap().contains("npm"));
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("tool.cmd"), b"").unwrap();
+        let path = std::env::join_paths([Path::new("Z:/nowhere"), dir.path()]).unwrap();
+        assert_eq!(find_on_path("tool.cmd", Some(&path)), Some(dir.path().join("tool.cmd")));
+        assert_eq!(find_on_path("other.cmd", Some(&path)), None);
+        assert_eq!(find_on_path("tool.cmd", None), None);
     }
 
     #[test]
@@ -659,13 +1287,22 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let installer = dir.path().join("SocialSpace-setup.exe");
         fs::write(&installer, b"installer").unwrap();
-        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: sha256_of(&installer).unwrap(), built_at: 1 };
+        let prepared = PreparedUpdate { commit: "b".repeat(40), installer: installer.display().to_string(), sha256: sha256_of(&installer).unwrap(), built_at: 1, app_exe: None, app_sha256: None };
         assert!(prepared_for(Some(prepared.clone()), &"b".repeat(40)).is_some());
         assert!(prepared_for(Some(prepared.clone()), &"c".repeat(40)).is_none(), "main moved on since the build");
         fs::write(&installer, b"rebuilt by hand").unwrap();
         assert!(prepared_for(Some(prepared.clone()), &"b".repeat(40)).is_none(), "installer was replaced");
         fs::remove_file(&installer).unwrap();
         assert!(prepared_for(Some(prepared), &"b".repeat(40)).is_none(), "installer was deleted");
+    }
+
+    #[test]
+    fn only_the_reviewed_newest_main_is_built() {
+        let latest = "b".repeat(40);
+        assert!(buildable(&status("available", None), &latest).is_ok());
+        assert!(buildable(&status("available", None), &"c".repeat(40)).unwrap_err().contains("Main changed"));
+        assert!(buildable(&status("up_to_date", None), &latest).unwrap_err().contains("up to date"));
+        assert_eq!(buildable(&status("available", Some("npm missing")), &latest).unwrap_err(), "npm missing");
     }
 
     #[test]
@@ -713,7 +1350,7 @@ mod tests {
 
     #[test]
     fn the_app_restarts_only_after_the_installer_is_done() {
-        let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Manager\social-manager.exe"), Path::new(r"C:\Temp\install.log"));
+        let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Manager\social-manager.exe"), Path::new(r"C:\Temp\install.log"), true);
         let install = script.find("-ArgumentList '/S' -PassThru -Wait").unwrap();
         let wait_for_children = script.find("Get-Process -Name 'socialspace-update-setup'").unwrap();
         let relaunch = script.find("Start-Process -FilePath $app").unwrap();
@@ -723,6 +1360,14 @@ mod tests {
         assert!(script.contains(r#"Join-Path $dir.Trim('"') 'social-manager.exe'"#));
         assert!(script.contains("Get-Process -Id 42"));
         assert!(script.contains("Get-Process -Name 'social-manager'"), "other open windows are closed first");
+    }
+
+    #[test]
+    fn headless_installs_do_not_restart_the_app() {
+        let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Space\social-manager.exe"), Path::new(r"C:\Temp\install.log"), false);
+        assert!(script.contains("-ArgumentList '/S' -PassThru -Wait"));
+        assert!(!script.contains("Start-Process -FilePath $app"));
+        assert!(script.contains("not restarting"));
     }
 
     #[test]
@@ -736,5 +1381,125 @@ mod tests {
     fn build_records_where_it_came_from() {
         assert!(!BUILD_COMMIT.is_empty());
         assert!(Path::new(SOURCE_DIR).join("src-tauri").exists());
+        // SOURCE_DIR is the repository that owns the objects, never a worktree of it.
+        assert!(Path::new(SOURCE_DIR).join(".git").is_dir(), "{SOURCE_DIR} should be the main checkout");
+    }
+
+    #[test]
+    fn version_and_identifier_match_tauri_conf() {
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        assert_eq!(conf["version"], APP_VERSION);
+        assert_eq!(conf["identifier"], IDENTIFIER);
+    }
+
+    #[test]
+    fn the_build_worktree_lives_in_local_app_data() {
+        let local = Path::new(r"C:\Users\me\AppData\Local\com.socialmanager.desktop");
+        assert_eq!(build_worktree_dir(local), local.join("updates").join("build"));
+        let paths = UpdatePaths { data_dir: PathBuf::from("roaming"), local_data_dir: local.to_path_buf() };
+        assert_eq!(paths.build_dir(), local.join("updates").join("build"));
+        assert_eq!(paths.data_file(PREPARED_FILE), Path::new("roaming").join(PREPARED_FILE));
+    }
+
+    #[test]
+    fn dependencies_and_cargo_output_survive_the_reset() {
+        assert_eq!(clean_args(), ["clean", "-fdx", "-e", "node_modules", "-e", "/src-tauri/target"]);
+    }
+
+    #[test]
+    fn worktree_paths_compare_like_windows_does() {
+        assert!(same_dir("D:/Projects/SocialManager/.git", r"D:\Projects\SocialManager\.git\"));
+        assert_eq!(same_dir("D:/Projects/A/.git", "d:/projects/a/.git"), cfg!(windows));
+        assert!(!same_dir("D:/Projects/A/.git", "D:/Projects/B/.git"));
+        assert!(!same_dir("", ""));
+    }
+
+    #[test]
+    fn the_stamping_build_script_is_used_when_main_has_it() {
+        assert_eq!(build_script_args(r#"{"scripts":{"tauri:build":"node scripts/tauri-build.mjs"}}"#), ["run", "tauri:build"]);
+        assert_eq!(build_script_args(r#"{"scripts":{"tauri":"tauri"}}"#), ["run", "tauri", "build"]);
+        assert_eq!(build_script_args(""), ["run", "tauri", "build"]);
+    }
+
+    #[test]
+    fn cli_arguments_are_parsed() {
+        let request = |action, json| Some(Ok(CliRequest { action, json }));
+        assert_eq!(parse_cli(&args(&[])), None);
+        assert_eq!(parse_cli(&args(&["--something-else"])), None);
+        assert_eq!(parse_cli(&args(&["--hub"])), None, "a managed launch opens the window");
+        assert_eq!(parse_cli(&args(&["--update", "check", "--json"])), request(CliAction::Check, true));
+        assert_eq!(parse_cli(&args(&["--json", "--update", "apply"])), request(CliAction::Apply, true));
+        assert_eq!(parse_cli(&args(&["--update", "rollback", "--json"])), request(CliAction::Rollback, true));
+        assert_eq!(parse_cli(&args(&["--update=check"])), request(CliAction::Check, false));
+        assert_eq!(parse_cli(&args(&["--version", "--json"])), request(CliAction::Version, true));
+        assert_eq!(parse_cli(&args(&["--hub", "--version"])), request(CliAction::Version, false));
+        assert!(parse_cli(&args(&["--version", "x"])).unwrap().unwrap_err().contains("Unknown argument"));
+        assert!(parse_cli(&args(&["--update"])).unwrap().unwrap_err().contains("Missing"));
+        assert!(parse_cli(&args(&["--update", "--json"])).unwrap().unwrap_err().contains("Missing"));
+        assert!(parse_cli(&args(&["--update", "install"])).unwrap().unwrap_err().contains("Unknown update action"));
+        assert!(parse_cli(&args(&["--update", "check", "extra"])).unwrap().unwrap_err().contains("Unknown argument"));
+    }
+
+    #[test]
+    fn cli_report_has_the_hub_shape() {
+        let report = report_from_check(Ok(status("available", None)));
+        let json: serde_json::Value = serde_json::from_str(&serde_json::to_string(&report).unwrap()).unwrap();
+        let keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+        for key in ["state", "current", "latest", "notes", "reason", "version", "latestVersion", "commit", "latestCommit"] {
+            assert!(keys.contains(&key), "missing {key}");
+        }
+        assert_eq!(keys.len(), 9);
+        assert_eq!(json["state"], "available");
+        assert_eq!((json["current"].as_str(), json["latest"].as_str()), (Some("0.2.0"), Some("0.3.0")));
+        assert_eq!(json["latestVersion"], "0.3.0");
+        assert_eq!(json["notes"][0], "bbbbbbb Add video library");
+        assert!(json["reason"].is_null());
+        assert!(!serde_json::to_string(&report).unwrap().contains('\n'), "one line");
+    }
+
+    #[test]
+    fn apply_and_rollback_exit_codes_follow_the_contract() {
+        let report = report_from_check(Ok(status("available", None)));
+        assert_eq!(CliReport { state: "installed", ..report.clone() }.exit_code(), EXIT_OK);
+        assert_eq!(CliReport { state: "rolled_back", ..report.clone() }.exit_code(), EXIT_OK);
+        assert_eq!(report_from_check(Ok(status("up_to_date", None))).exit_code(), EXIT_OK);
+        assert_eq!(report.clone().with_blocked(OPEN_REASON.into()).exit_code(), EXIT_BLOCKED);
+        let failed = report.failed("did not build".into());
+        assert_eq!((failed.state, failed.exit_code()), ("failed", EXIT_FAILED));
+        assert_eq!(run_cli(Err("bad".into())), EXIT_BLOCKED);
+    }
+
+    #[test]
+    fn the_test_build_is_never_swapped() {
+        // cargo test runs from target\debug\deps, which has no uninstall.exe.
+        assert!(installed_program().unwrap_err().contains("not an installed Social Space"));
+    }
+
+    #[test]
+    fn anything_that_stops_an_update_is_reported_as_blocked() {
+        assert_eq!(report_from_check(Ok(status("up_to_date", None))).state, "up_to_date");
+        assert_eq!(report_from_check(Ok(status("ready", None))).state, "ready");
+        let blocked = report_from_check(Ok(status("available", Some("npm missing"))));
+        assert_eq!((blocked.state, blocked.reason.as_deref()), ("blocked", Some("npm missing")));
+        let failed = report_from_check(Err("The source folder X is gone".into()));
+        assert_eq!(failed.state, "blocked");
+        assert_eq!(failed.latest_commit, None);
+        assert_eq!(failed.version, APP_VERSION);
+        let open = report_from_check(Ok(status("available", None))).with_blocked("open".into());
+        assert_eq!((open.state, open.latest_commit.is_some()), ("blocked", true));
+    }
+
+    #[test]
+    fn other_running_copies_are_found() {
+        let csv = "\"social-manager.exe\",\"1200\",\"Console\",\"1\",\"80,000 K\"\r\n\"social-manager.exe\",\"77\",\"Console\",\"1\",\"9,000 K\"\r\n";
+        assert_eq!(other_pids(csv, 77), vec![1200]);
+        assert!(other_pids("\"social-manager.exe\",\"77\",\"Console\",\"1\",\"9,000 K\"", 77).is_empty());
+        assert!(other_pids("INFO: No tasks are running which match the specified criteria.", 77).is_empty());
+    }
+
+    #[test]
+    fn human_output_summarises_the_report() {
+        let text = human(&report_from_check(Ok(status("available", None))));
+        assert!(text.contains("available") && text.contains("bbbbbbb Add video library") && text.contains("0.3.0"));
     }
 }

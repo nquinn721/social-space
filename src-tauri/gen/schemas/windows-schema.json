@@ -387,6 +387,12 @@
           "markdownDescription": "Enables the fill_site_form command without any pre-configured scope."
         },
         {
+          "description": "Enables the finish_instagram_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-finish-instagram-connection",
+          "markdownDescription": "Enables the finish_instagram_connection command without any pre-configured scope."
+        },
+        {
           "description": "Enables the generate_profile_image command without any pre-configured scope.",
           "type": "string",
           "const": "allow-generate-profile-image",
@@ -675,6 +681,12 @@
           "markdownDescription": "Enables the tiktok_connection command without any pre-configured scope."
         },
         {
+          "description": "Enables the update_management command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-update-management",
+          "markdownDescription": "Enables the update_management command without any pre-configured scope."
+        },
+        {
           "description": "Enables the update_progress command without any pre-configured scope.",
           "type": "string",
           "const": "allow-update-progress",
@@ -901,6 +913,12 @@
           "type": "string",
           "const": "deny-fill-site-form",
           "markdownDescription": "Denies the fill_site_form command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the finish_instagram_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-finish-instagram-connection",
+          "markdownDescription": "Denies the finish_instagram_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the generate_profile_image command without any pre-configured scope.",
@@ -1189,6 +1207,12 @@
           "type": "string",
           "const": "deny-tiktok-connection",
           "markdownDescription": "Denies the tiktok_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the update_management command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-update-management",
+          "markdownDescription": "Denies the update_management command without any pre-configured scope."
         },
         {
           "description": "Denies the update_progress command without any pre-configured scope.",

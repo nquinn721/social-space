@@ -6,6 +6,8 @@ import InstagramAppSetup from './InstagramAppSetup';
 import { listVideoSources } from './videoSourcesService';
 import { listDeveloperApps, saveDeveloperApp } from './devAppsService';
 import { canConnect, connectProfile, disconnectProfile, PROVIDER_OF, useProfileConnections } from './profileConnections';
+import InstagramIdPrompt from './InstagramIdPrompt';
+import { INSTAGRAM_ID_NEEDED } from './instagramService';
 import { TIKTOK_REDIRECT_URI, YOUTUBE_REDIRECT_URI } from './socialConnectService';
 import { getPlatform, normalizeHandle, type Account, type Brand, type Platform, type View } from './model';
 import { BrandMark, errorText } from './ui';
@@ -82,6 +84,8 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
   const [apps, setApps] = useState<Record<string, string | null>>({});
   const [working, setWorking] = useState(false);
   const [note, setNote] = useState('');
+  /** A profile Meta approved without naming its Instagram account; its ID finishes the connection. */
+  const [needsId, setNeedsId] = useState<Account | null>(null);
   const [setup, setSetup] = useState<Setup>(null);
   const [checked, setChecked] = useState(0);
   const status = useSetupStatus(accounts, checked);
@@ -109,6 +113,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
     } catch (reason) {
       const text = errorText(reason);
       if (text === 'SETUP_NEEDED') setSetup({ provider: PROVIDER_OF[account.platform], retry: account });
+      else if (text.startsWith(INSTAGRAM_ID_NEEDED)) setNeedsId(account);
       else setNote(text);
     } finally { setWorking(false); }
   }
@@ -158,6 +163,8 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
     </div>
 
     {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
+    {needsId && <InstagramIdPrompt profile={needsId.id} handle={normalizeHandle(needsId.handle)} onCancel={() => setNeedsId(null)}
+      onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); setChecked((value) => value + 1); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
     {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret, configId) => saveApp('meta', id, secret, configId)} onCancel={() => setSetup(null)}/>}
     {setup?.provider === 'x' && <XAppSetup working={working} onSave={(id) => saveApp('x', id, '')} onCancel={() => setSetup(null)}/>}
     {(setup?.provider === 'google' || setup?.provider === 'tiktok') && <KeyedAppSetup key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret) => saveApp(setup.provider, id, secret)} onCancel={() => setSetup(null)}/>}

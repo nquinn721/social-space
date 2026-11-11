@@ -40,6 +40,25 @@ const CONFIG_ENTRY: &str = "meta";
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 static BUSY: Mutex<bool> = Mutex::new(false);
+/// Marks the error Connect returns when Meta connected but would not say which Instagram account.
+pub const ID_NEEDED: &str = "INSTAGRAM_ID_NEEDED";
+/// A working business token whose Instagram account could not be looked up, kept in memory only
+/// (never on disk) per profile slot until the user gives the account ID.
+static PENDING: Mutex<Option<std::collections::HashMap<String, String>>> = Mutex::new(None);
+
+fn keep_pending(slot: &str, token: &str) {
+    if let Ok(mut pending) = PENDING.lock() {
+        pending.get_or_insert_with(std::collections::HashMap::new).insert(slot.to_owned(), token.to_owned());
+    }
+}
+fn pending_token(slot: &str) -> Option<String> {
+    PENDING.lock().ok()?.as_ref()?.get(slot).cloned()
+}
+fn forget_pending(slot: &str) {
+    if let Ok(mut pending) = PENDING.lock() {
+        if let Some(map) = pending.as_mut() { map.remove(slot); }
+    }
+}
 
 struct MetaApp {
     app_id: String,
@@ -379,7 +398,8 @@ impl Drop for Busy {
 /// One click: opens Instagram's approval page with the profile's saved username and
 /// password filled in, waits for the user to press Allow, and saves the connection.
 #[tauri::command]
-pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, username: Option<String>) -> Result<crate::instagram::InstagramConnection, String> {
+/// instagram_id: the profile's Instagram account ID when it is known, used when Meta will not list the account.
+pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, username: Option<String>, instagram_id: Option<String>) -> Result<crate::instagram::InstagramConnection, String> {
     let _busy = Busy::take()?;
     // New Meta apps only offer Unified login, so an app saved without its configuration
     // (from the earlier form) is set up again instead of opening Instagram's page, which fails.
@@ -437,7 +457,23 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
         if token.trim().is_empty() || token.chars().any(char::is_whitespace) {
             return Err("Meta returned an invalid token.".into());
         }
-        let account = unified_account(&meta, &token, username.as_deref()).await?;
+        let account = match unified_account(&meta, &token, username.as_deref()).await {
+            Ok(account) => account,
+            // Meta connected but kept the account list behind business_management: keep the token
+            // in memory and ask for the account ID instead of making the user sign in again.
+            Err(reason) => {
+                // A known account ID finishes it straight away; Meta checks it against the token.
+                if let Some(id) = instagram_id.as_deref().map(str::trim).filter(|id| !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_digit())) {
+                    if let Ok(connection) = crate::instagram::store(&slot, id, &token, crate::instagram::LoginKind::Facebook).await {
+                        forget_pending(&slot);
+                        return Ok(connection);
+                    }
+                }
+                keep_pending(&slot, &token);
+                return Err(format!("{ID_NEEDED}: {reason}"));
+            }
+        };
+        forget_pending(&slot);
         return crate::instagram::store(&slot, &account.id, &token, crate::instagram::LoginKind::Facebook).await;
     }
     let token = exchange(&meta, &code).await?;
@@ -446,6 +482,22 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
     }
     // The connection belongs to the profile that pressed Connect.
     crate::instagram::store(&slot, "", &token, crate::instagram::LoginKind::Instagram).await
+}
+
+/// Finishes a Connect that Meta approved but whose Instagram account could not be looked up,
+/// using the account ID from Meta Business Settings. Meta checks the ID against the token.
+#[tauri::command]
+pub async fn finish_instagram_connection(profile: Option<String>, instagram_id: String) -> Result<crate::instagram::InstagramConnection, String> {
+    let slot = crate::instagram::slot(profile.as_deref())?;
+    let id = instagram_id.trim();
+    if id.is_empty() || id.len() > 32 || !id.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("The Instagram account ID is the long number under the account in Meta Business Settings.".into());
+    }
+    let token = pending_token(&slot).ok_or("Press Connect again first, then enter the ID.")?;
+    let connection = crate::instagram::store(&slot, id, &token, crate::instagram::LoginKind::Facebook).await
+        .map_err(|reason| format!("Meta did not accept that account ID for this connection. {reason}"))?;
+    forget_pending(&slot);
+    Ok(connection)
 }
 
 #[cfg(test)]
@@ -516,6 +568,23 @@ mod tests {
         assert_eq!(describe_token(&debug), "token type SYSTEM_USER, permissions instagram_basic,instagram_content_publish");
         let empty: DebugToken = serde_json::from_value(serde_json::json!({ "data": {} })).unwrap();
         assert_eq!(describe_token(&empty), "token type unknown, permissions none for Instagram");
+    }
+
+    #[test]
+    fn pending_tokens_are_kept_per_profile_until_used() {
+        keep_pending("profile-a", "EAAtoken");
+        assert_eq!(pending_token("profile-a").as_deref(), Some("EAAtoken"));
+        assert_eq!(pending_token("profile-b"), None);
+        forget_pending("profile-a");
+        assert_eq!(pending_token("profile-a"), None);
+    }
+
+    #[test]
+    fn finishing_rejects_ids_that_are_not_numbers() {
+        let result = tauri::async_runtime::block_on(finish_instagram_connection(Some("p1".into()), "../me".into()));
+        assert!(result.err().unwrap().contains("long number"));
+        let result = tauri::async_runtime::block_on(finish_instagram_connection(Some("p1".into()), "123".into()));
+        assert!(result.err().unwrap().contains("Press Connect again"));
     }
 
     #[test]

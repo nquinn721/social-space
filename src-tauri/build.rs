@@ -41,6 +41,7 @@ fn main() {
         "instagram_app_ready",
         "save_instagram_app",
         "connect_instagram_app",
+        "finish_instagram_connection",
         "instagram_connection",
         "disconnect_instagram",
         "publish_instagram_reel",
@@ -81,36 +82,75 @@ fn main() {
         "export_sign_ins",
         "import_sign_ins",
         "check_for_update",
+        "update_management",
         "prepare_update",
         "install_prepared_update",
         "restart_app",
         "update_progress",
         "take_update_result",
     ];
+    require_stamping_script();
     record_build_source();
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(commands));
     tauri_build::try_build(attributes).expect("failed to build Tauri application");
 }
 
-/// Bakes the source commit and folder into the binary so the app can update itself from main.
+/// A release is built only by `npm run tauri:build` (scripts/tauri-build.mjs), which checks the tree
+/// is a clean main and stamps its commit. `cargo test` and `tauri dev` build the debug profile.
+fn require_stamping_script() {
+    const STAMP_ENV: &str = "SOCIALSPACE_BUILD_STAMPED";
+    println!("cargo:rerun-if-env-changed={STAMP_ENV}");
+    let release = std::env::var("PROFILE").is_ok_and(|profile| profile == "release");
+    if release && std::env::var(STAMP_ENV).is_err() {
+        panic!("Build releases with `npm run tauri:build`: it checks the tree is a clean main and stamps its commit.");
+    }
+}
+
+/// Bakes the source commit and repository into the binary so the app can update itself from main.
+///
+/// The commit is the one of the tree actually being compiled (a worktree has its own HEAD), and
+/// the source folder is the repository that owns the git objects: for a worktree that is the main
+/// checkout, so an update build made in the updater's own worktree still points back at the repo.
+/// `scripts/tauri-build.mjs` and the updater set both explicitly; these are the fallbacks.
 fn record_build_source() {
+    const COMMIT_ENV: &str = "SOCIALSPACE_BUILD_COMMIT";
+    const SOURCE_ENV: &str = "SOCIALSPACE_SOURCE_DIR";
+    println!("cargo:rerun-if-env-changed={COMMIT_ENV}");
+    println!("cargo:rerun-if-env-changed={SOURCE_ENV}");
     let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let repo = manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf();
-    let commit = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&repo)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-        .filter(|commit| !commit.is_empty())
-        .unwrap_or_else(|| "unknown".into());
-    println!("cargo:rustc-env=SOCIALSPACE_BUILD_COMMIT={commit}");
-    println!("cargo:rustc-env=SOCIALSPACE_SOURCE_DIR={}", repo.display());
+    let tree = manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf();
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&tree)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .filter(|value| !value.is_empty())
+    };
+    let from_env = |name: &str| std::env::var(name).ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+    let commit = from_env(COMMIT_ENV).or_else(|| git(&["rev-parse", "HEAD"])).unwrap_or_else(|| "unknown".into());
+    let git_dir = git(&["rev-parse", "--path-format=absolute", "--git-dir"]).map(std::path::PathBuf::from);
+    let common_dir = git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]).map(std::path::PathBuf::from);
+    let source = from_env(SOURCE_ENV)
+        .map(std::path::PathBuf::from)
+        .or_else(|| common_dir.as_ref().and_then(|dir| dir.parent()).map(std::path::Path::to_path_buf))
+        .unwrap_or_else(|| tree.clone());
+    println!("cargo:rustc-env={COMMIT_ENV}={commit}");
+    println!("cargo:rustc-env={SOURCE_ENV}={}", source.display());
     // Rebuild when the checked-out commit changes, so the recorded commit never goes stale.
-    for path in [".git/HEAD", ".git/refs/heads", ".git/packed-refs"] {
-        println!("cargo:rerun-if-changed={}", repo.join(path).display());
+    if let Some(dir) = git_dir {
+        // logs/HEAD is appended on every commit, checkout and reset, even when HEAD names a branch.
+        for path in ["HEAD", "logs/HEAD"] {
+            println!("cargo:rerun-if-changed={}", dir.join(path).display());
+        }
+    }
+    if let Some(dir) = common_dir {
+        for path in ["refs/heads", "packed-refs"] {
+            println!("cargo:rerun-if-changed={}", dir.join(path).display());
+        }
     }
 }

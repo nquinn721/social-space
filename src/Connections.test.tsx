@@ -10,7 +10,7 @@ import * as apps from './devAppsService';
 import * as social from './socialConnectService';
 
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(async () => ({ host: 'gmail', username: 'softwings25@gmail.com', kind: 'gmail' })), connectGmailSession: vi.fn(), openGmailSignIn: vi.fn() }));
-vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn() }));
+vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn(), finishInstagramConnection: vi.fn(), INSTAGRAM_ID_NEEDED: 'INSTAGRAM_ID_NEEDED' }));
 vi.mock('./xService', () => ({ claimXConnection: vi.fn(), connectX: vi.fn(), disconnectX: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({ active: null, sources: [] })) }));
 vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'https://localhost/socialspace/tiktok', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
@@ -46,8 +46,34 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
     await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
-    expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa');
+    expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa', undefined);
     expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
+  });
+
+  it('passes a known Instagram account ID so Connect can finish without asking', async () => {
+    vi.mocked(instagram.connectInstagramApp).mockResolvedValue({ id: '17841466785898395', username: 'massagelisa' });
+    const withId = accounts.map((account) => account.id === 'ig-lisa' ? { ...account, platformId: '17841466785898395' } : account);
+    const user = userEvent.setup();
+    render(<Connections onNavigate={vi.fn()} accounts={withId} brands={brands}/>);
+    await within(row('Instagram @massagewithmia')).findByText('Connected');
+    await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
+    expect(instagram.connectInstagramApp).toHaveBeenCalledWith('ig-lisa', 'massagelisa', '17841466785898395');
+    expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
+  });
+
+  it('finishes with the Instagram account ID when Meta does not name the account', async () => {
+    vi.mocked(instagram.connectInstagramApp).mockRejectedValue('INSTAGRAM_ID_NEEDED: Meta did not share an Instagram account.');
+    vi.mocked(instagram.finishInstagramConnection).mockResolvedValue({ id: '17841466785898395', username: 'massagelisa' });
+    const user = userEvent.setup();
+    render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
+    await within(row('Instagram @massagewithmia')).findByText('Connected');
+    await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
+    const form = await screen.findByRole('form', { name: 'Finish connecting Instagram' });
+    await user.type(within(form).getByLabelText('Instagram account ID'), ' 17841466785898395 ');
+    await user.click(within(form).getByRole('button', { name: 'Finish connecting' }));
+    expect(instagram.finishInstagramConnection).toHaveBeenCalledWith('ig-lisa', '17841466785898395');
+    expect(await screen.findByText('Instagram connected as @massagelisa for MassageMentor.')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Finish connecting Instagram' })).not.toBeInTheDocument();
   });
 
   it('asks for the Meta app with its Unified login configuration once, then connects', async () => {
