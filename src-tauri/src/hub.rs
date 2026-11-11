@@ -74,6 +74,70 @@ pub struct UpdateManagement {
     managed_by: Option<String>,
 }
 
+/// What the open app leaves for Ava when someone clicks its header update button in managed mode.
+pub const REQUEST_NAME: &str = "hub-update-request.json";
+
+/// `%APPDATA%\com.socialmanager.desktop\hub-update-request.json`, next to the marker.
+pub fn request_path(appdata: Option<&Path>) -> Option<PathBuf> {
+    marker_path(appdata).map(|marker| marker.with_file_name(REQUEST_NAME))
+}
+
+/// `{"app", "requestedAt", "latestVersion"}`: Ava applies the update once the app has closed and
+/// opens it again. It ignores a request older than a few minutes.
+pub fn request_json(requested_at_ms: u64, latest_version: Option<&str>) -> String {
+    serde_json::json!({ "app": HUB_ID, "requestedAt": requested_at_ms, "latestVersion": latest_version }).to_string()
+}
+
+/// The Ava program named in the marker (`avaPath`), if any.
+pub fn manager_program(marker: &Path) -> Option<PathBuf> {
+    let text = fs::read_to_string(marker).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(text.trim_start_matches('\u{feff}')).ok()?;
+    value.get("avaPath")?.as_str().map(str::trim).filter(|path| !path.is_empty()).map(PathBuf::from)
+}
+
+/// Whether a program with this file name is running (tasklist; hidden window).
+fn program_running(program: &Path) -> bool {
+    let Some(name) = program.file_name().and_then(|name| name.to_str()) else { return false };
+    let mut command = Command::new("tasklist");
+    command.args(["/FI", &format!("IMAGENAME eq {name}"), "/NH", "/FO", "CSV"]).stdin(Stdio::null());
+    crate::updater::hide_window(&mut command);
+    command
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).to_lowercase().contains(&format!("\"{}\"", name.to_lowercase())))
+        .unwrap_or(false)
+}
+
+/// How the header button's update goes in managed mode.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HandOff {
+    /// Ava has the request; the app closes and Ava installs the update and opens it again.
+    Ava,
+    /// Ava is not running, so the app installs the update itself.
+    SelfUpdate,
+}
+
+/// The header button in managed mode: leave Ava a request and close, so Ava installs the update
+/// (keeping its rollback and "Updated to" note) and reopens the app. When Ava isn't running the
+/// app updates itself instead, so the button never dead-ends.
+#[tauri::command]
+pub fn request_hub_update(app: tauri::AppHandle, latest_version: Option<String>) -> Result<HandOff, String> {
+    let appdata = std::env::var_os("APPDATA").map(PathBuf::from);
+    let marker = marker_path(appdata.as_deref()).filter(|path| path.is_file());
+    let ava_running = marker.as_deref().and_then(manager_program).is_some_and(|program| program_running(&program));
+    if !ava_running {
+        return Ok(HandOff::SelfUpdate);
+    }
+    let path = request_path(appdata.as_deref()).ok_or("Could not find the app data folder.")?;
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|time| time.as_millis() as u64).unwrap_or_default();
+    fs::write(&path, request_json(now, latest_version.as_deref())).map_err(|error| format!("Could not ask Ava to update: {error}"))?;
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(400));
+        app.exit(0);
+    });
+    Ok(HandOff::Ava)
+}
+
 #[tauri::command]
 pub fn update_management() -> UpdateManagement {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -259,6 +323,24 @@ mod tests {
         assert!(!info.commit.is_empty());
         let line = serde_json::to_string(&info).unwrap();
         assert!(line.starts_with("{\"id\":\"social-space\",\"version\":"), "{line}");
+    }
+
+    #[test]
+    fn an_update_request_names_the_app_and_sits_next_to_the_marker() {
+        let roaming = Path::new(r"C:\Users\me\AppData\Roaming");
+        assert_eq!(request_path(Some(roaming)), Some(roaming.join("com.socialmanager.desktop").join("hub-update-request.json")));
+        let value: serde_json::Value = serde_json::from_str(&request_json(42, Some("0.2.5"))).unwrap();
+        assert_eq!(value, serde_json::json!({ "app": "social-space", "requestedAt": 42, "latestVersion": "0.2.5" }));
+    }
+
+    #[test]
+    fn the_marker_names_the_ava_program_to_hand_updates_to() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join(MARKER_NAME);
+        fs::write(&marker, r#"{"managedBy":"Ava","avaPath":"C:\\Ava\\ava.exe","since":1}"#).unwrap();
+        assert_eq!(manager_program(&marker), Some(PathBuf::from(r"C:\Ava\ava.exe")));
+        fs::write(&marker, "{not json").unwrap();
+        assert_eq!(manager_program(&marker), None);
     }
 
     #[test]

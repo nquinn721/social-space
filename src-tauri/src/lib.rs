@@ -441,7 +441,8 @@ pub fn run() {
             updater::restart_app,
             updater::update_progress,
             updater::take_update_result,
-            hub::update_management
+            hub::update_management,
+            hub::request_hub_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Space");

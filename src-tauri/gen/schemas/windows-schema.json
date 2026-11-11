@@ -609,6 +609,12 @@
           "markdownDescription": "Enables the rename_video_source command without any pre-configured scope."
         },
         {
+          "description": "Enables the request_hub_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-request-hub-update",
+          "markdownDescription": "Enables the request_hub_update command without any pre-configured scope."
+        },
+        {
           "description": "Enables the restart_app command without any pre-configured scope.",
           "type": "string",
           "const": "allow-restart-app",
@@ -1135,6 +1141,12 @@
           "type": "string",
           "const": "deny-rename-video-source",
           "markdownDescription": "Denies the rename_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the request_hub_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-request-hub-update",
+          "markdownDescription": "Denies the request_hub_update command without any pre-configured scope."
         },
         {
           "description": "Denies the restart_app command without any pre-configured scope.",

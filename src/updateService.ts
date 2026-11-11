@@ -35,6 +35,13 @@ export async function updateManagement(): Promise<UpdateManagement> {
   if (!isTauri()) return { managedBy: null };
   return invoke('update_management');
 }
+/** "ava": Ava has the request and the app is closing; "self_update": Ava isn't running, update here. */
+export type HandOff = 'ava' | 'self_update';
+/** Managed mode's header button: asks Ava to install the update (the app then closes and Ava reopens it). */
+export async function requestHubUpdate(latestVersion: string | null): Promise<HandOff> {
+  if (!isTauri()) return 'self_update';
+  return invoke('request_hub_update', { latestVersion });
+}
 /** Returns null outside the desktop app, where there is nothing to update. */
 export async function checkForUpdate(): Promise<UpdateStatus | null> {
   if (!isTauri()) return null;

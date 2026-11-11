@@ -83,6 +83,7 @@ fn main() {
         "import_sign_ins",
         "check_for_update",
         "update_management",
+        "request_hub_update",
         "prepare_update",
         "install_prepared_update",
         "restart_app",

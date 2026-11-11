@@ -94,6 +94,7 @@
     "allow-restart-app",
     "allow-update-progress",
     "allow-take-update-result",
-    "allow-update-management"
+    "allow-update-management",
+    "allow-request-hub-update"
   ]
 }

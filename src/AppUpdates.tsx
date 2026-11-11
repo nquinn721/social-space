@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, RefreshCw, RotateCw, X as Close } from 'lucide-react';
-import { checkForUpdate, installPreparedUpdate, prepareUpdate, restartApp, takeUpdateResult, updateManagement, updateProgress, type UpdateProgress, type UpdateResult, type UpdateStatus } from './updateService';
+import { checkForUpdate, installPreparedUpdate, prepareUpdate, requestHubUpdate, restartApp, takeUpdateResult, updateManagement, updateProgress, type UpdateProgress, type UpdateResult, type UpdateStatus } from './updateService';
 import { PageHeader } from './ui';
 import './updates.css';
 
@@ -23,7 +23,7 @@ export function hasUpdate(status: UpdateStatus | null): boolean {
 }
 
 export type AppUpdates = {
-  /** "Ava" while the Ava hub manages updates: then the app never checks, builds or offers updates itself. */
+  /** "Ava" while the Ava hub manages updates: the app still notices and prepares a release, but Ava installs it. */
   managedBy?: string | null;
   status: UpdateStatus | null;
   progress: UpdateProgress | null;
@@ -38,10 +38,10 @@ export type AppUpdates = {
 };
 
 /**
- * Checks main at startup and every few minutes. When main has new commits it builds them in the
- * background on its own (once per commit, so a failed build is not retried in a loop), and the
- * app then offers one "Restart to update" that installs over the old version. In managed mode
- * (the Ava hub keeps the app up to date) it does none of that.
+ * Checks main at startup, every minute and on focus. When main has new commits it builds them in
+ * the background on its own (once per commit, so a failed build is not retried in a loop), and the
+ * header then offers one "Restart to update". In managed mode (the Ava hub keeps the app up to
+ * date) the same happens, but the restart hands the install to Ava, which reuses the build.
  */
 export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -64,7 +64,8 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
       .catch(() => { if (live) setManagedBy(null); });
     return () => { live = false; };
   }, []);
-  const selfUpdating = managedBy === null;
+  // Known once the management lookup answered; checks run the same either way.
+  const selfUpdating = managedBy !== undefined;
 
   const check = useCallback(async (quiet = false) => {
     if (checkingRef.current) return;
@@ -128,7 +129,15 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const restartToUpdate = useCallback(async () => {
     if (acting.current) return;
     acting.current = true; setError('');
-    try { await installPreparedUpdate(); await followProgress(); }
+    try {
+      // Managed: Ava installs it (keeping rollback and its "Updated to" note) and reopens the app.
+      // Only when Ava isn't running does the app install it itself.
+      if (managedBy && await requestHubUpdate(status?.latestVersion ?? null) === 'ava') {
+        setProgress((current) => ({ ...(current ?? { step: 0, totalSteps: 3, label: '', detail: '', error: null }), state: 'restarting', label: 'Ava is installing the update' }));
+        return;
+      }
+      await installPreparedUpdate(); await followProgress();
+    }
     catch (reason) {
       setError(errorText(reason));
       // The built installer was refused (for example, a manual build replaced it). Check again so
@@ -137,7 +146,7 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
       void check(true);
     }
     finally { acting.current = false; }
-  }, [followProgress, check]);
+  }, [followProgress, check, managedBy, status]);
 
   return { managedBy, status, progress, checking, error, check, followProgress, buildNow, restartToUpdate };
 }
@@ -169,19 +178,20 @@ export function updateNavLabel(updates: Pick<AppUpdates, 'status' | 'progress'>)
 
 /**
  * The update button in the header, the same in every hub app: "Preparing update" while a new
- * release is fetched and built, then "Restart to update". Hidden when there is nothing new, and
- * when the Ava hub manages updates (it installs them while the app is closed).
+ * release is fetched and built, then "Restart to update". Hidden when there is nothing new. In
+ * managed mode the restart hands the install to Ava, which reopens the app.
  */
 export function HeaderUpdateButton({ updates, onOpen }: { updates: AppUpdates; onOpen: () => void }) {
   const { status, progress, restartToUpdate } = updates;
-  if (updates.managedBy || status?.blockedReason) return null;
+  if (status?.blockedReason) return null;
   if (progress?.state === 'restarting') {
     return <button type="button" className="primary-button small-button header-update" disabled><RotateCw size={15} className="spin"/> Restarting…</button>;
   }
   if (status?.state === 'ready') {
     return <button type="button" className="primary-button small-button header-update" onClick={() => void restartToUpdate()} title={changeCount(status)}><Download size={15}/> Restart to update</button>;
   }
-  if (status?.state === 'available') {
+  // Managed: Ava's Settings has the details, so the button only shows once the update is ready.
+  if (status?.state === 'available' && !updates.managedBy) {
     const building = progress?.state === 'running';
     const failed = progress?.state === 'failed';
     return <button type="button" className={`outline-button small-button header-update ${failed ? 'failed' : ''}`} onClick={onOpen} title={changeCount(status)}>
