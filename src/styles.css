@@ -187,13 +187,16 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .empty-state .heading-buttons { margin-top: 10px; justify-content: center; }
 
 /* ───────────────── Platform marks ───────────────── */
-.platform-mark { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; font-size: 19px; font-weight: 700; }
-.platform-mark.small { width: 26px; height: 26px; font-size: 14px; border-radius: 7px; }
-.platform-mark.instagram { background: var(--instagram-soft); color: var(--instagram); }
-.platform-mark.tiktok { background: var(--tiktok-soft); color: var(--tiktok); }
-.platform-mark.youtube { background: var(--youtube-soft); color: var(--youtube); font-size: 14px; }
-.platform-mark.small.youtube { font-size: 11px; }
-.platform-mark.x { background: var(--x-soft); color: var(--x); }
+.platform-mark { width: 36px; height: 36px; flex-shrink: 0; display: grid; place-items: center; border-radius: 10px; color: #fff; }
+.platform-mark svg { width: 56%; height: 56%; fill: currentColor; }
+.platform-mark.small { width: 26px; height: 26px; border-radius: 7px; }
+/* The socials' own colours, so each logo reads as the real thing. */
+.platform-mark.instagram { background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285aeb 90%); }
+.platform-mark.tiktok { background: #000; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.platform-mark.tiktok svg { filter: drop-shadow(-1px -1px 0 #25f4ee) drop-shadow(1px 1px 0 #fe2c55); }
+.platform-mark.youtube { background: #fff; color: #ff0000; }
+.platform-mark.youtube svg { width: 70%; height: 70%; }
+.platform-mark.x { background: #000; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
 
 /* ───────────────── Overview ───────────────── */
 .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }

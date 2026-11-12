@@ -10,6 +10,8 @@ import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
 export const DEFAULT_SIGNUP_EMAIL = 'softwings25@gmail.com';
+/** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */
+export const DEFAULT_SIGNUP_BIRTHDAY = '1995-06-15';
 /** Details to start the form with, e.g. when adding an existing brand to more socials. */
 export type WizardPrefill = { label?: string; handle?: string; brandId?: string } & AccountProfile;
 type Step = 'details' | 'signup' | 'profile';
@@ -60,7 +62,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
   const [autoImage, setAutoImage] = useState<AutoImage>();
-  const [birthday, setBirthday] = useState(prefill?.birthday ?? '');
+  const [birthday, setBirthday] = useState(prefill?.birthday || DEFAULT_SIGNUP_BIRTHDAY);
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const [accounts, setAccounts] = useState<Account[]>(resume ?? []);

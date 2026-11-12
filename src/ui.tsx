@@ -1,11 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { getPlatform, type Account, type Platform } from './model';
 import { loadImagePreview } from './profileService';
+import { SOCIAL_ICON_PATHS } from './socialIcons';
 
 /** Platform logo tile. Decorative by default, since its name is almost always printed next to it. */
 export function BrandMark({ platform, small = false, label = false }: { platform: Platform; small?: boolean; label?: boolean }) {
   const item = getPlatform(platform);
-  return <span className={`platform-mark ${small ? 'small' : ''} ${platform}`} {...(label ? { role: 'img', 'aria-label': item.name } : { 'aria-hidden': true })}>{item.mark}</span>;
+  return <span className={`platform-mark ${small ? 'small' : ''} ${platform}`} {...(label ? { role: 'img', 'aria-label': item.name } : { 'aria-hidden': true })}>
+    <svg viewBox="0 0 24 24" focusable="false"><path d={SOCIAL_ICON_PATHS[platform]}/></svg>
+  </span>;
 }
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: ReactNode; actions?: ReactNode }) {

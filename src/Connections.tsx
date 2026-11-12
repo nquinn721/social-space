@@ -4,7 +4,7 @@ import { connectGmailSession, emailConnection, openGmailSignIn } from './emailSe
 import { saveInstagramApp } from './instagramService';
 import InstagramAppSetup from './InstagramAppSetup';
 import { listVideoSources } from './videoSourcesService';
-import { listDeveloperApps, saveDeveloperApp } from './devAppsService';
+import { saveDeveloperApp } from './devAppsService';
 import { canConnect, connectProfile, disconnectProfile, PROVIDER_OF, useProfileConnections } from './profileConnections';
 import InstagramIdPrompt from './InstagramIdPrompt';
 import { INSTAGRAM_ID_NEEDED } from './instagramService';
@@ -70,18 +70,12 @@ function KeyedAppSetup({ provider, working, onSave, onCancel }: { provider: 'goo
 }
 
 /**
- * Connections in two layers: each social's developer app is set up once, then every live profile
- * connects on its own with one button, and posts through its own connection.
+ * Connecting profiles, shared by the Setup tab and a brand's Accounts tab: one click connects a profile,
+ * and opens the social's one-time app setup (then retries) when it is missing. `panels` holds the forms
+ * and notices this needs; render it once above the profiles.
  */
-/** profilesOnly: just the profiles' own connections, as on a brand's Accounts tab (one-time app setup still opens when needed). */
-/**
- * marks/onMark: the setup checklist's hand-ticked steps, saved in the workspace.
- * onEditAccount: opens a profile to add its username and password.
- */
-export default function Connections({ onNavigate, accounts = [], brands = [], profilesOnly = false, marks = {}, onMark, onEditAccount }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; profilesOnly?: boolean; marks?: Record<string, number>; onMark?: (id: string, done: boolean) => void; onEditAccount?: (account: Account) => void }) {
-  const { state, loading, refresh } = useConnectionState();
+export function useConnectFlow(accounts: Account[], brands: Brand[]) {
   const profiles = useProfileConnections(accounts);
-  const [apps, setApps] = useState<Record<string, string | null>>({});
   const [working, setWorking] = useState(false);
   const [note, setNote] = useState('');
   /** A profile Meta approved without naming its Instagram account; its ID finishes the connection. */
@@ -89,26 +83,15 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
   const [setup, setSetup] = useState<Setup>(null);
   const [checked, setChecked] = useState(0);
   const status = useSetupStatus(accounts, checked);
-  const loadApps = () => listDeveloperApps().then((list) => setApps(Object.fromEntries(list.map((item) => [item.provider, item.id])))).catch(() => undefined);
-  useEffect(() => { void loadApps(); }, []);
-  const live = accounts.filter((account) => account.status === 'active').sort((a, b) => brandName(a).localeCompare(brandName(b)));
+  const recheck = () => setChecked((value) => value + 1);
   function brandName(account: Account) { return brands.find((brand) => brand.id === account.brandId)?.name ?? account.label; }
 
-  async function connectInbox() {
-    if (working) return;
-    setWorking(true); setNote('');
-    try { await connectGmailSession(); refresh(); setNote('Inbox connected.'); }
-    catch {
-      try { await openGmailSignIn(); setNote('Sign in to Gmail in the window that opened, then press Connect again.'); }
-      catch (reason) { setNote(errorText(reason)); }
-    } finally { setWorking(false); }
-  }
   async function connect(account: Account) {
     if (working) return;
     setWorking(true); setNote('');
     try {
       const username = await connectProfile(account);
-      setSetup(null); await profiles.refresh(); setChecked((value) => value + 1);
+      setSetup(null); await profiles.refresh(); recheck();
       setNote(`${getPlatform(account.platform).name} connected as @${normalizeHandle(username)} for ${brandName(account)}.`);
     } catch (reason) {
       const text = errorText(reason);
@@ -120,7 +103,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
   async function disconnect(account: Account) {
     if (working || !window.confirm(`Disconnect ${getPlatform(account.platform).name} @${account.handle}? The app won't be able to post for it until you connect again.`)) return;
     setWorking(true); setNote('');
-    try { await disconnectProfile(account); await profiles.refresh(); setChecked((value) => value + 1); }
+    try { await disconnectProfile(account); await profiles.refresh(); recheck(); }
     catch (reason) { setNote(errorText(reason)); } finally { setWorking(false); }
   }
   async function saveApp(provider: Provider, id: string, secret: string, configId?: string) {
@@ -129,11 +112,45 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
     try {
       // The Meta app also needs its Unified login configuration, which only the Instagram command stores.
       await (provider === 'meta' ? saveInstagramApp(id, secret, configId) : saveDeveloperApp(provider, id, secret));
-      await loadApps(); setChecked((value) => value + 1);
+      recheck();
       const retry = setup?.retry;
       setSetup(null); setWorking(false);
       if (retry) await connect(retry);
     } catch (reason) { setNote(errorText(reason)); setWorking(false); }
+  }
+
+  const panels = <>
+    {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
+    {needsId && <InstagramIdPrompt profile={needsId.id} handle={normalizeHandle(needsId.handle)} onCancel={() => setNeedsId(null)}
+      onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); recheck(); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
+    {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret, configId) => saveApp('meta', id, secret, configId)} onCancel={() => setSetup(null)}/>}
+    {setup?.provider === 'x' && <XAppSetup working={working} onSave={(id) => saveApp('x', id, '')} onCancel={() => setSetup(null)}/>}
+    {(setup?.provider === 'google' || setup?.provider === 'tiktok') && <KeyedAppSetup key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret) => saveApp(setup.provider, id, secret)} onCancel={() => setSetup(null)}/>}
+  </>;
+  return { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp: (provider: Provider) => setSetup({ provider }), recheck, panels, brandName };
+}
+
+/**
+ * Connections in two layers: each social's developer app is set up once, then every live profile
+ * connects on its own with one button, and posts through its own connection.
+ * marks/onMark: the setup checklist's hand-ticked steps, saved in the workspace.
+ * onEditAccount: opens a profile to add its username and password.
+ */
+export default function Connections({ onNavigate, accounts = [], brands = [], marks = {}, onMark, onEditAccount }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; marks?: Record<string, number>; onMark?: (id: string, done: boolean) => void; onEditAccount?: (account: Account) => void }) {
+  const { state, loading, refresh } = useConnectionState();
+  const flow = useConnectFlow(accounts, brands);
+  const { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp, recheck, brandName } = flow;
+  const apps = status.apps ?? {};
+  const live = accounts.filter((account) => account.status === 'active').sort((a, b) => brandName(a).localeCompare(brandName(b)));
+
+  async function connectInbox() {
+    if (working) return;
+    setWorking(true); setNote('');
+    try { await connectGmailSession(); refresh(); setNote('Inbox connected.'); }
+    catch {
+      try { await openGmailSignIn(); setNote('Sign in to Gmail in the window that opened, then press Connect again.'); }
+      catch (reason) { setNote(errorText(reason)); }
+    } finally { setWorking(false); }
   }
 
   const other: Row[] = [
@@ -159,19 +176,13 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
   return <section className="connections" aria-label="Connections">
     <div className="sign-ins-head">
       <div><h2><Link2 size={16}/> Connections</h2><p>Connect each profile so the app can post as it.</p></div>
-      <button type="button" className="ghost-button small-button" disabled={loading || profiles.loading} onClick={() => { refresh(); void profiles.refresh(); void loadApps(); setChecked((value) => value + 1); }}><RefreshCw size={14}/> Check again</button>
+      <button type="button" className="ghost-button small-button" disabled={loading || profiles.loading} onClick={() => { refresh(); void profiles.refresh(); recheck(); }}><RefreshCw size={14}/> Check again</button>
     </div>
 
-    {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
-    {needsId && <InstagramIdPrompt profile={needsId.id} handle={normalizeHandle(needsId.handle)} onCancel={() => setNeedsId(null)}
-      onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); setChecked((value) => value + 1); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
-    {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret, configId) => saveApp('meta', id, secret, configId)} onCancel={() => setSetup(null)}/>}
-    {setup?.provider === 'x' && <XAppSetup working={working} onSave={(id) => saveApp('x', id, '')} onCancel={() => setSetup(null)}/>}
-    {(setup?.provider === 'google' || setup?.provider === 'tiktok') && <KeyedAppSetup key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret) => saveApp(setup.provider, id, secret)} onCancel={() => setSetup(null)}/>}
+    {flow.panels}
 
     <SetupTracker accounts={accounts} brands={brands} apps={status.apps} connections={status.connections} passwords={status.passwords} marks={marks}
-      onMark={onMark} onConnect={(account) => void connect(account)} onSetupApp={(provider) => setSetup({ provider })} onEditAccount={onEditAccount} working={working}
-      scope={profilesOnly && brands.length === 1 ? brands[0].name : undefined}/>
+      onMark={onMark} onConnect={(account) => void connect(account)} onSetupApp={setupApp} onEditAccount={onEditAccount} working={working}/>
 
     <div className="card conn-card" aria-label="Profile connections">
       <div className="conn-card-head"><h3>Profiles</h3><small>{profiles.loading ? 'Checking…' : `${connectedCount} of ${live.length} connected`}</small></div>
@@ -196,14 +207,14 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
         </div>)}
     </div>
 
-    {!profilesOnly && <div className="conn-columns">
+    <div className="conn-columns">
       <div className="card conn-card" aria-label="Developer apps">
         <div className="conn-card-head"><h3>Set up once</h3><small>One developer app per social</small></div>
         {appRows.map((row) => <div className="conn-row" key={row.provider}>
           <BrandMark platform={SOCIAL_OF[row.provider]} small/>
           <div className="conn-text"><strong>{row.name}</strong></div>
           <span className={`pill ${apps[row.provider] ? 'active' : 'planned'}`}><span className="dot"/>{apps[row.provider] ? 'Set up' : 'Not set up'}</span>
-          <span className="conn-action"><button type="button" className={apps[row.provider] ? 'ghost-button small-button' : 'outline-button small-button'} disabled={working} onClick={() => setSetup({ provider: row.provider })}>{apps[row.provider] ? 'Change' : 'Set up'}</button></span>
+          <span className="conn-action"><button type="button" className={apps[row.provider] ? 'ghost-button small-button' : 'outline-button small-button'} disabled={working} onClick={() => setupApp(row.provider)}>{apps[row.provider] ? 'Change' : 'Set up'}</button></span>
         </div>)}
       </div>
       <div className="card conn-card" aria-label="Other connections">
@@ -215,6 +226,6 @@ export default function Connections({ onNavigate, accounts = [], brands = [], pr
           <span className="conn-action"><button type="button" className={row.connected ? 'ghost-button small-button' : 'primary-button small-button'} disabled={working} onClick={!row.connected && row.connect ? row.connect : row.go}>{row.connected ? 'Manage' : 'Connect'}</button></span>
         </div>)}
       </div>
-    </div>}
+    </div>
   </section>;
 }

@@ -3,10 +3,11 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AccountsPage, { groupByBrand } from './AccountsPage';
+import { ensureSharedPassword } from '../profileService';
 import { migrateWorkspace } from '../brands';
 import type { Account, Workspace } from '../model';
 
-vi.mock('../profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
+vi.mock('../profileService', () => ({ ensureSharedPassword: vi.fn(async () => undefined), onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
 afterEach(cleanup);
 const account = (id: string, platform: Account['platform'], label: string, status: Account['status'] = 'planned'): Account => ({ id, platform, label, handle: 'softwings', status, notes: '', bio: 'Wings.', signupEmail: 'softwings25@gmail.com' });
 const accounts = [account('1', 'x', 'Soft Wings'), account('2', 'instagram', 'soft wings ', 'active'), { ...account('3', 'youtube', 'Clip Lab'), handle: 'cliplab' }, { ...account('4', 'instagram', 'Clip Lab'), handle: 'cliplab' }];
@@ -39,10 +40,12 @@ describe('brands page', () => {
     renderPage({ onSignUp });
     const user = await openBrand('Soft Wings');
     const profiles = screen.getByRole('region', { name: 'Soft Wings profiles' });
-    expect(within(profiles).getByText('Live')).toBeInTheDocument();
+    expect(within(profiles).getByRole('article', { name: 'Instagram profile' })).toHaveTextContent(/Live/);
     expect(within(profiles).getByText('Not created yet')).toBeInTheDocument();
     await user.click(within(profiles).getByRole('button', { name: 'Create on X' }));
-    expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })]);
+    // The new X profile gets the brand's password (the live Instagram one comes first).
+    await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })]));
+    expect(ensureSharedPassword).toHaveBeenCalledWith(['2', '1']);
     expect(within(profiles).queryByRole('button', { name: 'Create on Instagram' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /All brands/ }));
     expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
@@ -60,7 +63,7 @@ describe('brands page', () => {
     const onAlreadyCreated = vi.fn();
     renderPage({ onAlreadyCreated });
     const user = await openBrand('Soft Wings');
-    await user.click(screen.getByRole('button', { name: 'I already made it' }));
+    await user.click(screen.getByRole('button', { name: 'Mark it live' }));
     expect(onAlreadyCreated).toHaveBeenCalledWith(expect.objectContaining({ id: '1', platform: 'x' }));
   });
 
@@ -76,12 +79,17 @@ describe('brands page', () => {
     expect(onRemoveBrand).toHaveBeenCalledWith(expect.objectContaining({ name: 'Soft Wings' }));
   });
 
-  it('offers the missing socials pre-filled with the brand details', async () => {
-    const onCreateAccounts = vi.fn();
-    renderPage({ onCreateAccounts });
+  it('adds a missing social in one click and opens its sign-up filled in with the brand details', async () => {
+    const onSave = vi.fn(async () => true);
+    const onSignUp = vi.fn();
+    renderPage({ onSave, onSignUp });
     const user = await openBrand('Soft Wings');
-    await user.click(within(screen.getByRole('region', { name: 'Soft Wings profiles' })).getByRole('button', { name: 'TikTok' }));
-    expect(onCreateAccounts).toHaveBeenCalledWith(['tiktok'], expect.objectContaining({ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.', brandId: expect.any(String) }));
+    await user.click(within(screen.getByRole('region', { name: 'Soft Wings profiles' })).getByRole('button', { name: /Add TikTok/ }));
+    const saved = (onSave.mock.calls[0] as unknown as [Workspace])[0];
+    const tiktok = saved.accounts.find((item) => item.platform === 'tiktok');
+    expect(tiktok).toMatchObject({ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.', status: 'planned', signupEmail: 'softwings25+softwings@gmail.com', birthday: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: tiktok!.id })]));
+    expect(ensureSharedPassword).toHaveBeenLastCalledWith(['2', '1', tiktok!.id]);
   });
 
   it('searches brands by name or username', async () => {

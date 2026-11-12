@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
+import CreateAccountWizard, { DEFAULT_SIGNUP_BIRTHDAY, DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import * as profile from './profileService';
 import * as email from './emailService';
 import * as suggest from './assistant/suggest';
@@ -115,6 +115,9 @@ describe('verification code detection', () => {
     const user = userEvent.setup();
     render(<CreateAccountWizard initialPlatforms={['instagram']} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
+    // Sign-up forms always ask for one, so the form starts with a default birthday.
+    expect(screen.getByLabelText(/Birthday/)).toHaveValue(DEFAULT_SIGNUP_BIRTHDAY);
+    await user.clear(screen.getByLabelText(/Birthday/));
     await user.type(screen.getByLabelText(/Birthday/), '1998-04-12');
     await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ birthday: '1998-04-12' }));
@@ -158,6 +161,6 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     await user.click(screen.getByRole('button', { name: 'Make a new Gmail instead' }));
-    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia' }, { keepFilling: true }));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia', birthday: DEFAULT_SIGNUP_BIRTHDAY }, { keepFilling: true }));
   });
 });
