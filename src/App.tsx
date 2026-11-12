@@ -15,6 +15,8 @@ import appIcon from './assets/app-icon.png';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { initialOf, PageHeader } from './ui';
 import { PartnerReviewProvider, usePartnerReview } from './usePartnerReview';
+import { useTeamSync } from './useTeamSync';
+import { mergeWorkspaces } from './workspaceSync';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 /** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
@@ -48,20 +50,40 @@ function App() {
   workspaceRef.current = workspace;
 
   useEffect(() => { loadWorkspace().then((data) => { setWorkspace(data); setBusinessName(data.businessName); setLoaded(true); }).catch(() => showError('Could not load your workspace. Restart the app and try again.')); }, []);
+  // Saves and team syncs run one at a time. A save prepared before a sync brought in the other PC's
+  // changes is replayed on top of them, so neither side's edits are lost.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  function exclusive<T>(work: () => Promise<T>): Promise<T> {
+    const run = queue.current.then(work, work);
+    queue.current = run.catch(() => undefined);
+    return run;
+  }
+  async function store(next: Workspace) {
+    const saved = await saveWorkspace(next);
+    workspaceRef.current = saved;
+    setWorkspace(saved); setBusinessName(saved.businessName);
+    return saved;
+  }
+  function commit(next: Workspace) {
+    const origin = workspaceRef.current;
+    return exclusive(async () => {
+      const saved = await store(workspaceRef.current === origin ? next : mergeWorkspaces(origin, next, workspaceRef.current));
+      teamSync.saved();
+      return saved;
+    });
+  }
+  const teamSync = useTeamSync({ loaded, workspaceRef, exclusive, apply: store });
   async function persist(next: Workspace, success: string) {
     if (busy || !loaded) return;
     setBusy(true); setMessage('');
-    try { const saved = await saveWorkspace(next); setWorkspace(saved); setBusinessName(saved.businessName); showMessage(success); return true; }
+    try { await commit(next); showMessage(success); return true; }
     catch { showError('Could not save your changes. Please try again.'); return false; }
     finally { setBusy(false); }
   }
   // The assistant saves directly so several tool calls in one reply build on each other.
   async function saveFromAssistant(next: Workspace) {
     if (!loaded) throw new Error('The workspace has not loaded yet.');
-    const saved = await saveWorkspace(next);
-    workspaceRef.current = saved;
-    setWorkspace(saved); setBusinessName(saved.businessName);
-    return saved;
+    return commit(next);
   }
   async function saveWizardAccount(account: Account) {
     const current = workspaceRef.current;
@@ -131,7 +153,7 @@ function App() {
       <div className="sidebar-bottom">
         {!updatesManaged && navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
-        <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>Stored on this PC</small></div></div>
+        <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>{teamSync.status?.enabled ? 'Shared with your partner' : 'Stored on this PC'}</small></div></div>
       </div>
     </aside>
     <main className="main">
@@ -150,7 +172,7 @@ function App() {
         {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
-        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy}/>}
+        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync}/>}
       </div>
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>

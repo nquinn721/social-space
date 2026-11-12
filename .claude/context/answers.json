@@ -1,0 +1,11 @@
+[
+ {
+  "a": "Team sync: Settings > Shared accounts. Rust team_sync.rs encrypts (team passphrase -> PBKDF2 -> AES-GCM) and stores in Firestore team/{meta,marker,data}; polls only team/marker each minute. Secrets shared = Credential Manager services in SHARED_SERVICES plus SHARED_FILES (video-sources.json); add new shared secrets there. Workspace parts (brands, accounts, channels, categories, setup) are 3-way merged in src/workspaceSync.ts; App.tsx serialises saves and syncs (exclusive queue) and replays stale saves with mergeWorkspaces. Approved review posts are claimed with claim_review_post so only one PC publishes. Release-installed apps (SOCIALSPACE_RELEASE_CHANNEL, .github/workflows/release.yml) update from GitHub releases.",
+  "at": "2026-11-12",
+  "q": "How do the two desktop apps share accounts, passwords and API keys?",
+  "refs": {
+   "src/useTeamSync.ts#syncOnce": "95c742f14f55",
+   "src/workspaceSync.ts#mergeShared": "2b3f86529518"
+  }
+ }
+]

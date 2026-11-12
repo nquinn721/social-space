@@ -21,6 +21,7 @@ mod ollama;
 mod queue;
 mod review;
 mod setup_pages;
+mod team_sync;
 mod updater;
 mod video_files;
 mod video_gen;
@@ -369,6 +370,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_workspace,
             save_workspace,
+            team_sync::team_sync_status,
+            team_sync::team_sync_enable,
+            team_sync::team_sync_disable,
+            team_sync::team_sync_fetch,
+            team_sync::team_sync_push,
+            review::claim_review_post,
+            review::export_review_key,
             open_platform_action,
             open_kling,
             video_sources::list_video_sources,

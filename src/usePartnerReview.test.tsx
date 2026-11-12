@@ -3,11 +3,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { isTauri } from '@tauri-apps/api/core';
 import type { Workspace } from './model';
 import { usePartnerReview } from './usePartnerReview';
-import { importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, type ReviewPost } from './reviewService';
+import { claimReviewPost, importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, type ReviewPost } from './reviewService';
 import { claimInstagramConnection, publishInstagramReelFile } from './instagramService';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
-vi.mock('./reviewService', () => ({ listReviewPosts: vi.fn(), recordReviewResult: vi.fn(), reviewConnection: vi.fn(), submitForReview: vi.fn(), publishReviewCatalog: vi.fn(), importReviewVideo: vi.fn() }));
+vi.mock('./reviewService', () => ({ claimReviewPost: vi.fn(), listReviewPosts: vi.fn(), recordReviewResult: vi.fn(), reviewConnection: vi.fn(), submitForReview: vi.fn(), publishReviewCatalog: vi.fn(), importReviewVideo: vi.fn() }));
 vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(), publishInstagramReelFile: vi.fn() }));
 
 const workspace: Workspace = {
@@ -26,6 +26,7 @@ beforeEach(() => {
   vi.mocked(isTauri).mockReturnValue(true);
   vi.mocked(reviewConnection).mockResolvedValue({ clientEmail: 'sa@p.iam.gserviceaccount.com', projectId: 'socialspace-review', site: 'https://socialspace-review.web.app' });
   vi.mocked(recordReviewResult).mockResolvedValue();
+  vi.mocked(claimReviewPost).mockResolvedValue(true);
   vi.mocked(publishReviewCatalog).mockResolvedValue();
   localStorage.clear();
 });
@@ -41,8 +42,8 @@ describe('usePartnerReview', () => {
 
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(publishInstagramReelFile).toHaveBeenCalledWith('C:\\v\\bunny.mp4', 'Approved text\n\n#bunny', 'ig1', expect.anything());
-    expect(recordReviewResult).toHaveBeenNthCalledWith(1, 'v1', 'posting', undefined, []);
-    const [, status, results, events] = vi.mocked(recordReviewResult).mock.calls[1];
+    expect(claimReviewPost).toHaveBeenCalledWith('v1');
+    const [, status, results, events] = vi.mocked(recordReviewResult).mock.calls[0];
     expect(status).toBe('posted');
     expect(results).toMatchObject({ instagram: { status: 'posted', url: 'https://www.instagram.com/reel/abc/' }, tiktok: { status: 'manual' } });
     expect(events.map((event) => event.text)).toEqual(['Posted to Instagram', 'TikTok is posted by hand from Social Space']);
@@ -56,10 +57,29 @@ describe('usePartnerReview', () => {
     vi.mocked(claimInstagramConnection).mockResolvedValue(null);
     const save = vi.fn();
     renderHook(() => usePartnerReview(workspace, true, save));
-    await waitFor(() => expect(recordReviewResult).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(recordReviewResult).mock.calls[1][1]).toBe('failed');
+    await waitFor(() => expect(recordReviewResult).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(recordReviewResult).mock.calls[0][1]).toBe('failed');
     expect(publishInstagramReelFile).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it('leaves an approved post alone when the other PC claimed it first', async () => {
+    vi.mocked(listReviewPosts).mockResolvedValue([approved]);
+    vi.mocked(claimReviewPost).mockResolvedValue(false);
+    const save = vi.fn();
+    renderHook(() => usePartnerReview(workspace, true, save));
+    await waitFor(() => expect(claimReviewPost).toHaveBeenCalledWith('v1'));
+    expect(publishInstagramReelFile).not.toHaveBeenCalled();
+    expect(recordReviewResult).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('does not touch an approved post whose video is on the other PC', async () => {
+    vi.mocked(listReviewPosts).mockResolvedValue([{ ...approved, id: 'v9', videoId: 'v9' }]);
+    const { result } = renderHook(() => usePartnerReview(workspace, true, vi.fn()));
+    await waitFor(() => expect(result.current.posts.v9).toBeDefined());
+    expect(claimReviewPost).not.toHaveBeenCalled();
+    expect(recordReviewResult).not.toHaveBeenCalled();
   });
 
   it('brings a video the partner made on the site into its brand and category, once', async () => {

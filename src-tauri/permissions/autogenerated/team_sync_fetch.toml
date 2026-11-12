@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-team-sync-fetch"
+description = "Enables the team_sync_fetch command without any pre-configured scope."
+commands.allow = ["team_sync_fetch"]
+
+[[permission]]
+identifier = "deny-team-sync-fetch"
+description = "Denies the team_sync_fetch command without any pre-configured scope."
+commands.deny = ["team_sync_fetch"]

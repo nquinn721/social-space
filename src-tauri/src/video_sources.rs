@@ -33,7 +33,7 @@ const LEGACY_KLING_ACCOUNT: &str = "api-key";
 const LEGACY_SOURCE_NAME: &str = "Kling";
 
 #[derive(Default)]
-pub struct SourcesLock(Mutex<()>);
+pub struct SourcesLock(pub(crate) Mutex<()>);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]

@@ -48,13 +48,13 @@ pub struct Restored {
     created_at: u64,
 }
 
-fn key(passphrase: &str, salt: &[u8], iterations: u32) -> [u8; 32] {
+pub(crate) fn key(passphrase: &str, salt: &[u8], iterations: u32) -> [u8; 32] {
     let mut key = [0u8; 32];
     pbkdf2::pbkdf2_hmac::<sha2::Sha256>(passphrase.as_bytes(), salt, iterations, &mut key);
     key
 }
 
-fn random<const N: usize>() -> Result<[u8; N], String> {
+pub(crate) fn random<const N: usize>() -> Result<[u8; N], String> {
     let mut bytes = [0u8; N];
     getrandom::fill(&mut bytes).map_err(|_| "Could not create a secure backup key.")?;
     Ok(bytes)

@@ -318,6 +318,9 @@ pub fn build_worktree_dir(local_data_dir: &Path) -> PathBuf {
 }
 
 fn check_with(paths: &UpdatePaths) -> Result<UpdateStatus, String> {
+    if RELEASE_CHANNEL {
+        return check_release(APP_VERSION, read_prepared(paths));
+    }
     check(&source_dir()?, APP_VERSION, read_prepared(paths))
 }
 
@@ -792,6 +795,15 @@ pub async fn prepare_update(app: AppHandle, expected_commit: String) -> Result<(
     let paths = UpdatePaths::from_app(&app)?;
     claim_progress("Checking for changes")?;
     std::thread::spawn(move || {
+        if RELEASE_CHANNEL {
+            let outcome = check_release(APP_VERSION, None)
+                .and_then(|status| buildable(&status, &expected_commit))
+                .and_then(|_| download_release(&paths, &expected_commit));
+            if let Err(error) = outcome {
+                fail_progress(error);
+            }
+            return;
+        }
         let outcome = source_dir().and_then(|dir| {
             buildable(&check(&dir, APP_VERSION, None)?, &expected_commit)?;
             build_update(&paths, &dir, &expected_commit)
@@ -1532,5 +1544,173 @@ mod tests {
     fn human_output_summarises_the_report() {
         let text = human(&report_from_check(Ok(status("available", None))));
         assert!(text.contains("available") && text.contains("bbbbbbb Add video library") && text.contains("0.3.0"));
+    }
+}
+
+// ---- Release channel -----------------------------------------------------------------------------------
+//
+// A copy installed from a GitHub release (the partner's PC: no git, Node or Rust) updates from GitHub
+// releases instead of building. `.github/workflows/release.yml` builds every push to main and publishes
+// the installer with a small manifest (`socialspace-update.json`: commit, version, installer name,
+// SHA-256). Builds made by that workflow have `SOCIALSPACE_RELEASE_CHANNEL` baked in. "Preparing" an
+// update downloads the installer and checks its SHA-256; installing is the same as for a local build.
+
+/// True for builds made by the release workflow.
+pub const RELEASE_CHANNEL: bool = option_env!("SOCIALSPACE_RELEASE_CHANNEL").is_some();
+const RELEASES_API: &str = "https://api.github.com/repos/nquinn721/social-space/releases/latest";
+const MANIFEST_ASSET: &str = "socialspace-update.json";
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(900);
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ReleaseManifest {
+    commit: String,
+    version: String,
+    installer: String,
+    sha256: String,
+    #[serde(default)]
+    released_at: Option<u64>,
+}
+
+#[derive(Debug, Clone)]
+struct LatestRelease {
+    manifest: ReleaseManifest,
+    installer_url: String,
+}
+
+fn http(timeout: Duration) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .user_agent(concat!("SocialSpace/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|error| format!("Could not start a web request: {error}"))
+}
+
+/// The asset's download URL by name, from a GitHub release JSON.
+fn asset_url(release: &serde_json::Value, name: &str) -> Option<String> {
+    release["assets"].as_array()?.iter().find(|asset| asset["name"] == name)?["browser_download_url"].as_str().map(str::to_string)
+}
+
+fn valid_manifest(manifest: &ReleaseManifest) -> bool {
+    is_commit(&manifest.commit)
+        && manifest.sha256.len() == 64
+        && manifest.sha256.chars().all(|c| c.is_ascii_hexdigit())
+        && manifest.installer.ends_with("-setup.exe")
+        && !manifest.installer.contains(['/', '\\'])
+}
+
+fn latest_release() -> Result<LatestRelease, String> {
+    tauri::async_runtime::block_on(async {
+        let client = http(Duration::from_secs(30))?;
+        let response = client.get(RELEASES_API).header("Accept", "application/vnd.github+json").send().await.map_err(|error| offline_reason(&error.to_string()))?;
+        if !response.status().is_success() {
+            return Err(format!("GitHub has no release to update from yet ({}).", response.status()));
+        }
+        let release: serde_json::Value = response.json().await.map_err(|_| "GitHub sent an unreadable release.".to_string())?;
+        let manifest_url = asset_url(&release, MANIFEST_ASSET).ok_or("The latest release has no update manifest.")?;
+        let manifest: ReleaseManifest = client
+            .get(&manifest_url)
+            .send()
+            .await
+            .map_err(|error| offline_reason(&error.to_string()))?
+            .json()
+            .await
+            .map_err(|_| "The release's update manifest is unreadable.".to_string())?;
+        if !valid_manifest(&manifest) {
+            return Err("The release's update manifest is not valid.".into());
+        }
+        let installer_url = asset_url(&release, &manifest.installer).ok_or("The latest release is missing its installer.")?;
+        Ok(LatestRelease { manifest, installer_url })
+    })
+}
+
+fn release_status(version: &str, latest: &ReleaseManifest, prepared: Option<PreparedUpdate>) -> UpdateStatus {
+    let update_available = latest.commit != BUILD_COMMIT;
+    let prepared = if update_available { prepared_for(prepared, &latest.commit) } else { None };
+    UpdateStatus {
+        state: update_state(update_available, prepared.is_some()),
+        running_version: version.to_string(),
+        latest_version: Some(latest.version.clone()),
+        source_dir: "GitHub releases".into(),
+        prepared,
+        installed_commit: BUILD_COMMIT.to_string(),
+        latest_commit: Some(latest.commit.clone()),
+        installed_released_at: None,
+        latest_released_at: latest.released_at,
+        update_available,
+        new_commits: Vec::new(),
+        new_commit_times: Vec::new(),
+        blocked_reason: None,
+    }
+}
+
+fn check_release(version: &str, prepared: Option<PreparedUpdate>) -> Result<UpdateStatus, String> {
+    Ok(release_status(version, &latest_release()?.manifest, prepared))
+}
+
+/// Downloads the reviewed release's installer into the app's data and checks it byte for byte.
+fn download_release(paths: &UpdatePaths, expected_commit: &str) -> Result<PreparedUpdate, String> {
+    begin_step(1, "Finding the new version");
+    let latest = latest_release()?;
+    if latest.manifest.commit != expected_commit {
+        return Err("A newer version was released since you checked. Check again.".into());
+    }
+    begin_step(2, "Downloading the new version");
+    let bytes = tauri::async_runtime::block_on(async {
+        let response = http(DOWNLOAD_TIMEOUT)?.get(&latest.installer_url).send().await.map_err(|error| format!("Could not download the update: {error}"))?;
+        if !response.status().is_success() {
+            return Err(format!("Could not download the update ({}).", response.status()));
+        }
+        response.bytes().await.map_err(|error| format!("Could not download the update: {error}"))
+    })?;
+    begin_step(3, "Checking the download");
+    let store = paths.data_file(UPDATES_DIR);
+    let downloaded = store.join("download.partial");
+    write_data(&downloaded, &bytes)?;
+    let sha256 = sha256_of(&downloaded)?;
+    if !sha256.eq_ignore_ascii_case(&latest.manifest.sha256) {
+        let _ = fs::remove_file(&downloaded);
+        return Err("The downloaded update did not match its checksum, so it was thrown away.".into());
+    }
+    let installer = keep_installer(&downloaded, &store, expected_commit)?;
+    let _ = fs::remove_file(&downloaded);
+    let built_at = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|time| time.as_secs()).unwrap_or_default();
+    let prepared = PreparedUpdate { commit: expected_commit.to_string(), sha256, installer: installer.display().to_string(), built_at, app_exe: None, app_sha256: None };
+    write_data(&paths.data_file(PREPARED_FILE), &serde_json::to_vec(&prepared).unwrap_or_default())?;
+    set_progress(|progress| progress.state = "ready");
+    Ok(prepared)
+}
+
+#[cfg(test)]
+mod release_tests {
+    use super::*;
+
+    fn manifest() -> ReleaseManifest {
+        ReleaseManifest { commit: "a".repeat(40), version: "0.5.0".into(), installer: "Social.Space_0.5.0_x64-setup.exe".into(), sha256: "b".repeat(64), released_at: Some(5) }
+    }
+
+    #[test]
+    fn manifest_must_name_a_commit_checksum_and_plain_installer() {
+        assert!(valid_manifest(&manifest()));
+        assert!(!valid_manifest(&ReleaseManifest { commit: "abc".into(), ..manifest() }));
+        assert!(!valid_manifest(&ReleaseManifest { sha256: "zz".into(), ..manifest() }));
+        assert!(!valid_manifest(&ReleaseManifest { installer: "..\\evil-setup.exe".into(), ..manifest() }));
+        assert!(!valid_manifest(&ReleaseManifest { installer: "readme.txt".into(), ..manifest() }));
+    }
+
+    #[test]
+    fn a_release_of_another_commit_is_an_update() {
+        let status = release_status("0.4.0", &manifest(), None);
+        assert!(status.update_available);
+        assert_eq!(status.state, "available");
+        assert_eq!(status.latest_version.as_deref(), Some("0.5.0"));
+        assert!(status.blocked_reason.is_none());
+    }
+
+    #[test]
+    fn finds_release_assets_by_name() {
+        let release = serde_json::json!({ "assets": [{ "name": MANIFEST_ASSET, "browser_download_url": "https://github.com/x/m.json" }] });
+        assert_eq!(asset_url(&release, MANIFEST_ASSET).as_deref(), Some("https://github.com/x/m.json"));
+        assert_eq!(asset_url(&release, "other"), None);
     }
 }
