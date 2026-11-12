@@ -157,7 +157,8 @@ function updateCheckout(tree, allowUnreleased) {
 }
 
 function npm(tree, args) {
-  const result = spawnSync('npm', args, { cwd: tree, stdio: 'inherit', shell: process.platform === 'win32' });
+  // npm is a .cmd on Windows, so it needs a shell; the arguments are fixed strings from this script.
+  const result = spawnSync(`npm ${args.join(' ')}`, { cwd: tree, stdio: 'inherit', shell: true });
   return result.status === 0;
 }
 

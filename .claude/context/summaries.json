@@ -34,9 +34,17 @@
   }
  },
  "files": {
+  "README.md": {
+   "h": "8649d8bc75c3",
+   "s": "Partner install steps (clone + npm start) and dev commands"
+  },
   "docs/signup-flows.md": {
    "h": "f65e75736d01",
    "s": "Page-by-page sign-up flows for TikTok, Instagram, YouTube/Google and X with field selectors and who does each step"
+  },
+  "scripts/install.mjs": {
+   "h": "15c52618ccbe",
+   "s": "npm start: checks/installs Windows build tools via winget, pulls main, runs tauri:build, installs the NSIS setup silently and launches the app"
   },
   "src/BrandAccounts.tsx": {
    "h": "28f71a4d970d",

@@ -66,6 +66,8 @@ part of it working. Every Tauri command must also be listed in `src-tauri/build.
   `capabilities/default.json`, wrap it in the feature's `*Service.ts`, test both sides. Example: `f05a77e`.
 - **Add a workspace field:** add it to `lib.rs` and `src/model.ts` as optional, default it on load, add a test
   that an old workspace without it still loads. Example: `ce8dbf9`.
+- **Install on another PC (the partner's):** clone and `npm start` (`scripts/install.mjs`: checks/installs the
+  build tools, builds main, installs, launches). Development is `npm run dev:app`, not `npm start`.
 - **Ship:** bump with `npm run app-version -- X.Y.Z` (keeps package.json, tauri.conf.json, Cargo files in step),
   run the checks, run the app, merge to `dev` (see Shipping changes above).
 
