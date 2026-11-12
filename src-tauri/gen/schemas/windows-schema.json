@@ -387,6 +387,12 @@
           "markdownDescription": "Enables the embed_platform_page command without any pre-configured scope."
         },
         {
+          "description": "Enables the embed_setup_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-embed-setup-page",
+          "markdownDescription": "Enables the embed_setup_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the ensure_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-ensure-account-password",
@@ -1027,6 +1033,12 @@
           "type": "string",
           "const": "deny-embed-platform-page",
           "markdownDescription": "Denies the embed_platform_page command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the embed_setup_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-embed-setup-page",
+          "markdownDescription": "Denies the embed_setup_page command without any pre-configured scope."
         },
         {
           "description": "Denies the ensure_account_password command without any pre-configured scope.",

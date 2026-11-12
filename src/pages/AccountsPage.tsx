@@ -3,14 +3,14 @@ import { AppWindow, ArrowLeft, Pencil, Plus, Search, Trash2, UserPlus, UsersRoun
 import VideoLibrary from '../VideoLibrary';
 import type { OpenBrand } from '../App';
 import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from '../model';
-import { emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 import { ensureSharedPassword } from '../profileService';
 import BrandAccounts from '../BrandAccounts';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
 import Connections from '../Connections';
-import { DEFAULT_SIGNUP_BIRTHDAY, DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
+import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
 
 type Props = {
   workspace: Workspace;
@@ -97,9 +97,9 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       const base = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
       // TikTok and X need their own email per account: the brand's plus-address reaches the same inbox.
       const plan = planPresence(all, platform, brand.name, sharesLogins(platform) ? base : plusAddress(base, emailTag(brand.name)));
-      const birthday = accounts.find((account) => account.birthday)?.birthday || DEFAULT_SIGNUP_BIRTHDAY;
-      const account: Account = { ...createAccount(platform, brand.name, lead?.handle || emailTag(brand.name), 'planned', ''), brandId: brand.id,
-        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath, birthday };
+      // New profiles take the brand's name as their username, and the current sign-up birthday.
+      const account: Account = { ...createAccount(platform, brand.name, emailTag(brand.name), 'planned', ''), brandId: brand.id,
+        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath, birthday: DEFAULT_SIGNUP_BIRTHDAY };
       const saved = await onSave({ ...workspace, accounts: [...workspace.accounts, account] }, `${getPlatform(platform).name} profile added to ${brand.name}.`);
       if (saved === false) return;
       await startSignUp(account, accounts);

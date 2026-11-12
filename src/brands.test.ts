@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues } from './brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
 import type { Account } from './model';
 
 const BASE = 'softwings25@gmail.com';
@@ -48,5 +48,23 @@ describe('brand model', () => {
     const workspace = migrateWorkspace({ accounts: [account('1', 'instagram', 'MassageMentor'), account('2', 'instagram', 'Massage With Mia'), account('3', 'tiktok', 'Massage With Mia', 'softwings25+mia@gmail.com')] });
     expect(loginText(workspace.accounts[1], workspace)).toBe('Signs in with softwings25@gmail.com, shared with MassageMentor.');
     expect(loginText(workspace.accounts[2], workspace)).toBe('Its own TikTok account, signed up with softwings25+mia@gmail.com.');
+  });
+
+  it('moves profiles not created yet off the old default birthday, but keeps live ones', () => {
+    const planned = { ...account('1', 'tiktok', 'Mia'), birthday: '1995-06-15' };
+    const live = { ...account('2', 'instagram', 'Mia'), status: 'active' as const, birthday: '1995-06-15' };
+    const migrated = migrateWorkspace({ accounts: [planned, live] });
+    expect(DEFAULT_SIGNUP_BIRTHDAY).toBe('1983-06-05');
+    expect(migrated.accounts.map((item) => item.birthday)).toEqual(['1983-06-05', '1995-06-15']);
+  });
+
+  it('gives profiles not created yet the new brand name as username and email tag', () => {
+    const planned = account('1', 'tiktok', 'softwings25', 'softwings25+softwings25@gmail.com', 'softwings25');
+    const renamed = renamedProfile(planned, 'softwings25', 'Massage With Mia');
+    expect(renamed).toMatchObject({ label: 'Massage With Mia', handle: 'massagewithmia', signupEmail: 'softwings25+massagewithmia@gmail.com' });
+    const shared = renamedProfile(account('2', 'instagram', 'softwings25', BASE, 'softwings25'), 'softwings25', 'Massage With Mia');
+    expect(shared.signupEmail).toBe(BASE);
+    const live = renamedProfile({ ...planned, status: 'active' }, 'softwings25', 'Massage With Mia');
+    expect(live).toMatchObject({ label: 'Massage With Mia', handle: 'softwings25', signupEmail: 'softwings25+softwings25@gmail.com' });
   });
 });

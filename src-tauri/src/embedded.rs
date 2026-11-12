@@ -53,11 +53,23 @@ pub async fn embed_platform_page(
     action: String,
     bounds: Bounds,
 ) -> Result<String, String> {
-    let bounds = bounds.checked()?;
     let address = crate::platform_url(platform, &action).ok_or("Unknown platform action.")?;
+    embed_address(&app, address, bounds)
+}
+
+/// Opens one of the fixed developer setup pages (see `setup_pages::page_url`) inside the app
+/// window, for the guided developer-app setup. Only known pages open, never a free-form URL.
+#[tauri::command]
+pub async fn embed_setup_page(app: AppHandle, page: String, bounds: Bounds) -> Result<String, String> {
+    let address = crate::setup_pages::page_url(&page).ok_or("That setup page is not known.")?;
+    embed_address(&app, address, bounds)
+}
+
+fn embed_address(app: &AppHandle, address: &str, bounds: Bounds) -> Result<String, String> {
+    let bounds = bounds.checked()?;
     let url: url::Url = address.parse().map_err(|_| "Invalid website address.")?;
     let window = app.get_window("main").ok_or("The app window is not ready yet.")?;
-    close_current(&app);
+    close_current(app);
     let label = format!("site-embed-{}", NEXT.fetch_add(1, Ordering::Relaxed));
     let popup_app = app.clone();
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(url))

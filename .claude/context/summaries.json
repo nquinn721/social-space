@@ -34,6 +34,18 @@
   }
  },
  "files": {
+  "README.md": {
+   "h": "8649d8bc75c3",
+   "s": "Partner install steps (clone + npm start) and dev commands"
+  },
+  "docs/signup-flows.md": {
+   "h": "f65e75736d01",
+   "s": "Page-by-page sign-up flows for TikTok, Instagram, YouTube/Google and X with field selectors and who does each step"
+  },
+  "scripts/install.mjs": {
+   "h": "15c52618ccbe",
+   "s": "npm start: checks/installs Windows build tools via winget, pulls main, runs tauri:build, installs the NSIS setup silently and launches the app"
+  },
   "src/BrandAccounts.tsx": {
    "h": "28f71a4d970d",
    "s": "A brand's Accounts tab: one card per profile (status, one next-step button, email/password, open steps) plus one-click Add <social> cards"
@@ -41,6 +53,10 @@
   "src/Connections.tsx": {
    "h": "24a980b90fcc",
    "s": "Setup tab connections; exports useConnectFlow (connect/disconnect/one-time app setup) shared with BrandAccounts"
+  },
+  "src/signupFlows.ts": {
+   "h": "af3b122c1ca2",
+   "s": "Each social's real sign-up steps (who does each: app fills or Nate); shown in the Create accounts side panel"
   },
   "src/socialIcons.ts": {
    "h": "a3896a2e3328",

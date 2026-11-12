@@ -21,3 +21,20 @@
   .setup-tracker .setup-list li { flex-wrap: wrap; }
   .setup-actions { max-width: none; width: 100%; justify-content: flex-start; padding-left: 34px; }
 }
+
+/* Guided developer-app setup: steps on the left, the developer site in the middle, instructions and keys on the right */
+.dev-guide .wizard-steps li { padding: 0; }
+.dev-guide-step { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; line-height: 1.35; }
+.dev-guide-step:hover { background: var(--surface-3, rgba(255, 255, 255, 0.04)); }
+.dev-guide-step:focus-visible { outline: 2px solid var(--accent-line); }
+.dev-guide-intro { color: var(--text-2); line-height: 1.45; }
+.dev-guide-lines { margin: 0; padding-left: 18px; display: grid; gap: 10px; font-size: 13.5px; color: var(--text-2); line-height: 1.5; }
+.dev-guide-lines em { font-style: normal; font-weight: 600; color: var(--text); }
+.dev-guide-copy { display: grid; gap: 4px; }
+.dev-guide-copy small, .dev-guide-keys small { color: var(--text-3); }
+.dev-guide .copy-row { display: flex; align-items: center; gap: 8px; }
+.dev-guide .copy-row code { flex: 1; min-width: 0; word-break: break-all; font-size: 12px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.dev-guide .copy-row input { flex: 1; min-width: 0; }
+.dev-guide .copy-row button { flex-shrink: 0; }
+.dev-guide-keys { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-sm); background: var(--splash-soft, transparent); }
+.dev-guide-keys label { display: block; font-size: 12.5px; margin-bottom: 4px; }
