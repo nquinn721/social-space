@@ -141,6 +141,21 @@ describe('verification code detection', () => {
     await user.click(await screen.findByRole('button', { name: 'Fill code 482913 on page' }));
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' }));
   });
+  it('shows the code bottom right to copy, and lists the real sign-up steps', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<CreateAccountWizard initialPlatforms={['tiktok']} onSave={vi.fn().mockResolvedValue(undefined)} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
+    await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
+    const steps = await screen.findByRole('list', { name: 'TikTok sign-up steps' });
+    expect(steps).toHaveTextContent('Finish in the TikTok app');
+    await user.click(await screen.findByRole('button', { name: 'Fill code 482913 on page' }));
+    await waitFor(() => expect(document.querySelector('.code-toast')).toHaveTextContent('482913'));
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(writeText).toHaveBeenCalledWith('482913');
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+  });
   it('adds Instagram to the shared login and gives TikTok its own email when the base one is taken', async () => {
     const saved: Account[] = [];
     const existing: Account[] = [{ id: 'old-ig', platform: 'instagram', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }, { id: 'old-tt', platform: 'tiktok', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }];

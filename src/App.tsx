@@ -10,7 +10,7 @@ import { deleteAccountPassword } from './profileService';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Check, ChevronRight, Home, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
-import { loginText } from './brands';
+import { loginText, renamedProfile } from './brands';
 import appIcon from './assets/app-icon.png';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
 import { initialOf, PageHeader } from './ui';
@@ -106,7 +106,7 @@ function App() {
   async function renameBrand(brand: Brand, name: string) {
     const old = brand.name;
     const accounts = workspace.accounts.map((account) => account.brandId === brand.id
-      ? { ...account, label: name, ...(account.displayName === old ? { displayName: name } : {}) } : account);
+      ? renamedProfile(account, old, name) : account);
     return persist({ ...workspace, brands: workspace.brands.map((item) => item.id === brand.id ? { ...item, name } : item), accounts }, `Renamed ${old} to ${name}. To change a username on a social, open that profile and use Fill profile.`);
   }
   async function removeBrand(brand: Brand) {

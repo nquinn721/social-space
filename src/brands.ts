@@ -13,6 +13,11 @@ export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number; explain: 
   x: { profilesPerLogin: 1, explain: 'X needs a separate account with its own email for each profile.' },
 };
 
+/** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */
+export const DEFAULT_SIGNUP_BIRTHDAY = '1983-06-05';
+/** The default before 0.8.0. Profiles not created yet that still carry it move to the current default. */
+const OLD_DEFAULT_BIRTHDAY = '1995-06-15';
+
 export const sharesLogins = (platform: Platform) => LOGIN_RULES[platform].profilesPerLogin > 1;
 const emailKey = (email: string | undefined) => (email ?? '').trim().toLowerCase();
 
@@ -38,6 +43,22 @@ export function plusAddress(base: string, tag: string) {
   const [local, domain] = base.trim().split('@');
   if (!local || !domain) return base.trim();
   return `${local.split('+')[0]}+${tag}@${domain}`;
+}
+
+/**
+ * A profile after its brand is renamed. Profiles not created on the social yet also take the new name
+ * as their username and plus-address tag, so a sign-up never goes out under the old name.
+ */
+export function renamedProfile(account: Account, oldName: string, newName: string): Account {
+  const renamed = { ...account, label: newName, ...(account.displayName === oldName ? { displayName: newName } : {}) };
+  if (account.status === 'active') return renamed;
+  const oldTag = emailTag(oldName);
+  const newTag = emailTag(newName);
+  const handle = normalizeHandle(account.handle) === oldTag ? newTag : account.handle;
+  const [local = '', domain = ''] = (account.signupEmail ?? '').split('@');
+  const [base, tag] = local.split('+');
+  const signupEmail = domain && tag === oldTag ? `${base}+${newTag}@${domain}` : account.signupEmail;
+  return { ...renamed, handle, ...(signupEmail !== undefined ? { signupEmail } : {}) };
 }
 
 export type PresencePlan =
@@ -102,7 +123,9 @@ export const accountsOf = (workspace: Workspace, brandId: string) => workspace.a
 export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
   const brands = [...(saved.brands ?? [])];
   const byName = new Map(brands.map((brand) => [brand.name.trim().toLowerCase(), brand]));
-  const accounts = (saved.accounts ?? []).map((account) => {
+  const accounts = (saved.accounts ?? []).map((stored) => {
+    let account = stored;
+    if (account.status !== 'active' && account.birthday === OLD_DEFAULT_BIRTHDAY) account = { ...account, birthday: DEFAULT_SIGNUP_BIRTHDAY };
     if (account.brandId && brands.some((brand) => brand.id === account.brandId)) return account;
     const name = account.label.trim() || 'Untitled';
     let brand = byName.get(name.toLowerCase());

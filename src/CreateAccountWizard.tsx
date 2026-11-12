@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
-import { emailTag, planPresence } from './brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
 import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
+import { SIGNUP_FLOWS } from './signupFlows';
 import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
 export const DEFAULT_SIGNUP_EMAIL = 'softwings25@gmail.com';
-/** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */
-export const DEFAULT_SIGNUP_BIRTHDAY = '1995-06-15';
+export { DEFAULT_SIGNUP_BIRTHDAY };
 /** Details to start the form with, e.g. when adding an existing brand to more socials. */
 export type WizardPrefill = { label?: string; handle?: string; brandId?: string } & AccountProfile;
 type Step = 'details' | 'signup' | 'profile';
@@ -74,6 +74,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  /** The newest emailed code, shown bottom right to copy. */
+  const [code, setCode] = useState<{ value: string; copied: boolean } | null>(null);
   const preview = useImagePreview(imagePath);
   const ordered = PLATFORMS.map((platform) => platform.id).filter((id) => chosen.includes(id));
   const tightest = sharedBioLimit(ordered);
@@ -162,11 +164,16 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
       openSignup(made[0]);
     });
   }
-  const refill = (code?: string) => run(async () => {
+  // A new code shows bottom right even if the page is busy, so it can always be copied.
+  const refill = (code?: string) => { if (code) setCode({ value: code, copied: false }); return run(async () => {
     if (!account || !windowId) return;
     await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: !code, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
-  });
+  }); };
+  const copyCode = async () => {
+    if (!code) return;
+    try { await navigator.clipboard.writeText(code.value); setCode({ ...code, copied: true }); } catch (reason) { setError(errorText(reason)); }
+  };
   const reopen = () => { if (account) openSignup(account); };
   const togglePassword = () => run(async () => { if (!account) return; if (!showPass && !password) setPassword(await revealAccountPassword(account.id)); setShowPass((value) => !value); });
   const copy = (what: string, value: string | (() => Promise<string>)) => run(async () => {
@@ -182,6 +189,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
       setAccounts((list) => list.map((item) => item.id === active.id ? active : item));
     }
     setOutcomes((map) => ({ ...map, [account.id]: outcome }));
+    setCode(null);
     const next = current + 1;
     if (next < accounts.length) { setCurrent(next); openSignup(accounts[next]); }
     else { setPage(null); setWindowId(''); await closeEmbeddedPage(); setStep('profile'); }
@@ -264,11 +272,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
           <div ref={frame} className="site-frame" aria-label="Site page">{!windowId && <span>{page ? 'Loading the page…' : 'Pick a social on the right to open its profile settings here.'}</span>}</div>
           <aside className="site-side">
             {step === 'signup' && account && <>
-              <ol className="signup-steps">
-                <li>New pages fill in automatically as you press Next.</li>
-                <li>When {name} emails a code to {account.signupEmail}, it's entered on the page for you within seconds. You can also press a code below.</li>
-                <li>Solve any captcha or phone check yourself.</li>
-              </ol>
+              <ol className="signup-steps flow-steps" aria-label={`${name} sign-up steps`}>{SIGNUP_FLOWS[account.platform].map((item) => <li key={item.title} className={`by-${item.by}`}><strong>{item.title}</strong> <em>{item.by === 'app' ? 'filled for you' : 'you'}</em><span>{item.detail}</span></li>)}</ol>
               <section className="credentials copy-list" aria-label="Sign-up details">
                 <h3>Sign-up details</h3>
                 <div className="credential-row"><span>Email</span><code>{account.signupEmail}</code><button type="button" className="icon-button" aria-label="Copy email" onClick={() => void copy('Email', account.signupEmail ?? '')}><Copy size={15}/></button></div>
@@ -289,6 +293,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             </>}
           </aside>
         </div>
+        {step === 'signup' && code && <div className="code-toast" role="status" aria-live="polite"><span>Code</span><strong>{code.value}</strong><button type="button" className="primary-button small-button" onClick={() => void copyCode()}><Copy size={14}/> {code.copied ? 'Copied' : 'Copy'}</button><button type="button" className="icon-button" aria-label="Close code" onClick={() => setCode(null)}><Close size={15}/></button></div>}
         {step === 'signup' && account
           ? <div className="wizard-foot"><button type="button" className="outline-button" disabled={busy} onClick={() => void advance('skipped')}><SkipForward size={15}/> Skip {name}</button><button type="button" className="primary-button" disabled={busy} onClick={() => void advance('created')}><Check size={15}/> {name} account is created{current + 1 < accounts.length ? ', next' : ''}</button></div>
           : <div className="wizard-foot"><button type="button" className="primary-button" disabled={busy} onClick={onClose}>Done</button></div>}
