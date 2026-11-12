@@ -33,6 +33,19 @@
    "s": "Partner review site (Firebase Hosting, project socialspace-review)."
   }
  },
- "files": {},
+ "files": {
+  "src/BrandAccounts.tsx": {
+   "h": "28f71a4d970d",
+   "s": "A brand's Accounts tab: one card per profile (status, one next-step button, email/password, open steps) plus one-click Add <social> cards"
+  },
+  "src/Connections.tsx": {
+   "h": "24a980b90fcc",
+   "s": "Setup tab connections; exports useConnectFlow (connect/disconnect/one-time app setup) shared with BrandAccounts"
+  },
+  "src/socialIcons.ts": {
+   "h": "a3896a2e3328",
+   "s": "Inline SVG paths of the real Instagram/TikTok/YouTube/X logos used by BrandMark"
+  }
+ },
  "version": 1
 }

@@ -21,7 +21,7 @@ vi.mock('./profileConnections', () => ({
 vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => true), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn() }));
 afterEach(cleanup);
 
-const brand: Brand = { id: 'b1', name: 'Soft Wings' };
+const brand: Brand = { id: 'b1', name: 'Soft Wings', notes: '' };
 const profile = (id: string, platform: Account['platform']): Account => ({ id, platform, label: 'Soft Wings', handle: 'softwings', status: 'active', notes: '', brandId: 'b1', signupEmail: 'softwings25@gmail.com' });
 
 describe('brand accounts', () => {
