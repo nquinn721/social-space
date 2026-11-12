@@ -1,0 +1,53 @@
+# Builds every push to main and publishes it as a GitHub release, so a copy of Social Space installed
+# from a release (on a PC without git, Node or Rust) can update itself: the app reads the
+# socialspace-update.json manifest of the latest release, downloads the installer and checks its SHA-256.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci --no-audit --no-fund
+      - name: Build the installer
+        run: npm run tauri:build
+        env:
+          SOCIALSPACE_RELEASE_CHANNEL: github
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $commit = "${{ github.sha }}"
+          $short = $commit.Substring(0, 7)
+          $built = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime | Select-Object -Last 1
+          # GitHub turns spaces in asset names into dots, so give the installer a name without any.
+          $installer = "SocialSpace_${version}_${short}_x64-setup.exe"
+          Copy-Item $built.FullName $installer
+          $sha = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLower()
+          $manifest = @{ commit = $commit; version = $version; installer = $installer; sha256 = $sha; releasedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
+          $manifest | ConvertTo-Json | Set-Content socialspace-update.json -Encoding utf8NoBOM
+          $notes = "Social Space $version from main ($short). Install it once; after that the app updates itself from these releases."
+          gh release create "v$version-$short" $installer socialspace-update.json --target $commit --title "Social Space $version ($short)" --notes $notes --latest

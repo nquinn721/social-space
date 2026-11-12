@@ -5,7 +5,7 @@ import { claimInstagramConnection } from './instagramService';
 import { publishVideoToInstagram } from './useBrandInstagram';
 import { errorText } from './ui';
 import { approvedToPost, approvedVideo, AUTO_POST_PLATFORMS, finishedStatus, partnerVideo, partnerVideosToImport, resultEvent, REVIEW_POLL_MS, reviewCatalog, submissionFor } from './partnerReview';
-import { importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, submitForReview, type PlatformResult, type ReviewConnection, type ReviewPost } from './reviewService';
+import { claimReviewPost, importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, submitForReview, type PlatformResult, type ReviewConnection, type ReviewPost } from './reviewService';
 
 type Save = (next: Workspace, message: string) => Promise<boolean | undefined>;
 export type PartnerReview = {
@@ -75,12 +75,10 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
     for (const post of approved) {
       const video = (latest.current.videos ?? []).find((item) => item.id === post.videoId);
       const events = [...(post.events ?? [])];
-      if (!video) {
-        events.push({ at: Date.now(), text: 'The video was removed from Social Space, so it was not posted.' });
-        await recordReviewResult(post.videoId, 'failed', post.results, events);
-        continue;
-      }
-      await recordReviewResult(post.videoId, 'posting', post.results, [...events]);
+      // The video file lives on the PC that sent it, so another PC sharing this team leaves it alone.
+      if (!video) continue;
+      // Both PCs watch the site: only the one that claims the post first publishes it.
+      if (!await claimReviewPost(post.videoId)) continue;
       const toPost = approvedVideo(video, post);
       const results: Partial<Record<Platform, PlatformResult>> = { ...post.results };
       for (const platform of post.platforms ?? []) {

@@ -249,6 +249,12 @@
           "markdownDescription": "Enables the claim_instagram_connection command without any pre-configured scope."
         },
         {
+          "description": "Enables the claim_review_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-claim-review-post",
+          "markdownDescription": "Enables the claim_review_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the claim_x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-claim-x-connection",
@@ -391,6 +397,12 @@
           "type": "string",
           "const": "allow-ensure-shared-password",
           "markdownDescription": "Enables the ensure_shared_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the export_review_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-export-review-key",
+          "markdownDescription": "Enables the export_review_key command without any pre-configured scope."
         },
         {
           "description": "Enables the export_sign_ins command without any pre-configured scope.",
@@ -747,6 +759,36 @@
           "markdownDescription": "Enables the take_update_result command without any pre-configured scope."
         },
         {
+          "description": "Enables the team_sync_disable command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-disable",
+          "markdownDescription": "Enables the team_sync_disable command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_enable command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-enable",
+          "markdownDescription": "Enables the team_sync_enable command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_fetch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-fetch",
+          "markdownDescription": "Enables the team_sync_fetch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_push command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-push",
+          "markdownDescription": "Enables the team_sync_push command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-status",
+          "markdownDescription": "Enables the team_sync_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the tiktok_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-tiktok-connection",
@@ -847,6 +889,12 @@
           "type": "string",
           "const": "deny-claim-instagram-connection",
           "markdownDescription": "Denies the claim_instagram_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the claim_review_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-claim-review-post",
+          "markdownDescription": "Denies the claim_review_post command without any pre-configured scope."
         },
         {
           "description": "Denies the claim_x_connection command without any pre-configured scope.",
@@ -991,6 +1039,12 @@
           "type": "string",
           "const": "deny-ensure-shared-password",
           "markdownDescription": "Denies the ensure_shared_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the export_review_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-export-review-key",
+          "markdownDescription": "Denies the export_review_key command without any pre-configured scope."
         },
         {
           "description": "Denies the export_sign_ins command without any pre-configured scope.",
@@ -1345,6 +1399,36 @@
           "type": "string",
           "const": "deny-take-update-result",
           "markdownDescription": "Denies the take_update_result command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_disable command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-disable",
+          "markdownDescription": "Denies the team_sync_disable command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_enable command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-enable",
+          "markdownDescription": "Denies the team_sync_enable command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_fetch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-fetch",
+          "markdownDescription": "Denies the team_sync_fetch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_push command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-push",
+          "markdownDescription": "Denies the team_sync_push command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-status",
+          "markdownDescription": "Denies the team_sync_status command without any pre-configured scope."
         },
         {
           "description": "Denies the tiktok_connection command without any pre-configured scope.",

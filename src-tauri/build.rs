@@ -2,6 +2,13 @@ fn main() {
     let commands = &[
         "load_workspace",
         "save_workspace",
+        "team_sync_status",
+        "team_sync_enable",
+        "team_sync_disable",
+        "team_sync_fetch",
+        "team_sync_push",
+        "claim_review_post",
+        "export_review_key",
         "open_platform_action",
         "open_kling",
         "list_video_sources",
@@ -170,6 +177,7 @@ fn record_build_source() {
     const COMMIT_ENV: &str = "SOCIALSPACE_BUILD_COMMIT";
     const SOURCE_ENV: &str = "SOCIALSPACE_SOURCE_DIR";
     println!("cargo:rerun-if-env-changed={COMMIT_ENV}");
+    println!("cargo:rerun-if-env-changed=SOCIALSPACE_RELEASE_CHANNEL");
     println!("cargo:rerun-if-env-changed={SOURCE_ENV}");
     let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let tree = manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf();

@@ -36,6 +36,10 @@ export async function submitForReview(post: ReviewSubmission): Promise<ReviewPos
 export async function recordReviewResult(videoId: string, status: ReviewStatus, results: ReviewPost['results'], events: ReviewEvent[]): Promise<void> {
   desktopOnly(); return invoke('record_review_result', { videoId, status, results: results ?? {}, events });
 }
+/** Takes an approved post for this PC to publish; false when the other PC already took it. */
+export async function claimReviewPost(videoId: string): Promise<boolean> { desktopOnly(); return invoke('claim_review_post', { videoId }); }
+/** Saves the review key to a file for the partner's app; returns the file name, or null if cancelled. */
+export async function exportReviewKey(): Promise<string | null> { desktopOnly(); return invoke('export_review_key'); }
 export async function openReviewSite(): Promise<void> { desktopOnly(); return invoke('open_review_site'); }
 /** The brands, their socials and categories a reviewer can make a video for. */
 export type CatalogBrand = { id: string; name: string; socials: Platform[]; categories: { id: string; name: string; defaults?: { caption: string; hashtags: string[] } }[] };

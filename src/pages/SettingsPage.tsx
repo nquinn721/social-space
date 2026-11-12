@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck, UserCheck } from 'lucide-react';
+import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
+import TeamSyncSettings from '../TeamSyncSettings';
+import type { TeamSync } from '../useTeamSync';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
 import { PageHeader } from '../ui';
 
-type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null };
+type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null; teamSync?: TeamSync };
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
   { id: 'email', label: 'Email inbox', icon: Mail },
   { id: 'partner-review', label: 'Partner review', icon: UserCheck },
+  { id: 'team-sync', label: 'Shared accounts', icon: Users },
   { id: 'video-sources', label: 'Video sources', icon: Clapperboard },
   { id: 'assistant', label: 'Assistant', icon: Bot },
 ];
@@ -39,7 +42,7 @@ function AssistantSettingsCard() {
   </section>;
 }
 
-export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy }: Props) {
+export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync }: Props) {
   return <>
     <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
     <div className="settings-layout">
@@ -54,6 +57,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
         </form>
         <EmailSettings/>
         <PartnerReviewSettings/>
+        {teamSync && <TeamSyncSettings sync={teamSync}/>}
         <section className="settings-card" id="video-sources">
           <h2><Clapperboard size={17}/> Video sources</h2>
           <p>AI video providers you generate with, each under its own name and API key. Keys are checked with the provider and stored in Windows Credential Manager.</p>
@@ -61,7 +65,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
         </section>
         <AssistantSettingsCard/>
         {updatesManagedBy && <section className="settings-card" id="updates"><h2><RotateCw size={17}/> Updates</h2><p className="footnote">Updates managed by {updatesManagedBy}.</p></section>}
-        <div className="privacy-note"><ShieldCheck size={18}/><span>Your workspace is stored on this PC. Passwords live in Windows Credential Manager and are only shown when you ask.</span></div>
+        <div className="privacy-note"><ShieldCheck size={18}/><span>Your workspace is stored on this PC{teamSync?.status?.enabled ? ' and shared, encrypted, with your partner' : ''}. Passwords live in Windows Credential Manager and are only shown when you ask.</span></div>
       </div>
     </div>
   </>;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-export-review-key"
+description = "Enables the export_review_key command without any pre-configured scope."
+commands.allow = ["export_review_key"]
+
+[[permission]]
+identifier = "deny-export-review-key"
+description = "Denies the export_review_key command without any pre-configured scope."
+commands.deny = ["export_review_key"]

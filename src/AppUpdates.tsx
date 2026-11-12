@@ -162,7 +162,7 @@ function ProgressView({ progress }: { progress: UpdateProgress }) {
   const step = Math.max(progress.step, 1);
   const percent = restarting ? 100 : Math.round(((step - 1) / progress.totalSteps) * 100 + 100 / progress.totalSteps / 2);
   return <div className="update-progress">
-    <strong>{restarting ? 'Installing the update. SocialSpace will restart…' : `Building the update · Step ${step} of ${progress.totalSteps}: ${progress.label}…`}</strong>
+    <strong>{restarting ? 'Installing the update. SocialSpace will restart…' : `Preparing the update · Step ${step} of ${progress.totalSteps}: ${progress.label}…`}</strong>
     <div className="update-bar" role="progressbar" aria-label="Update progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }}/></div>
     {!restarting && progress.detail && <small>{progress.detail}</small>}
   </div>;

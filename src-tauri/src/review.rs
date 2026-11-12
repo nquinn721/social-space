@@ -17,16 +17,16 @@ const SCOPES: &str = "https://www.googleapis.com/auth/datastore https://www.goog
 const TOKEN_MARGIN_SECS: u64 = 300;
 const TOKEN_LIFETIME_SECS: u64 = 3600;
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(900);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const VIDEO_EXTENSIONS: [(&str, &str); 4] = [("mp4", "video/mp4"), ("mov", "video/quicktime"), ("m4v", "video/x-m4v"), ("webm", "video/webm")];
 /// Where reviewers open the review site.
 pub const REVIEW_SITE: &str = "https://socialspace-review.web.app";
 
 #[derive(Deserialize, Serialize, Clone)]
-struct ServiceAccount {
+pub(crate) struct ServiceAccount {
     #[serde(rename = "type")]
     kind: String,
-    project_id: String,
+    pub(crate) project_id: String,
     private_key: String,
     client_email: String,
 }
@@ -35,7 +35,7 @@ struct ServiceAccount {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewConnection {
     client_email: String,
-    project_id: String,
+    pub(crate) project_id: String,
     site: String,
 }
 
@@ -61,7 +61,7 @@ static TOKEN: Mutex<Option<(String, u64, String)>> = Mutex::new(None);
 fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
@@ -92,7 +92,7 @@ fn save_key(key: &ServiceAccount) -> Result<(), String> {
     entry()?.set_secret(text.as_bytes()).map_err(|_| "Couldn't save the key in Windows Credential Manager.".to_string())
 }
 
-fn require_key() -> Result<ServiceAccount, String> {
+pub(crate) fn require_key() -> Result<ServiceAccount, String> {
     load_key()?.ok_or_else(|| "Partner review isn't connected. Connect it under Settings first.".into())
 }
 
@@ -104,12 +104,12 @@ fn bucket(key: &ServiceAccount) -> String {
     format!("{}.firebasestorage.app", key.project_id)
 }
 
-fn client(timeout: Duration) -> Result<reqwest::Client, String> {
+pub(crate) fn client(timeout: Duration) -> Result<reqwest::Client, String> {
     reqwest::Client::builder().timeout(timeout).build().map_err(|e| format!("Couldn't start a web request: {e}"))
 }
 
 /// A Google access token for the service account (JWT bearer grant), reused until near its end.
-async fn access_token(key: &ServiceAccount) -> Result<String, String> {
+pub(crate) async fn access_token(key: &ServiceAccount) -> Result<String, String> {
     if let Some((token, expires, email)) = TOKEN.lock().map_err(|_| "Token cache is unavailable.")?.clone() {
         if email == key.client_email && expires > now_secs() + TOKEN_MARGIN_SECS {
             return Ok(token);
@@ -150,7 +150,7 @@ pub fn to_firestore(value: &Value) -> Value {
         Value::Object(map) => json!({ "mapValue": { "fields": fields_of(map) } }),
     }
 }
-fn fields_of(map: &Map<String, Value>) -> Map<String, Value> {
+pub(crate) fn fields_of(map: &Map<String, Value>) -> Map<String, Value> {
     map.iter().map(|(k, v)| (k.clone(), to_firestore(v))).collect()
 }
 
@@ -167,16 +167,16 @@ pub fn from_firestore(value: &Value) -> Value {
         _ => Value::Null,
     }
 }
-fn plain_fields(fields: &Value) -> Map<String, Value> {
+pub(crate) fn plain_fields(fields: &Value) -> Map<String, Value> {
     fields.as_object().map(|map| map.iter().map(|(k, v)| (k.clone(), from_firestore(v))).collect()).unwrap_or_default()
 }
 
-fn documents_url(key: &ServiceAccount) -> String {
+pub(crate) fn documents_url(key: &ServiceAccount) -> String {
     format!("https://firestore.googleapis.com/v1/projects/{}/databases/(default)/documents", key.project_id)
 }
 
 /// Only ids made of letters, digits, `-` and `_`, so a document path can't be steered elsewhere.
-fn safe_id(id: &str) -> Result<&str, String> {
+pub(crate) fn safe_id(id: &str) -> Result<&str, String> {
     let id = id.trim();
     if id.is_empty() || id.len() > 128 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         return Err("That post id isn't valid.".into());
@@ -234,6 +234,19 @@ pub async fn connect_review() -> Result<Option<ReviewConnection>, String> {
     access_token(&key).await?;
     save_key(&key)?;
     Ok(Some(connection_of(&key)))
+}
+
+/// Saves the review key to a file the user picks, so the partner's app can connect with it.
+/// Returns the file name, or None if the dialog was closed.
+#[tauri::command]
+pub async fn export_review_key() -> Result<Option<String>, String> {
+    let key = require_key()?;
+    let text = serde_json::to_string_pretty(&key).map_err(|e| e.to_string())?;
+    let Some(file) = rfd::AsyncFileDialog::new().set_title("Save the review key for your partner").set_file_name("socialspace-review-key.json").add_filter("Service account key", &["json"]).save_file().await else {
+        return Ok(None);
+    };
+    std::fs::write(file.path(), text).map_err(|_| "Couldn't save the key file.".to_string())?;
+    Ok(Some(file.file_name()))
 }
 
 #[tauri::command]
@@ -404,6 +417,34 @@ pub async fn record_review_result(video_id: String, status: String, results: Val
     let url = format!("{}/posts/{id}?{mask}&currentDocument.exists=true", documents_url(&key));
     firestore(&key, reqwest::Method::PATCH, url, Some(json!({ "fields": fields_of(fields.as_object().unwrap()) }))).await?;
     Ok(())
+}
+
+/// Takes an approved post for this PC to publish. Both apps watch the review site, so the post is
+/// moved from approved to posting in one write that only succeeds if nobody changed it since it was
+/// read: exactly one PC gets true and posts it.
+#[tauri::command]
+pub async fn claim_review_post(video_id: String) -> Result<bool, String> {
+    let key = require_key()?;
+    let id = safe_id(&video_id)?;
+    let token = access_token(&key).await?;
+    let url = format!("{}/posts/{id}", documents_url(&key));
+    let response = client(REQUEST_TIMEOUT)?.get(&url).bearer_auth(&token).send().await.map_err(|e| format!("Couldn't reach the review site: {e}"))?;
+    if !response.status().is_success() {
+        return Ok(false);
+    }
+    let doc: Value = response.json().await.unwrap_or(Value::Null);
+    let status = from_firestore(&doc["fields"]["status"]);
+    let Some(update_time) = doc["updateTime"].as_str().filter(|_| status == "approved") else { return Ok(false) };
+    let claim = format!("{url}?updateMask.fieldPaths=status&updateMask.fieldPaths=claimedBy&currentDocument.updateTime={}", urlencoding(update_time));
+    let by = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "this PC".into());
+    let response = client(REQUEST_TIMEOUT)?
+        .patch(&claim)
+        .bearer_auth(&token)
+        .json(&json!({ "fields": fields_of(json!({ "status": "posting", "claimedBy": by }).as_object().unwrap()) }))
+        .send()
+        .await
+        .map_err(|e| format!("Couldn't reach the review site: {e}"))?;
+    Ok(response.status().is_success())
 }
 
 /// Puts the brands and categories on the review site, so a reviewer can make a video for one of them.
