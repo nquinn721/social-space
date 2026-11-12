@@ -11,7 +11,8 @@ import type { DevProvider } from './devAppsService';
 export type ConnectionCheck = { state: 'none' | 'ok' | 'expired' | 'unchecked'; username: string; detail: string };
 /** Pages the tracker can open; the desktop app maps each to a fixed address. */
 export type SetupPage = 'meta-apps' | 'meta-business' | 'instagram-settings' | 'google-consent' | 'google-youtube-api' | 'google-quota'
-  | 'youtube-audit' | 'youtube-verify' | 'tiktok-apps' | 'x-portal' | 'x-products';
+  | 'youtube-audit' | 'youtube-verify' | 'tiktok-apps' | 'x-portal' | 'x-products'
+  | 'tiktok-login' | 'google-project' | 'google-credentials' | 'google-new-client' | 'x-signup';
 export type NeedStatus = 'done' | 'todo' | 'problem' | 'checking';
 export type NeedAction = { kind: 'connect'; account: Account } | { kind: 'setup-app'; provider: DevProvider } | { kind: 'sign-in'; account: Account };
 export type Need = {

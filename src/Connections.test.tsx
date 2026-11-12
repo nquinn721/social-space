@@ -82,9 +82,10 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
     await user.click(within(row('Instagram @massagelisa')).getByRole('button', { name: 'Connect' }));
-    const form = await screen.findByRole('form', { name: 'Set up Instagram once' });
+    await user.click(await screen.findByRole('button', { name: /Copy the App ID and secret/ }));
+    const form = await screen.findByRole('form', { name: 'Instagram keys' });
     await user.type(within(form).getByLabelText('App ID'), '1234567890');
-    await user.type(within(form).getByLabelText('App Secret'), 'abcdef0123456789abcdef0123456789');
+    await user.type(within(form).getByLabelText('App secret'), 'abcdef0123456789abcdef0123456789');
     await user.type(within(form).getByLabelText('Configuration ID'), '555666777');
     await user.click(within(form).getByRole('button', { name: 'Save and connect' }));
     expect(instagram.saveInstagramApp).toHaveBeenCalledWith('1234567890', 'abcdef0123456789abcdef0123456789', '555666777');
@@ -98,8 +99,9 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
     await user.click(within(row('X @mia_x')).getByRole('button', { name: 'Connect' }));
-    const form = await screen.findByRole('form', { name: 'Set up X once' });
-    await user.type(within(form).getByLabelText('X Client ID'), 'abc-123');
+    await user.click(await screen.findByRole('button', { name: /Copy the client ID$/ }));
+    const form = await screen.findByRole('form', { name: 'X keys' });
+    await user.type(within(form).getByLabelText('OAuth 2.0 Client ID'), 'abc-123');
     await user.click(within(form).getByRole('button', { name: 'Save and connect' }));
     expect(apps.saveDeveloperApp).toHaveBeenCalledWith('x', 'abc-123', '');
     expect(x.connectX).toHaveBeenLastCalledWith('', 'x-mia');
@@ -111,7 +113,8 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
     await user.click(within(row('TikTok @mia')).getByRole('button', { name: 'Connect' }));
-    const form = await screen.findByRole('form', { name: 'Set up TikTok once' });
+    await user.click(await screen.findByRole('button', { name: /Copy the client key and secret/ }));
+    const form = await screen.findByRole('form', { name: 'TikTok keys' });
     await user.type(within(form).getByLabelText('Client key'), 'awkey123');
     await user.type(within(form).getByLabelText('Client secret'), 'secret-value-123');
     await user.click(within(form).getByRole('button', { name: 'Save and connect' }));

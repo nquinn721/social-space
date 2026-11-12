@@ -4,12 +4,15 @@ import { listDeveloperApps, type DevProvider } from './devAppsService';
 import { hasAccountPassword } from './profileService';
 import { canConnect, profileConnection } from './profileConnections';
 import type { Account } from './model';
+import type { Bounds } from './profileService';
 import type { ConnectionCheck, SetupPage } from './setupNeeds';
 
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to check setup.'); }
 
 /** Opens a developer or account page from the setup tracker in an app window. */
 export async function openSetupPage(page: SetupPage): Promise<void> { desktopOnly(); return invoke('open_setup_page', { page }); }
+/** Shows a setup page inside the app at these bounds (for the guided setup) and returns its id. */
+export async function embedSetupPage(page: SetupPage, bounds: Bounds): Promise<string> { desktopOnly(); return invoke('embed_setup_page', { page, bounds }); }
 
 const CHECK_COMMAND = { instagram: 'check_instagram_connection', x: 'check_x_connection', youtube: 'check_youtube_connection', tiktok: 'check_tiktok_connection' } as const;
 

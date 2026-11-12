@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { Clapperboard, Link2, Mail, RefreshCw } from 'lucide-react';
 import { connectGmailSession, emailConnection, openGmailSignIn } from './emailService';
 import { saveInstagramApp } from './instagramService';
-import InstagramAppSetup from './InstagramAppSetup';
+import DevAppSetupGuide from './DevAppSetupGuide';
 import { listVideoSources } from './videoSourcesService';
 import { saveDeveloperApp } from './devAppsService';
 import { canConnect, connectProfile, disconnectProfile, PROVIDER_OF, useProfileConnections } from './profileConnections';
 import InstagramIdPrompt from './InstagramIdPrompt';
 import { INSTAGRAM_ID_NEEDED } from './instagramService';
-import { TIKTOK_REDIRECT_URI, YOUTUBE_REDIRECT_URI } from './socialConnectService';
 import { getPlatform, normalizeHandle, type Account, type Brand, type Platform, type View } from './model';
 import { BrandMark, errorText } from './ui';
 import SetupTracker from './SetupTracker';
@@ -40,35 +39,6 @@ export function useConnectionState() {
 type Row = { key: string; icon: React.ReactNode; name: string; what: string; connected: string | null; go: () => void; connect?: () => void };
 type Provider = 'meta' | 'x' | 'tiktok' | 'google';
 type Setup = { provider: Provider; retry?: Account } | null;
-const X_CALLBACK = 'http://127.0.0.1:49173/callback';
-
-/** Sets up the X developer app once: only its OAuth 2.0 Client ID is needed. */
-function XAppSetup({ working, onSave, onCancel }: { working: boolean; onSave: (clientId: string) => Promise<void>; onCancel: () => void }) {
-  const [clientId, setClientId] = useState('');
-  return <form className="card backup-form" aria-label="Set up X once" onSubmit={(event) => { event.preventDefault(); if (clientId.trim()) void onSave(clientId.trim()); }}>
-    <strong>One-time setup for X</strong>
-    <small>In developer.x.com, open your app's <em>User authentication settings</em>: choose <em>Native App</em>, permissions <em>Read and write</em>, and add this callback address: <code>{X_CALLBACK}</code>. Then copy the <em>OAuth 2.0 Client ID</em> here. After this, Connect is one click for every X profile.</small>
-    <label htmlFor="x-client-id">X Client ID</label><input id="x-client-id" autoComplete="off" value={clientId} onChange={(event) => setClientId(event.target.value)}/>
-    <div className="inline-add"><button className="primary-button small-button" disabled={working || !clientId.trim()}>Save and connect</button><button type="button" className="ghost-button small-button" onClick={onCancel}>Cancel</button></div>
-  </form>;
-}
-
-/** Sets up a Google (YouTube) or TikTok developer app once: its client ID and secret. */
-function KeyedAppSetup({ provider, working, onSave, onCancel }: { provider: 'google' | 'tiktok'; working: boolean; onSave: (id: string, secret: string) => Promise<void>; onCancel: () => void }) {
-  const [id, setId] = useState('');
-  const [secret, setSecret] = useState('');
-  const google = provider === 'google';
-  return <form className="card backup-form" aria-label={google ? 'Set up YouTube once' : 'Set up TikTok once'} onSubmit={(event) => { event.preventDefault(); if (id.trim() && secret.trim()) void onSave(id.trim(), secret.trim()); }}>
-    <strong>One-time setup for {google ? 'YouTube' : 'TikTok'}</strong>
-    {google
-      ? <small>In console.cloud.google.com: create a project, enable <em>YouTube Data API v3</em>, set up the OAuth consent screen (add yourself as a test user), then <em>Credentials → Create OAuth client ID → Desktop app</em>. Copy its Client ID and Client secret here. The app signs in at <code>{YOUTUBE_REDIRECT_URI}</code>, which desktop clients allow without extra setup.</small>
-      : <small>In developers.tiktok.com: create an app, add <em>Login Kit</em> and <em>Content Posting API</em>, choose the <em>Desktop</em> platform and add this redirect URI: <code>{TIKTOK_REDIRECT_URI}</code>. Copy the Client key and Client secret here. TikTok only allows public posting after it reviews the app.</small>}
-    <div className="field-row"><div><label htmlFor={`${provider}-id`}>{google ? 'Client ID' : 'Client key'}</label><input id={`${provider}-id`} autoComplete="off" value={id} onChange={(event) => setId(event.target.value)}/></div>
-      <div><label htmlFor={`${provider}-secret`}>Client secret</label><input id={`${provider}-secret`} type="password" autoComplete="off" value={secret} onChange={(event) => setSecret(event.target.value)}/></div></div>
-    <div className="inline-add"><button className="primary-button small-button" disabled={working || !id.trim() || !secret.trim()}>Save and connect</button><button type="button" className="ghost-button small-button" onClick={onCancel}>Cancel</button></div>
-  </form>;
-}
-
 /**
  * Connecting profiles, shared by the Setup tab and a brand's Accounts tab: one click connects a profile,
  * and opens the social's one-time app setup (then retries) when it is missing. `panels` holds the forms
@@ -123,9 +93,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[]) {
     {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
     {needsId && <InstagramIdPrompt profile={needsId.id} handle={normalizeHandle(needsId.handle)} onCancel={() => setNeedsId(null)}
       onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); recheck(); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
-    {setup?.provider === 'meta' && <InstagramAppSetup working={working} onSave={(id, secret, configId) => saveApp('meta', id, secret, configId)} onCancel={() => setSetup(null)}/>}
-    {setup?.provider === 'x' && <XAppSetup working={working} onSave={(id) => saveApp('x', id, '')} onCancel={() => setSetup(null)}/>}
-    {(setup?.provider === 'google' || setup?.provider === 'tiktok') && <KeyedAppSetup key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret) => saveApp(setup.provider, id, secret)} onCancel={() => setSetup(null)}/>}
+    {setup && <DevAppSetupGuide key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret, configId) => saveApp(setup.provider, id, secret, configId)} onCancel={() => setSetup(null)}/>}
   </>;
   return { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp: (provider: Provider) => setSetup({ provider }), recheck, panels, brandName };
 }

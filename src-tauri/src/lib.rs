@@ -441,6 +441,7 @@ pub fn run() {
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
             embedded::embed_platform_page,
+            embedded::embed_setup_page,
             embedded::set_embedded_bounds,
             embedded::close_embedded_page,
             autofill::fill_site_form,

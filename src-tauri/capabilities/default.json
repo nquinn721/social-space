@@ -81,6 +81,7 @@
     "allow-connect-gmail-session",
     "allow-open-gmail-message",
     "allow-embed-platform-page",
+    "allow-embed-setup-page",
     "allow-set-embedded-bounds",
     "allow-close-embedded-page",
     "allow-fill-site-form",

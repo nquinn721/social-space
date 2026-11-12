@@ -449,10 +449,6 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .publish-row h2 { font-size: 14px; font-weight: 600; }
 .publish-row p { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
 .x-publisher, .instagram-publisher { margin-top: 16px; }
-.instagram-app-setup .setup-steps { margin: 4px 0 8px; padding-left: 20px; display: grid; gap: 8px; font-size: 13px; color: var(--text-2); }
-.instagram-app-setup .setup-steps b { color: var(--text); }
-.instagram-app-setup .copy-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-.instagram-app-setup .copy-row code { word-break: break-all; }
 .instagram-setup ol { margin: 8px 0 12px; padding-left: 20px; display: grid; gap: 6px; color: var(--text-2); }
 .instagram-setup code { font-size: 12px; }
 .instagram-kinds { margin: 8px 0 4px; flex-wrap: wrap; }

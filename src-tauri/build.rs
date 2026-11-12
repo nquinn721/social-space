@@ -41,6 +41,7 @@ fn main() {
         "check_tiktok_connection",
         "check_x_connection",
         "open_setup_page",
+        "embed_setup_page",
         "save_developer_app",
         "remove_developer_app",
         "post_to_x",
