@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, RefreshCw, RotateCw, X as Close } from 'lucide-react';
-import { checkForUpdate, installPreparedUpdate, prepareUpdate, restartApp, takeUpdateResult, updateManagement, updateProgress, type UpdateProgress, type UpdateResult, type UpdateStatus } from './updateService';
+import { checkForUpdate, installPreparedUpdate, prepareUpdate, requestHubUpdate, restartApp, takeUpdateResult, updateManagement, updateProgress, type UpdateProgress, type UpdateResult, type UpdateStatus } from './updateService';
 import { PageHeader } from './ui';
 import './updates.css';
 
-/** Checking is a git fetch in the source folder, so new merges to main show up within minutes. */
-export const CHECK_INTERVAL_MS = 5 * 60 * 1000;
+/** Checking is a quick git fetch, so a new release on main is noticed within a minute. */
+export const CHECK_INTERVAL_MS = 60 * 1000;
+/** Coming back to the window checks again, but not more often than this. */
+export const FOCUS_CHECK_MIN_MS = 15 * 1000;
 const PROGRESS_POLL_MS = 1000;
 const short = (commit: string | null | undefined) => (commit && commit !== 'unknown' ? commit.slice(0, 7) : 'unknown');
 const errorText = (error: unknown) => (typeof error === 'string' ? error : error instanceof Error ? error.message : 'Something went wrong.');
 const isActive = (progress: UpdateProgress | null) => progress?.state === 'running' || progress?.state === 'restarting';
+/** "Nov 11, 12:30 PM": when a commit was released, in this computer's time zone. */
+export function releasedAt(seconds: number | null | undefined): string | null {
+  if (!seconds) return null;
+  return new Date(seconds * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+const released = (seconds: number | null | undefined) => { const when = releasedAt(seconds); return when ? `Released ${when} · ` : ''; };
 const changeCount = (status: UpdateStatus) => {
   const count = status.newCommits.length;
   return count ? `${count}${count >= 20 ? '+' : ''} new change${count === 1 ? '' : 's'}` : 'New changes';
@@ -21,7 +29,7 @@ export function hasUpdate(status: UpdateStatus | null): boolean {
 }
 
 export type AppUpdates = {
-  /** "Ava" while the Ava hub manages updates: then the app never checks, builds or offers updates itself. */
+  /** "Ava" while the Ava hub manages updates: the app still notices and prepares a release, but Ava installs it. */
   managedBy?: string | null;
   status: UpdateStatus | null;
   progress: UpdateProgress | null;
@@ -36,10 +44,10 @@ export type AppUpdates = {
 };
 
 /**
- * Checks main at startup and every few minutes. When main has new commits it builds them in the
- * background on its own (once per commit, so a failed build is not retried in a loop), and the
- * app then offers one "Restart to update" that installs over the old version. In managed mode
- * (the Ava hub keeps the app up to date) it does none of that.
+ * Checks main at startup, every minute and on focus. When main has new commits it builds them in
+ * the background on its own (once per commit, so a failed build is not retried in a loop), and the
+ * header then offers one "Restart to update". In managed mode (the Ava hub keeps the app up to
+ * date) the same happens, but the restart hands the install to Ava, which reuses the build.
  */
 export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -62,7 +70,8 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
       .catch(() => { if (live) setManagedBy(null); });
     return () => { live = false; };
   }, []);
-  const selfUpdating = managedBy === null;
+  // Known once the management lookup answered; checks run the same either way.
+  const selfUpdating = managedBy !== undefined;
 
   const check = useCallback(async (quiet = false) => {
     if (checkingRef.current) return;
@@ -90,8 +99,20 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
     if (!selfUpdating) return () => { mounted.current = false; };
     void check(true);
     void followProgress();
-    const timer = window.setInterval(() => void check(true), intervalMs);
-    return () => { mounted.current = false; window.clearInterval(timer); window.clearTimeout(pollTimer.current); };
+    let lastCheck = Date.now();
+    const timer = window.setInterval(() => { lastCheck = Date.now(); void check(true); }, intervalMs);
+    // Switching back to the app looks for a release right away instead of waiting for the timer.
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden' || Date.now() - lastCheck < FOCUS_CHECK_MIN_MS) return;
+      lastCheck = Date.now();
+      void check(true);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      mounted.current = false; window.clearInterval(timer); window.clearTimeout(pollTimer.current);
+      window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus);
+    };
   }, [check, followProgress, intervalMs, selfUpdating]);
 
   const startBuild = useCallback(async (commit: string) => {
@@ -114,7 +135,15 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
   const restartToUpdate = useCallback(async () => {
     if (acting.current) return;
     acting.current = true; setError('');
-    try { await installPreparedUpdate(); await followProgress(); }
+    try {
+      // Managed: Ava installs it (keeping rollback and its "Updated to" note) and reopens the app.
+      // Only when Ava isn't running does the app install it itself.
+      if (managedBy && await requestHubUpdate(status?.latestVersion ?? null) === 'ava') {
+        setProgress((current) => ({ ...(current ?? { step: 0, totalSteps: 3, label: '', detail: '', error: null }), state: 'restarting', label: 'Ava is installing the update' }));
+        return;
+      }
+      await installPreparedUpdate(); await followProgress();
+    }
     catch (reason) {
       setError(errorText(reason));
       // The built installer was refused (for example, a manual build replaced it). Check again so
@@ -123,7 +152,7 @@ export function useAppUpdates(intervalMs = CHECK_INTERVAL_MS): AppUpdates {
       void check(true);
     }
     finally { acting.current = false; }
-  }, [followProgress, check]);
+  }, [followProgress, check, managedBy, status]);
 
   return { managedBy, status, progress, checking, error, check, followProgress, buildNow, restartToUpdate };
 }
@@ -133,7 +162,7 @@ function ProgressView({ progress }: { progress: UpdateProgress }) {
   const step = Math.max(progress.step, 1);
   const percent = restarting ? 100 : Math.round(((step - 1) / progress.totalSteps) * 100 + 100 / progress.totalSteps / 2);
   return <div className="update-progress">
-    <strong>{restarting ? 'Installing the update. SocialSpace will restart…' : `Building the update · Step ${step} of ${progress.totalSteps}: ${progress.label}…`}</strong>
+    <strong>{restarting ? 'Installing the update. SocialSpace will restart…' : `Preparing the update · Step ${step} of ${progress.totalSteps}: ${progress.label}…`}</strong>
     <div className="update-bar" role="progressbar" aria-label="Update progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }}/></div>
     {!restarting && progress.detail && <small>{progress.detail}</small>}
   </div>;
@@ -153,6 +182,32 @@ export function updateNavLabel(updates: Pick<AppUpdates, 'status' | 'progress'>)
   return 'Updates';
 }
 
+/**
+ * The update button in the header, the same in every hub app: "Preparing update" while a new
+ * release is fetched and built, then "Restart to update". Hidden when there is nothing new. In
+ * managed mode the restart hands the install to Ava, which reopens the app.
+ */
+export function HeaderUpdateButton({ updates, onOpen }: { updates: AppUpdates; onOpen: () => void }) {
+  const { status, progress, restartToUpdate } = updates;
+  if (status?.blockedReason) return null;
+  if (progress?.state === 'restarting') {
+    return <button type="button" className="primary-button small-button header-update" disabled><RotateCw size={15} className="spin"/> Restarting…</button>;
+  }
+  if (status?.state === 'ready') {
+    return <button type="button" className="primary-button small-button header-update" onClick={() => void restartToUpdate()} title={changeCount(status)}><Download size={15}/> Restart to update</button>;
+  }
+  // Managed: Ava's Settings has the details, so the button only shows once the update is ready.
+  if (status?.state === 'available' && !updates.managedBy) {
+    const building = progress?.state === 'running';
+    const failed = progress?.state === 'failed';
+    return <button type="button" className={`outline-button small-button header-update ${failed ? 'failed' : ''}`} onClick={onOpen} title={changeCount(status)}>
+      {building ? <RefreshCw size={15} className="spin"/> : <Download size={15}/>}
+      {failed ? 'Update failed' : building ? 'Preparing update…' : 'Update available'}
+    </button>;
+  }
+  return null;
+}
+
 /** A slim notice at the top of every page: the outcome after a restart, or an update ready to install. */
 export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen: () => void }) {
   const { status, progress, restartToUpdate } = updates;
@@ -170,7 +225,8 @@ export function UpdateBanner({ updates, onOpen }: { updates: AppUpdates; onOpen:
   if (updates.managedBy) return null;
   if (progress?.state === 'restarting') return <div role="status" className="update-banner"><Download size={17}/><ProgressView progress={progress}/></div>;
   if (progress?.state === 'failed') return <div role="alert" className="update-banner failed"><Download size={17}/><span>The update didn't build.</span><button className="outline-button small-button" onClick={onOpen}>See why</button></div>;
-  // Building happens quietly; the sidebar shows it. The banner only asks once it is ready.
+  // Building happens quietly and the header button offers the restart; the banner only adds the
+  // list of what changed, once, when an update is ready.
   if (status?.state !== 'ready' || status.blockedReason || dismissed === status.latestCommit) return null;
   return <div role="status" className="update-banner">
     <Download size={17}/>
@@ -201,15 +257,15 @@ export function UpdatesPage({ updates }: { updates: AppUpdates }) {
       <div className="update-heading"><h2 id="update-heading"><RotateCw size={17}/> Changes on main</h2><button type="button" className="icon-button" disabled={busy} onClick={() => void check()} aria-label="Check for updates" title="Check for updates"><RefreshCw size={16} className={checking ? 'spin' : undefined}/></button></div>
       {!status ? <p className="update-note">{checking ? 'Checking for updates…' : 'Update status is not available yet.'}</p> : <>
         <dl className="update-facts">
-          <dt>Running</dt><dd>SocialSpace {status.runningVersion}, build {short(status.installedCommit)}</dd>
-          <dt>Latest on main</dt><dd>{status.latestVersion ? `${status.latestVersion}, build ` : ''}{short(status.latestCommit)}</dd>
+          <dt>Running</dt><dd>{released(status.installedReleasedAt)}SocialSpace {status.runningVersion}, build {short(status.installedCommit)}</dd>
+          <dt>Latest on main</dt><dd>{released(status.latestReleasedAt)}{status.latestVersion ? `${status.latestVersion}, build ` : ''}{short(status.latestCommit)}</dd>
           <dt>Source folder</dt><dd>{status.sourceDir}</dd>
         </dl>
         {ready && status.prepared ? <p className="update-ready">Update ready: commit <strong>{short(status.prepared.commit)}</strong> is built. Restart to install it.</p>
           : status.state === 'available' && building ? <p className="update-ready">Building {changeCount(status).toLowerCase()} from main commit <strong>{short(status.latestCommit)}</strong> in the background.</p>
           : status.state === 'available' ? <p className="update-ready">{changeCount(status)} on main commit <strong>{short(status.latestCommit)}</strong>.</p>
           : <p className="update-note">SocialSpace is up to date with main.</p>}
-        {status.updateAvailable && status.newCommits.length > 0 && <ul className="update-commits" aria-label="Changes in this update">{status.newCommits.map((commit) => <li key={commit}>{commit}</li>)}</ul>}
+        {status.updateAvailable && status.newCommits.length > 0 && <ul className="update-commits" aria-label="Changes in this update">{status.newCommits.map((commit, index) => { const when = releasedAt(status.newCommitTimes?.[index]); return <li key={commit}>{when && <span className="update-commit-time">{when}</span>}{commit}</li>; })}</ul>}
         {status.blockedReason && <p className="update-error">{status.blockedReason}</p>}
       </>}
       {building && progress && <ProgressView progress={progress}/>}

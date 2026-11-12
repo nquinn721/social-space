@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// Social Space uploads with its service account (which skips these rules) and gives each video a private
+// download link stored on the post in Firestore. The only browser access is a reviewer uploading a new
+// video into their own folder, and reading it back to get its link.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function reviewer() {
+      return request.auth != null && request.auth.token.email_verified == true
+        && firestore.exists(/databases/(default)/documents/reviewers/$(request.auth.token.email.lower()));
+    }
+
+    match /uploads/{uid}/{file} {
+      allow read: if reviewer() && request.auth.uid == uid;
+      allow create: if reviewer() && request.auth.uid == uid
+        && request.resource.size < 1024 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

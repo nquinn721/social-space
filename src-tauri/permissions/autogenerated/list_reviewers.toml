@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-reviewers"
+description = "Enables the list_reviewers command without any pre-configured scope."
+commands.allow = ["list_reviewers"]
+
+[[permission]]
+identifier = "deny-list-reviewers"
+description = "Denies the list_reviewers command without any pre-configured scope."
+commands.deny = ["list_reviewers"]

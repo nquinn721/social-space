@@ -23,7 +23,7 @@ vi.mock('./videoSourcesService', () => ({
   getVideo: vi.fn(),
   saveGeneratedVideo: vi.fn(),
 }));
-vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(async () => null), publishInstagramReelFile: vi.fn() }));
+vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(async () => null), publishInstagramReelFile: vi.fn(), openInstagramPost: vi.fn(async () => {}) }));
 import * as instagram from './instagramService';
 vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }) }));
 import * as ai from './assistant/postSuggest';
@@ -158,24 +158,39 @@ describe('approving a post', () => {
 
   it('shows the whole post and posts it to Instagram when approved', async () => {
     connected();
-    vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1', permalink: 'https://www.instagram.com/reel/abc/' });
+    const confirmBox = vi.spyOn(window, 'confirm');
     const { onSave, user } = setup(workspace);
     const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
     expect(within(row).getByText('To approve')).toBeInTheDocument();
     expect(within(row).getByLabelText('Post')).toHaveTextContent('Crunchy');
     await user.click(await within(row).findByRole('button', { name: /Approve and post/ }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('@animals'));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('@animals');
+    await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
+    expect(confirmBox).not.toHaveBeenCalled();
     expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('1', 'mia');
     expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1', { coverMs: undefined, shareToFeed: true });
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'] })] }), 'Posted "Carrot crunch" to @animals on Instagram.');
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), 'Posted "Carrot crunch" to @animals on Instagram.');
+  });
+
+  it('opens the live post from a posted video', async () => {
+    connected();
+    const live: Video = { ...fresh, posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } };
+    const { user } = setup({ ...base, videos: [live] });
+    const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
+    await user.click(within(row).getByText('View on Instagram'));
+    await user.click(within(within(row).getByRole('group', { name: 'Posted on' })).getByRole('button', { name: 'View on Instagram' }));
+    expect(instagram.openInstagramPost).toHaveBeenCalledTimes(2);
+    expect(instagram.openInstagramPost).toHaveBeenCalledWith('https://www.instagram.com/reel/abc/');
   });
 
   it('does nothing when the confirmation is cancelled', async () => {
     connected();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     const { onSave, user } = setup(workspace);
     await user.click(await screen.findByRole('button', { name: /Approve and post/ }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(instagram.publishInstagramReelFile).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -183,9 +198,9 @@ describe('approving a post', () => {
   it('shows the Instagram error and keeps the video unposted', async () => {
     connected();
     vi.mocked(instagram.publishInstagramReelFile).mockRejectedValue('Instagram refused the video upload (HTTP 400).');
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { onSave, user } = setup(workspace);
     await user.click(await screen.findByRole('button', { name: /Approve and post/ }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Post to Instagram' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 400');
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -202,7 +217,6 @@ describe('approving a post', () => {
   it('posts with the edited hashtags, cover and feed choice, and saves them as the category defaults', async () => {
     connected();
     vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const detailed: Video = { ...fresh, details: { hashtags: ['bunny'], youtubeTitle: '', coverMs: 2500, madeWithAi: true, shareToFeed: true, madeForKids: false } };
     const { onSave, user } = setup({ ...base, videos: [detailed] });
     const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
@@ -211,7 +225,9 @@ describe('approving a post', () => {
     await user.click(within(row).getByLabelText(/main feed/));
     expect(within(row).getByLabelText(/Start new Rabbit videos/)).toBeChecked();
     await user.click(await within(row).findByRole('button', { name: /Approve and post/ }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Crunchy\n\n#bunny #snow'));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Crunchy #bunny #snow');
+    await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
     expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith(fresh.mediaSource, 'Crunchy\n\n#bunny #snow', '1', { coverMs: 2500, shareToFeed: false });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ categories: [expect.objectContaining({ id: 'rabbit', defaults: { caption: 'Crunchy', hashtags: ['bunny', 'snow'] } })] }), expect.any(String));
   });

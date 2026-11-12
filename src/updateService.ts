@@ -12,8 +12,13 @@ export type UpdateStatus = {
   prepared: PreparedUpdate | null;
   installedCommit: string;
   latestCommit: string | null;
+  /** When the running build's commit and main's newest commit were made (seconds since 1970). */
+  installedReleasedAt?: number | null;
+  latestReleasedAt?: number | null;
   updateAvailable: boolean;
   newCommits: string[];
+  /** When each of newCommits was made (same order, seconds since 1970). */
+  newCommitTimes?: number[];
   blockedReason: string | null;
 };
 export type UpdateProgress = {
@@ -34,6 +39,13 @@ const COMMIT = /^[a-f0-9]{40}$/i;
 export async function updateManagement(): Promise<UpdateManagement> {
   if (!isTauri()) return { managedBy: null };
   return invoke('update_management');
+}
+/** "ava": Ava has the request and the app is closing; "self_update": Ava isn't running, update here. */
+export type HandOff = 'ava' | 'self_update';
+/** Managed mode's header button: asks Ava to install the update (the app then closes and Ava reopens it). */
+export async function requestHubUpdate(latestVersion: string | null): Promise<HandOff> {
+  if (!isTauri()) return 'self_update';
+  return invoke('request_hub_update', { latestVersion });
 }
 /** Returns null outside the desktop app, where there is nothing to update. */
 export async function checkForUpdate(): Promise<UpdateStatus | null> {

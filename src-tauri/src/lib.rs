@@ -10,16 +10,17 @@ mod email;
 mod embedded;
 mod gmail_session;
 mod hub;
-mod image_ai;
 mod grok;
+mod grok_ai;
 mod dev_apps;
 mod instagram;
 mod instagram_login;
 mod social_connect;
 mod kling;
-mod ollama;
 mod queue;
+mod review;
 mod setup_pages;
+mod team_sync;
 mod updater;
 mod video_files;
 mod video_gen;
@@ -59,6 +60,9 @@ struct VideoCategory {
     id: String,
     brand_id: String,
     name: String,
+    /// The description and hashtags new posts of this category start from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    defaults: Option<serde_json::Value>,
 }
 
 /// One video of a category, posted to every social of its brand. `posted` lists the socials it is up on.
@@ -80,6 +84,15 @@ struct Video {
     /// Set while an AI video source is still making this video; cleared once the file is saved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     generation: Option<Generation>,
+    /// The post's hashtags, cover and per-social choices, as the interface edits them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    details: Option<serde_json::Value>,
+    /// What the video was made from, kept so the assistant can describe it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prompt: Option<String>,
+    /// Link to the live post on each social it was published to by the app.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    links: BTreeMap<String, String>,
 }
 
 /// An AI generation in progress for a library video.
@@ -356,6 +369,13 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_workspace,
             save_workspace,
+            team_sync::team_sync_status,
+            team_sync::team_sync_enable,
+            team_sync::team_sync_disable,
+            team_sync::team_sync_fetch,
+            team_sync::team_sync_push,
+            review::claim_review_post,
+            review::export_review_key,
             open_platform_action,
             open_kling,
             video_sources::list_video_sources,
@@ -401,17 +421,16 @@ pub fn run() {
             instagram::publish_instagram_reel,
             instagram::publish_instagram_photo,
             instagram::publish_instagram_reel_file,
+            instagram::open_instagram_post,
             instagram::choose_instagram_video,
             queue::list_queue,
             queue::add_queue_job,
             queue::complete_queue_job,
             queue::delete_queue_job,
             queue::choose_video_file,
-            ollama::ollama_models,
-            ollama::ollama_chat,
-            image_ai::image_ai_status,
-            image_ai::start_image_ai,
-            image_ai::generate_profile_image,
+            grok_ai::grok_models,
+            grok_ai::grok_chat,
+            grok_ai::generate_profile_image,
             email::email_connection,
             email::connect_email,
             email::disconnect_email,
@@ -441,7 +460,20 @@ pub fn run() {
             updater::restart_app,
             updater::update_progress,
             updater::take_update_result,
-            hub::update_management
+            hub::update_management,
+            hub::request_hub_update,
+            review::review_connection,
+            review::connect_review,
+            review::disconnect_review,
+            review::list_reviewers,
+            review::add_reviewer,
+            review::remove_reviewer,
+            review::list_review_posts,
+            review::submit_for_review,
+            review::record_review_result,
+            review::open_review_site,
+            review::publish_review_catalog,
+            review::import_review_video
         ])
         .run(tauri::generate_context!())
         .expect("error while running Social Space");
@@ -450,6 +482,19 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn post_details_prompt_links_and_category_defaults_survive_saving() {
+        let json = serde_json::json!({"businessName": "", "accounts": [], "categories": [{"id": "c", "brandId": "b", "name": "Rabbit", "defaults": {"caption": "Hi", "hashtags": ["#bunny"]}}],
+            "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "details": {"hashtags": ["#bunny"], "shareToFeed": true, "coverMs": 1500}, "prompt": "a rabbit",
+            "links": {"instagram": "https://www.instagram.com/reel/x/"}}]});
+        let workspace: Workspace = serde_json::from_value(json).unwrap();
+        let saved = serde_json::to_value(&workspace).unwrap();
+        assert_eq!(saved["videos"][0]["details"]["coverMs"], 1500);
+        assert_eq!(saved["videos"][0]["prompt"], "a rabbit");
+        assert_eq!(saved["videos"][0]["links"]["instagram"], "https://www.instagram.com/reel/x/");
+        assert_eq!(saved["categories"][0]["defaults"]["hashtags"][0], "#bunny");
+    }
 
     #[test]
     fn meta_developer_link_opens_a_page_that_works_signed_out() {
@@ -528,8 +573,8 @@ mod tests {
 
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![], setup: Default::default() };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None });
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default() };
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default() });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());
@@ -542,7 +587,7 @@ mod tests {
 
     #[test]
     fn videos_can_carry_an_ai_generation_in_progress() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into() }], videos: vec![], setup: Default::default() };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default() };
         let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
         workspace.videos.push(serde_json::from_value(json).unwrap());
         assert!(validate_workspace(&workspace).is_ok());

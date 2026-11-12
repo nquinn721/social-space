@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-grok-chat"
+description = "Enables the grok_chat command without any pre-configured scope."
+commands.allow = ["grok_chat"]
+
+[[permission]]
+identifier = "deny-grok-chat"
+description = "Denies the grok_chat command without any pre-configured scope."
+commands.deny = ["grok_chat"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-request-hub-update"
+description = "Enables the request_hub_update command without any pre-configured scope."
+commands.allow = ["request_hub_update"]
+
+[[permission]]
+identifier = "deny-request-hub-update"
+description = "Denies the request_hub_update command without any pre-configured scope."
+commands.deny = ["request_hub_update"]

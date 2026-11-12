@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Bot, Check, Send, Settings2, Trash2, X as Close } from 'lucide-react';
-import { chat, DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, toolArguments, type AssistantSettings, type ChatMessage } from './ollamaClient';
+import { chat, DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, toolArguments, type AssistantSettings, type ChatMessage } from './grokClient';
 import { errorText, runTool, SYSTEM_PROMPT, TOOL_SPECS, type ConfirmRequest, type ToolContext } from './tools';
 import './assistant.css';
 
@@ -24,7 +24,7 @@ export default function AssistantPanel({ context, onClose }: { context: Omit<Too
   const [models, setModels] = useState<string[]>([]);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView?.({ block: 'end' }); }, [history, pending, busy]);
-  useEffect(() => { if (showSettings) listModels(settings).then(setModels).catch(() => setModels([])); }, [showSettings, settings.baseUrl]);
+  useEffect(() => { if (showSettings) listModels().then(setModels).catch(() => setModels([])); }, [showSettings]);
 
   const confirm = (request: ConfirmRequest) => new Promise<boolean>((resolve) => setPending({ ...request, resolve }));
   function answer(approved: boolean) { pending?.resolve(approved); setPending(null); }
@@ -48,7 +48,7 @@ export default function AssistantPanel({ context, onClose }: { context: Omit<Too
           let result: unknown;
           try { result = await runTool(call.function.name, toolArguments(call), { ...context, confirm }); }
           catch (reason) { result = { error: errorText(reason) }; }
-          conversation = [...conversation, { role: 'tool', tool_name: call.function.name, content: JSON.stringify(result) }];
+          conversation = [...conversation, { role: 'tool', tool_call_id: call.id, tool_name: call.function.name, content: JSON.stringify(result) }];
           setHistory(conversation);
         }
       }
@@ -62,19 +62,16 @@ export default function AssistantPanel({ context, onClose }: { context: Omit<Too
 
   return <aside className="assistant-panel" aria-label="Assistant">
     <header className="assistant-head">
-      <div><span className="assistant-avatar"><Bot size={17}/></span><div><strong>Assistant</strong><small><span className="dot"/>{settings.model} · runs on this PC</small></div></div>
+      <div><span className="assistant-avatar"><Bot size={17}/></span><div><strong>Assistant</strong><small><span className="dot"/>{settings.model} · Grok by xAI</small></div></div>
       <button className="icon-button" aria-label="Assistant settings" onClick={() => setShowSettings((value) => !value)}><Settings2 size={17}/></button>
       <button className="icon-button" aria-label="Clear conversation" disabled={busy} onClick={() => { setHistory([]); setError(''); }}><Trash2 size={17}/></button>
       <button className="icon-button" aria-label="Close assistant" onClick={onClose}><Close size={18}/></button>
     </header>
     {showSettings && <div className="assistant-settings">
-      <label htmlFor="assistant-model">Ollama model</label>
+      <label htmlFor="assistant-model">Grok model</label>
       <input id="assistant-model" list="assistant-models" value={settings.model} onChange={(event) => updateSettings({ ...settings, model: event.target.value })}/>
       <datalist id="assistant-models">{models.map((model) => <option key={model} value={model}/>)}</datalist>
-      <label htmlFor="assistant-url">Ollama address</label>
-      <input id="assistant-url" value={settings.baseUrl} onChange={(event) => updateSettings({ ...settings, baseUrl: event.target.value })}/>
-      <label className="assistant-check"><input type="checkbox" checked={settings.think} onChange={(event) => updateSettings({ ...settings, think: event.target.checked })}/> Let the model think first (slower, sometimes smarter)</label>
-      <p>{models.length ? `${models.length} models installed.` : 'Ollama not found or no models installed.'} Default is {DEFAULT_SETTINGS.model}; install it with <code>ollama pull {DEFAULT_SETTINGS.model}</code>.</p>
+      <p>{models.length ? `${models.length} Grok models available with your xAI key.` : 'No xAI key found. Add a Grok source under Settings > Video sources.'} Default is {DEFAULT_SETTINGS.model}.</p>
     </div>}
     <div className="assistant-log" role="log">
       {!history.length && <div className="assistant-empty"><span className="assistant-avatar"><Bot size={22}/></span><strong>How can I help?</strong><p>I can draft profiles, fill sign-up forms for you to submit, find verification codes in your email, or post to X after you approve.</p>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-grok-models"
+description = "Enables the grok_models command without any pre-configured scope."
+commands.allow = ["grok_models"]
+
+[[permission]]
+identifier = "deny-grok-models"
+description = "Denies the grok_models command without any pre-configured scope."
+commands.deny = ["grok_models"]

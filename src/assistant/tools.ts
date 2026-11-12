@@ -6,7 +6,7 @@ import { listQueue } from '../queueService';
 import { postToX } from '../xService';
 import { generateVideo, listVideoSources } from '../videoSourcesService';
 import { PROVIDERS } from '../videoProviders';
-import type { ToolSpec } from './ollamaClient';
+import type { ToolSpec } from './grokClient';
 
 export type ConfirmRequest = { title: string; detail: string };
 export type ToolContext = {

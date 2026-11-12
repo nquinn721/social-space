@@ -33,7 +33,7 @@ const LEGACY_KLING_ACCOUNT: &str = "api-key";
 const LEGACY_SOURCE_NAME: &str = "Kling";
 
 #[derive(Default)]
-pub struct SourcesLock(Mutex<()>);
+pub struct SourcesLock(pub(crate) Mutex<()>);
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -314,6 +314,39 @@ pub fn resolve(app: &AppHandle, lock: &SourcesLock, id: Option<&str>) -> Result<
 pub fn read_source_key(id: &str) -> Result<String, String> {
     read_key(id)
 }
+
+/// The Grok source whose xAI key the assistant and picture maker share:
+/// the active one when it is Grok, else the first verified, else any usable one.
+fn pick_grok(state: &SourcesState) -> Option<&VideoSource> {
+    let grok = |source: &&VideoSource| source.provider == VideoProvider::Grok && source.status != SourceStatus::Rejected;
+    state
+        .active
+        .as_ref()
+        .and_then(|id| state.sources.iter().filter(grok).find(|source| &source.id == id))
+        .or_else(|| state.sources.iter().filter(grok).find(|source| source.status == SourceStatus::Verified))
+        .or_else(|| state.sources.iter().find(grok))
+}
+
+/// The xAI key saved with a Grok video source, so one key covers video, chat and pictures.
+pub fn xai_key(app: &AppHandle, lock: &SourcesLock) -> Result<String, String> {
+    let id = {
+        let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
+        let state = load_or_migrate(&sources_path(app)?)?;
+        pick_grok(&state).map(|source| source.id.clone())
+    };
+    read_key(&id.ok_or(NO_XAI_KEY)?)
+}
+
+/// The installed app's xAI key, for live tests run on Nate's PC.
+#[cfg(all(test, windows))]
+pub fn installed_app_xai_key() -> Result<String, String> {
+    let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA is not set")?;
+    let path = Path::new(&appdata).join("com.socialmanager.desktop").join(SOURCES_FILE);
+    let state = load_or_migrate(&path)?;
+    read_key(&pick_grok(&state).ok_or(NO_XAI_KEY)?.id)
+}
+
+pub const NO_XAI_KEY: &str = "Add your xAI key under Settings > Video sources (Grok Imagine). The assistant and picture maker use the same key.";
 
 // ---------- provider checks ----------
 
@@ -651,6 +684,17 @@ mod tests {
         assert!(matches!(grok_verdict(401, ""), Verdict::Rejected(_)));
         assert!(matches!(grok_verdict(400, r#"{"error":"Incorrect API key"}"#), Verdict::Rejected(_)));
         assert!(matches!(grok_verdict(503, ""), Verdict::Unavailable(_)));
+    }
+
+    #[test]
+    fn the_xai_key_comes_from_a_usable_grok_source() {
+        let kling = VideoSource { provider: VideoProvider::Kling, ..source("k", SourceStatus::Verified) };
+        let mut state = SourcesState { active: Some("k".into()), sources: vec![kling, source("r", SourceStatus::Rejected), source("u", SourceStatus::Unchecked), source("v", SourceStatus::Verified)] };
+        assert_eq!(pick_grok(&state).map(|item| item.id.as_str()), Some("v"), "a verified Grok source wins over a Kling active one");
+        state.active = Some("u".into());
+        assert_eq!(pick_grok(&state).map(|item| item.id.as_str()), Some("u"), "the active Grok source is used");
+        state.sources.retain(|item| item.id != "v" && item.id != "u");
+        assert!(pick_grok(&state).is_none(), "rejected keys and Kling keys are never used");
     }
 
     #[test]

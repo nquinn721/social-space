@@ -1,4 +1,4 @@
-import { chat, loadSettings, type ChatMessage } from './ollamaClient';
+import { chat, loadSettings, type ChatMessage } from './grokClient';
 import { parseHashtags } from '../postDetails';
 
 export type PostSuggestion = { description: string; hashtags: string[] };
@@ -28,7 +28,7 @@ export function parsePostSuggestion(text: string): PostSuggestion | null {
   } catch { return null; }
 }
 
-/** Asks the local model for a description and hashtags for one video. */
+/** Asks Grok for a description and hashtags for one video. */
 export async function suggestPost(idea: PostIdea): Promise<PostSuggestion> {
   const lines = [`Brand: ${idea.brand}`, `Category: ${idea.category}`, `Video title: ${idea.title}`];
   if (idea.prompt?.trim()) lines.push(`What the video shows: ${idea.prompt.trim()}`);
@@ -41,12 +41,12 @@ export async function suggestPost(idea: PostIdea): Promise<PostSuggestion> {
     { role: 'assistant', content: EXAMPLE_REPLY },
     { role: 'user', content: lines.join('\n') },
   ];
-  const settings = { ...loadSettings(), think: false };
+  const settings = loadSettings();
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const reply = await chat(settings, messages, []);
     const suggestion = parsePostSuggestion(reply.content ?? '');
     if (suggestion) return suggestion;
     messages.push({ role: 'assistant', content: reply.content ?? '' }, { role: 'user', content: 'Reply with only the JSON object.' });
   }
-  throw new Error('The assistant did not suggest anything usable. Check that Ollama is running under Settings, then try again.');
+  throw new Error('The assistant did not suggest anything usable. Check the assistant under Settings, then try again.');
 }

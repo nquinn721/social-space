@@ -183,6 +183,12 @@
           "markdownDescription": "Enables the add_queue_job command without any pre-configured scope."
         },
         {
+          "description": "Enables the add_reviewer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-add-reviewer",
+          "markdownDescription": "Enables the add_reviewer command without any pre-configured scope."
+        },
+        {
           "description": "Enables the add_video_source command without any pre-configured scope.",
           "type": "string",
           "const": "allow-add-video-source",
@@ -243,6 +249,12 @@
           "markdownDescription": "Enables the claim_instagram_connection command without any pre-configured scope."
         },
         {
+          "description": "Enables the claim_review_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-claim-review-post",
+          "markdownDescription": "Enables the claim_review_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the claim_x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-claim-x-connection",
@@ -283,6 +295,12 @@
           "type": "string",
           "const": "allow-connect-instagram-app",
           "markdownDescription": "Enables the connect_instagram_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the connect_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-review",
+          "markdownDescription": "Enables the connect_review command without any pre-configured scope."
         },
         {
           "description": "Enables the connect_tiktok command without any pre-configured scope.",
@@ -333,6 +351,12 @@
           "markdownDescription": "Enables the disconnect_instagram command without any pre-configured scope."
         },
         {
+          "description": "Enables the disconnect_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-disconnect-review",
+          "markdownDescription": "Enables the disconnect_review command without any pre-configured scope."
+        },
+        {
           "description": "Enables the disconnect_tiktok command without any pre-configured scope.",
           "type": "string",
           "const": "allow-disconnect-tiktok",
@@ -375,6 +399,12 @@
           "markdownDescription": "Enables the ensure_shared_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the export_review_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-export-review-key",
+          "markdownDescription": "Enables the export_review_key command without any pre-configured scope."
+        },
+        {
           "description": "Enables the export_sign_ins command without any pre-configured scope.",
           "type": "string",
           "const": "allow-export-sign-ins",
@@ -411,16 +441,28 @@
           "markdownDescription": "Enables the get_video command without any pre-configured scope."
         },
         {
+          "description": "Enables the grok_chat command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-grok-chat",
+          "markdownDescription": "Enables the grok_chat command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the grok_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-grok-models",
+          "markdownDescription": "Enables the grok_models command without any pre-configured scope."
+        },
+        {
           "description": "Enables the has_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-has-account-password",
           "markdownDescription": "Enables the has_account_password command without any pre-configured scope."
         },
         {
-          "description": "Enables the image_ai_status command without any pre-configured scope.",
+          "description": "Enables the import_review_video command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-image-ai-status",
-          "markdownDescription": "Enables the image_ai_status command without any pre-configured scope."
+          "const": "allow-import-review-video",
+          "markdownDescription": "Enables the import_review_video command without any pre-configured scope."
         },
         {
           "description": "Enables the import_sign_ins command without any pre-configured scope.",
@@ -459,6 +501,18 @@
           "markdownDescription": "Enables the list_queue command without any pre-configured scope."
         },
         {
+          "description": "Enables the list_review_posts command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-review-posts",
+          "markdownDescription": "Enables the list_review_posts command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_reviewers command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-reviewers",
+          "markdownDescription": "Enables the list_reviewers command without any pre-configured scope."
+        },
+        {
           "description": "Enables the list_video_sources command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-video-sources",
@@ -475,18 +529,6 @@
           "type": "string",
           "const": "allow-load-workspace",
           "markdownDescription": "Enables the load_workspace command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the ollama_chat command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-ollama-chat",
-          "markdownDescription": "Enables the ollama_chat command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the ollama_models command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-ollama-models",
-          "markdownDescription": "Enables the ollama_models command without any pre-configured scope."
         },
         {
           "description": "Enables the open_gmail_message command without any pre-configured scope.",
@@ -507,6 +549,12 @@
           "markdownDescription": "Enables the open_gmail_signup command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_instagram_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-instagram-post",
+          "markdownDescription": "Enables the open_instagram_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-kling",
@@ -517,6 +565,12 @@
           "type": "string",
           "const": "allow-open-platform-action",
           "markdownDescription": "Enables the open_platform_action command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the open_review_site command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-review-site",
+          "markdownDescription": "Enables the open_review_site command without any pre-configured scope."
         },
         {
           "description": "Enables the open_setup_page command without any pre-configured scope.",
@@ -585,16 +639,34 @@
           "markdownDescription": "Enables the publish_instagram_reel_file command without any pre-configured scope."
         },
         {
+          "description": "Enables the publish_review_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-publish-review-catalog",
+          "markdownDescription": "Enables the publish_review_catalog command without any pre-configured scope."
+        },
+        {
           "description": "Enables the read_email command without any pre-configured scope.",
           "type": "string",
           "const": "allow-read-email",
           "markdownDescription": "Enables the read_email command without any pre-configured scope."
         },
         {
+          "description": "Enables the record_review_result command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-record-review-result",
+          "markdownDescription": "Enables the record_review_result command without any pre-configured scope."
+        },
+        {
           "description": "Enables the remove_developer_app command without any pre-configured scope.",
           "type": "string",
           "const": "allow-remove-developer-app",
           "markdownDescription": "Enables the remove_developer_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_reviewer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-reviewer",
+          "markdownDescription": "Enables the remove_reviewer command without any pre-configured scope."
         },
         {
           "description": "Enables the remove_video_source command without any pre-configured scope.",
@@ -609,6 +681,12 @@
           "markdownDescription": "Enables the rename_video_source command without any pre-configured scope."
         },
         {
+          "description": "Enables the request_hub_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-request-hub-update",
+          "markdownDescription": "Enables the request_hub_update command without any pre-configured scope."
+        },
+        {
           "description": "Enables the restart_app command without any pre-configured scope.",
           "type": "string",
           "const": "allow-restart-app",
@@ -619,6 +697,12 @@
           "type": "string",
           "const": "allow-reveal-account-password",
           "markdownDescription": "Enables the reveal_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the review_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-review-connection",
+          "markdownDescription": "Enables the review_connection command without any pre-configured scope."
         },
         {
           "description": "Enables the save_developer_app command without any pre-configured scope.",
@@ -663,16 +747,46 @@
           "markdownDescription": "Enables the set_embedded_bounds command without any pre-configured scope."
         },
         {
-          "description": "Enables the start_image_ai command without any pre-configured scope.",
+          "description": "Enables the submit_for_review command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-start-image-ai",
-          "markdownDescription": "Enables the start_image_ai command without any pre-configured scope."
+          "const": "allow-submit-for-review",
+          "markdownDescription": "Enables the submit_for_review command without any pre-configured scope."
         },
         {
           "description": "Enables the take_update_result command without any pre-configured scope.",
           "type": "string",
           "const": "allow-take-update-result",
           "markdownDescription": "Enables the take_update_result command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_disable command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-disable",
+          "markdownDescription": "Enables the team_sync_disable command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_enable command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-enable",
+          "markdownDescription": "Enables the team_sync_enable command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_fetch command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-fetch",
+          "markdownDescription": "Enables the team_sync_fetch command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_push command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-push",
+          "markdownDescription": "Enables the team_sync_push command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the team_sync_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-team-sync-status",
+          "markdownDescription": "Enables the team_sync_status command without any pre-configured scope."
         },
         {
           "description": "Enables the tiktok_connection command without any pre-configured scope.",
@@ -709,6 +823,12 @@
           "type": "string",
           "const": "deny-add-queue-job",
           "markdownDescription": "Denies the add_queue_job command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the add_reviewer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-add-reviewer",
+          "markdownDescription": "Denies the add_reviewer command without any pre-configured scope."
         },
         {
           "description": "Denies the add_video_source command without any pre-configured scope.",
@@ -771,6 +891,12 @@
           "markdownDescription": "Denies the claim_instagram_connection command without any pre-configured scope."
         },
         {
+          "description": "Denies the claim_review_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-claim-review-post",
+          "markdownDescription": "Denies the claim_review_post command without any pre-configured scope."
+        },
+        {
           "description": "Denies the claim_x_connection command without any pre-configured scope.",
           "type": "string",
           "const": "deny-claim-x-connection",
@@ -811,6 +937,12 @@
           "type": "string",
           "const": "deny-connect-instagram-app",
           "markdownDescription": "Denies the connect_instagram_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the connect_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-review",
+          "markdownDescription": "Denies the connect_review command without any pre-configured scope."
         },
         {
           "description": "Denies the connect_tiktok command without any pre-configured scope.",
@@ -861,6 +993,12 @@
           "markdownDescription": "Denies the disconnect_instagram command without any pre-configured scope."
         },
         {
+          "description": "Denies the disconnect_review command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-disconnect-review",
+          "markdownDescription": "Denies the disconnect_review command without any pre-configured scope."
+        },
+        {
           "description": "Denies the disconnect_tiktok command without any pre-configured scope.",
           "type": "string",
           "const": "deny-disconnect-tiktok",
@@ -903,6 +1041,12 @@
           "markdownDescription": "Denies the ensure_shared_password command without any pre-configured scope."
         },
         {
+          "description": "Denies the export_review_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-export-review-key",
+          "markdownDescription": "Denies the export_review_key command without any pre-configured scope."
+        },
+        {
           "description": "Denies the export_sign_ins command without any pre-configured scope.",
           "type": "string",
           "const": "deny-export-sign-ins",
@@ -939,16 +1083,28 @@
           "markdownDescription": "Denies the get_video command without any pre-configured scope."
         },
         {
+          "description": "Denies the grok_chat command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-grok-chat",
+          "markdownDescription": "Denies the grok_chat command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the grok_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-grok-models",
+          "markdownDescription": "Denies the grok_models command without any pre-configured scope."
+        },
+        {
           "description": "Denies the has_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "deny-has-account-password",
           "markdownDescription": "Denies the has_account_password command without any pre-configured scope."
         },
         {
-          "description": "Denies the image_ai_status command without any pre-configured scope.",
+          "description": "Denies the import_review_video command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-image-ai-status",
-          "markdownDescription": "Denies the image_ai_status command without any pre-configured scope."
+          "const": "deny-import-review-video",
+          "markdownDescription": "Denies the import_review_video command without any pre-configured scope."
         },
         {
           "description": "Denies the import_sign_ins command without any pre-configured scope.",
@@ -987,6 +1143,18 @@
           "markdownDescription": "Denies the list_queue command without any pre-configured scope."
         },
         {
+          "description": "Denies the list_review_posts command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-review-posts",
+          "markdownDescription": "Denies the list_review_posts command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_reviewers command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-reviewers",
+          "markdownDescription": "Denies the list_reviewers command without any pre-configured scope."
+        },
+        {
           "description": "Denies the list_video_sources command without any pre-configured scope.",
           "type": "string",
           "const": "deny-list-video-sources",
@@ -1003,18 +1171,6 @@
           "type": "string",
           "const": "deny-load-workspace",
           "markdownDescription": "Denies the load_workspace command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the ollama_chat command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-ollama-chat",
-          "markdownDescription": "Denies the ollama_chat command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the ollama_models command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-ollama-models",
-          "markdownDescription": "Denies the ollama_models command without any pre-configured scope."
         },
         {
           "description": "Denies the open_gmail_message command without any pre-configured scope.",
@@ -1035,6 +1191,12 @@
           "markdownDescription": "Denies the open_gmail_signup command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_instagram_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-instagram-post",
+          "markdownDescription": "Denies the open_instagram_post command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_kling command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-kling",
@@ -1045,6 +1207,12 @@
           "type": "string",
           "const": "deny-open-platform-action",
           "markdownDescription": "Denies the open_platform_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_review_site command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-review-site",
+          "markdownDescription": "Denies the open_review_site command without any pre-configured scope."
         },
         {
           "description": "Denies the open_setup_page command without any pre-configured scope.",
@@ -1113,16 +1281,34 @@
           "markdownDescription": "Denies the publish_instagram_reel_file command without any pre-configured scope."
         },
         {
+          "description": "Denies the publish_review_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-publish-review-catalog",
+          "markdownDescription": "Denies the publish_review_catalog command without any pre-configured scope."
+        },
+        {
           "description": "Denies the read_email command without any pre-configured scope.",
           "type": "string",
           "const": "deny-read-email",
           "markdownDescription": "Denies the read_email command without any pre-configured scope."
         },
         {
+          "description": "Denies the record_review_result command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-record-review-result",
+          "markdownDescription": "Denies the record_review_result command without any pre-configured scope."
+        },
+        {
           "description": "Denies the remove_developer_app command without any pre-configured scope.",
           "type": "string",
           "const": "deny-remove-developer-app",
           "markdownDescription": "Denies the remove_developer_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_reviewer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-reviewer",
+          "markdownDescription": "Denies the remove_reviewer command without any pre-configured scope."
         },
         {
           "description": "Denies the remove_video_source command without any pre-configured scope.",
@@ -1137,6 +1323,12 @@
           "markdownDescription": "Denies the rename_video_source command without any pre-configured scope."
         },
         {
+          "description": "Denies the request_hub_update command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-request-hub-update",
+          "markdownDescription": "Denies the request_hub_update command without any pre-configured scope."
+        },
+        {
           "description": "Denies the restart_app command without any pre-configured scope.",
           "type": "string",
           "const": "deny-restart-app",
@@ -1147,6 +1339,12 @@
           "type": "string",
           "const": "deny-reveal-account-password",
           "markdownDescription": "Denies the reveal_account_password command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the review_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-review-connection",
+          "markdownDescription": "Denies the review_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the save_developer_app command without any pre-configured scope.",
@@ -1191,16 +1389,46 @@
           "markdownDescription": "Denies the set_embedded_bounds command without any pre-configured scope."
         },
         {
-          "description": "Denies the start_image_ai command without any pre-configured scope.",
+          "description": "Denies the submit_for_review command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-start-image-ai",
-          "markdownDescription": "Denies the start_image_ai command without any pre-configured scope."
+          "const": "deny-submit-for-review",
+          "markdownDescription": "Denies the submit_for_review command without any pre-configured scope."
         },
         {
           "description": "Denies the take_update_result command without any pre-configured scope.",
           "type": "string",
           "const": "deny-take-update-result",
           "markdownDescription": "Denies the take_update_result command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_disable command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-disable",
+          "markdownDescription": "Denies the team_sync_disable command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_enable command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-enable",
+          "markdownDescription": "Denies the team_sync_enable command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_fetch command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-fetch",
+          "markdownDescription": "Denies the team_sync_fetch command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_push command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-push",
+          "markdownDescription": "Denies the team_sync_push command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the team_sync_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-team-sync-status",
+          "markdownDescription": "Denies the team_sync_status command without any pre-configured scope."
         },
         {
           "description": "Denies the tiktok_connection command without any pre-configured scope.",

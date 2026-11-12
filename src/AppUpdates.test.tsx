@@ -2,10 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hasUpdate, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
+import { FOCUS_CHECK_MIN_MS, hasUpdate, releasedAt, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates, type AppUpdates } from './AppUpdates';
 import * as updates from './updateService';
 
-vi.mock('./updateService', () => ({ checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn(), updateManagement: vi.fn() }));
+vi.mock('./updateService', () => ({ requestHubUpdate: vi.fn(), checkForUpdate: vi.fn(), prepareUpdate: vi.fn(), installPreparedUpdate: vi.fn(), restartApp: vi.fn(), updateProgress: vi.fn(), takeUpdateResult: vi.fn(), updateManagement: vi.fn() }));
 
 const MAIN = 'b'.repeat(40);
 const available: updates.UpdateStatus = {
@@ -48,19 +48,28 @@ describe('update checks', () => {
     } finally { vi.useRealTimers(); }
   });
 
-  it('never checks, builds or polls while Ava manages updates', async () => {
-    vi.useFakeTimers();
-    try {
-      vi.mocked(updates.updateManagement).mockResolvedValue({ managedBy: 'Ava' });
-      vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
-      const { result } = renderHook(() => useAppUpdates(1000));
-      await settle();
-      await act(async () => { vi.advanceTimersByTime(5000); await Promise.resolve(); });
-      expect(result.current.managedBy).toBe('Ava');
-      expect(updates.checkForUpdate).not.toHaveBeenCalled();
-      expect(updates.updateProgress).not.toHaveBeenCalled();
-      expect(updates.prepareUpdate).not.toHaveBeenCalled();
-    } finally { vi.useRealTimers(); }
+  it('still notices and prepares a release while Ava manages updates', async () => {
+    vi.mocked(updates.updateManagement).mockResolvedValue({ managedBy: 'Ava' });
+    vi.mocked(updates.checkForUpdate).mockResolvedValue(available);
+    vi.mocked(updates.prepareUpdate).mockResolvedValue();
+    const { result } = renderHook(() => useAppUpdates(60_000));
+    await vi.waitFor(() => expect(updates.prepareUpdate).toHaveBeenCalledWith(MAIN));
+    expect(result.current.managedBy).toBe('Ava');
+  });
+
+  it('hands the restart to Ava while it manages updates, and installs itself only when Ava is not running', async () => {
+    vi.mocked(updates.updateManagement).mockResolvedValue({ managedBy: 'Ava' });
+    vi.mocked(updates.checkForUpdate).mockResolvedValue(ready);
+    vi.mocked(updates.requestHubUpdate).mockResolvedValueOnce('ava').mockResolvedValueOnce('self_update');
+    vi.mocked(updates.installPreparedUpdate).mockResolvedValue();
+    const { result } = renderHook(() => useAppUpdates(60_000));
+    await vi.waitFor(() => expect(result.current.status?.state).toBe('ready'));
+    await act(async () => { await result.current.restartToUpdate(); });
+    expect(updates.requestHubUpdate).toHaveBeenCalledWith('0.2.0');
+    expect(updates.installPreparedUpdate).not.toHaveBeenCalled();
+    expect(result.current.progress?.state).toBe('restarting');
+    await act(async () => { await result.current.restartToUpdate(); });
+    expect(updates.installPreparedUpdate).toHaveBeenCalledOnce();
   });
 
   it('only offers an update that is not blocked', () => {
@@ -164,6 +173,17 @@ describe('Updates page', () => {
     expect(screen.getByText('bbbbbbb Add video library')).toBeInTheDocument();
   });
 
+  it('says when the running build and main were released, so versions are not needed', () => {
+    const at = (iso: string) => Date.parse(iso) / 1000;
+    const dated = { ...available, installedReleasedAt: at('2026-11-10T15:00:00'), latestReleasedAt: at('2026-11-11T12:30:00'), newCommitTimes: [at('2026-11-11T12:30:00'), at('2026-11-11T09:05:00')] };
+    render(<UpdatesPage updates={fake({ status: dated })}/>);
+    expect(releasedAt(dated.latestReleasedAt)).toMatch(/Nov 11.*12:30/);
+    expect(screen.getByText(`Released ${releasedAt(dated.installedReleasedAt)} · SocialSpace 0.1.0, build aaaaaaa`)).toBeInTheDocument();
+    expect(screen.getByText(`Released ${releasedAt(dated.latestReleasedAt)} · 0.2.0, build bbbbbbb`)).toBeInTheDocument();
+    expect(screen.getByText(releasedAt(dated.newCommitTimes[1])!)).toBeInTheDocument();
+    expect(releasedAt(null)).toBeNull();
+  });
+
   it('says so when up to date and offers no update', () => {
     render(<UpdatesPage updates={fake({ status: upToDate })}/>);
     expect(screen.getByText('SocialSpace is up to date with main.')).toBeInTheDocument();
@@ -206,5 +226,48 @@ describe('Updates page', () => {
     await user.click(screen.getByRole('button', { name: 'Restart without updating' }));
     expect(updates.restartApp).toHaveBeenCalledOnce();
     expect(updates.installPreparedUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('header update button', () => {
+  it('shows nothing when up to date or blocked, and only a ready update while Ava manages updates', () => {
+    const { container, rerender } = render(<HeaderUpdateButton updates={fake({ status: upToDate })} onOpen={vi.fn()}/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<HeaderUpdateButton updates={fake({ status: { ...available, blockedReason: 'npm is not on PATH.' } })} onOpen={vi.fn()}/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<HeaderUpdateButton updates={fake({ status: available, managedBy: 'Ava', progress: { ...idle, state: 'running' } })} onOpen={vi.fn()}/>);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<HeaderUpdateButton updates={fake({ status: ready, managedBy: 'Ava' })} onOpen={vi.fn()}/>);
+    expect(screen.getByRole('button', { name: /Restart to update/ })).toBeInTheDocument();
+  });
+
+  it('says it is preparing while the release builds, then offers the restart', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    const restartToUpdate = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<HeaderUpdateButton updates={fake({ progress: { ...idle, state: 'running' } })} onOpen={onOpen}/>);
+    await user.click(screen.getByRole('button', { name: /Preparing update/ }));
+    expect(onOpen).toHaveBeenCalledOnce();
+    rerender(<HeaderUpdateButton updates={fake({ status: ready, progress: { ...idle, state: 'ready' }, restartToUpdate })} onOpen={onOpen}/>);
+    await user.click(screen.getByRole('button', { name: /Restart to update/ }));
+    expect(restartToUpdate).toHaveBeenCalledOnce();
+  });
+
+  it('checks again when the window comes back into focus, at most every few seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(updates.checkForUpdate).mockResolvedValue(upToDate);
+      renderHook(() => useAppUpdates(60 * 60 * 1000));
+      await settle();
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(1);
+      await act(async () => { vi.advanceTimersByTime(FOCUS_CHECK_MIN_MS + 1); });
+      await act(async () => { window.dispatchEvent(new Event('focus')); });
+      await settle();
+      expect(updates.checkForUpdate).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

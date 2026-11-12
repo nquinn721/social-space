@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
+import CreateAccountWizard, { DEFAULT_SIGNUP_BIRTHDAY, DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import * as profile from './profileService';
 import * as email from './emailService';
 import * as suggest from './assistant/suggest';
@@ -12,7 +12,7 @@ import type { Account } from './model';
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
   embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), openGmailSignup: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
 vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
-vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), imageAiStatus: vi.fn(), startImageAi: vi.fn(), generateProfileImage: vi.fn() }));
+vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), generateProfileImage: vi.fn() }));
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(), listEmails: vi.fn(), readEmail: vi.fn() }));
 
 beforeEach(() => {
@@ -68,21 +68,20 @@ describe('create account wizard', () => {
 
   it('suggests a name and description from an idea', async () => {
     vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.', imagePrompt: 'pastel butterfly logo mark', imageStyle: 'logo' });
-    vi.mocked(imageAi.imageAiStatus).mockResolvedValue({ running: true, looks: ['fast', 'detailed'], canStart: true });
-    vi.mocked(imageAi.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\profile-1.png', seed: 1, preview: 'data:image/png;base64,1' });
+    vi.mocked(imageAi.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\profile-1.png', preview: 'data:image/png;base64,1' });
     vi.mocked(profile.loadImagePreview).mockResolvedValue('data:image/png;base64,1');
     const user = userEvent.setup();
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText(/Your idea/), 'butterfly jewelry for kids');
     await user.click(screen.getByRole('button', { name: /Suggest/ }));
-    expect(await screen.findByText(/Suggested by your local model/)).toBeInTheDocument();
+    expect(await screen.findByText(/Suggested by Grok/)).toBeInTheDocument();
     expect(screen.getByLabelText('Account name')).toHaveValue('Flutter Finds');
     expect(screen.getByLabelText('Username you want optional')).toHaveValue('flutterfinds');
     expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
     expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X']);
     // The matching picture is made straight away and becomes the account's image.
     expect(await screen.findByText('profile-1.png')).toBeInTheDocument();
-    expect(vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt).toBe('minimal modern logo mark, pastel butterfly logo mark, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon');
+    expect(vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt).toBe('minimal modern logo mark, pastel butterfly logo mark, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon, no tiny details, no watermark');
   });
 
   it('keeps one description within the tightest chosen limit', async () => {
@@ -116,6 +115,9 @@ describe('verification code detection', () => {
     const user = userEvent.setup();
     render(<CreateAccountWizard initialPlatforms={['instagram']} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
+    // Sign-up forms always ask for one, so the form starts with a default birthday.
+    expect(screen.getByLabelText(/Birthday/)).toHaveValue(DEFAULT_SIGNUP_BIRTHDAY);
+    await user.clear(screen.getByLabelText(/Birthday/));
     await user.type(screen.getByLabelText(/Birthday/), '1998-04-12');
     await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ birthday: '1998-04-12' }));
@@ -159,6 +161,6 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     await user.click(screen.getByRole('button', { name: 'Make a new Gmail instead' }));
-    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia' }, { keepFilling: true }));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia', birthday: DEFAULT_SIGNUP_BIRTHDAY }, { keepFilling: true }));
   });
 });

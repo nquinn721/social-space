@@ -10,6 +10,8 @@ import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
 export const DEFAULT_SIGNUP_EMAIL = 'softwings25@gmail.com';
+/** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */
+export const DEFAULT_SIGNUP_BIRTHDAY = '1995-06-15';
 /** Details to start the form with, e.g. when adding an existing brand to more socials. */
 export type WizardPrefill = { label?: string; handle?: string; brandId?: string } & AccountProfile;
 type Step = 'details' | 'signup' | 'profile';
@@ -60,7 +62,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
   const [autoImage, setAutoImage] = useState<AutoImage>();
-  const [birthday, setBirthday] = useState(prefill?.birthday ?? '');
+  const [birthday, setBirthday] = useState(prefill?.birthday || DEFAULT_SIGNUP_BIRTHDAY);
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const [accounts, setAccounts] = useState<Account[]>(resume ?? []);
@@ -134,7 +136,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
     setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
     setAutoImage({ description: suggestion.imagePrompt || `${suggestion.name}, ${idea.trim()}`, style: suggestion.imageStyle, key: Date.now() });
-    setNote('Suggested by your local model, and a matching profile picture is on its way. Edit anything you like.');
+    setNote('Suggested by Grok, and a matching profile picture is on its way. Edit anything you like.');
   });
   // Optional: a separate Gmail for the brand. Plus-addresses are simpler, since their codes reach the connected inbox.
   const makeGmail = () => run(async () => {

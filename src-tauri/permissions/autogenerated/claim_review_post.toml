@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-claim-review-post"
+description = "Enables the claim_review_post command without any pre-configured scope."
+commands.allow = ["claim_review_post"]
+
+[[permission]]
+identifier = "deny-claim-review-post"
+description = "Denies the claim_review_post command without any pre-configured scope."
+commands.deny = ["claim_review_post"]

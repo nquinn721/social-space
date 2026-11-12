@@ -2,6 +2,13 @@ fn main() {
     let commands = &[
         "load_workspace",
         "save_workspace",
+        "team_sync_status",
+        "team_sync_enable",
+        "team_sync_disable",
+        "team_sync_fetch",
+        "team_sync_push",
+        "claim_review_post",
+        "export_review_key",
         "open_platform_action",
         "open_kling",
         "list_video_sources",
@@ -47,16 +54,15 @@ fn main() {
         "publish_instagram_reel",
         "publish_instagram_photo",
         "publish_instagram_reel_file",
+        "open_instagram_post",
         "choose_instagram_video",
         "list_queue",
         "add_queue_job",
         "complete_queue_job",
         "delete_queue_job",
         "choose_video_file",
-        "ollama_models",
-        "ollama_chat",
-        "image_ai_status",
-        "start_image_ai",
+        "grok_models",
+        "grok_chat",
         "generate_profile_image",
         "email_connection",
         "connect_email",
@@ -83,11 +89,24 @@ fn main() {
         "import_sign_ins",
         "check_for_update",
         "update_management",
+        "request_hub_update",
         "prepare_update",
         "install_prepared_update",
         "restart_app",
         "update_progress",
         "take_update_result",
+        "review_connection",
+        "connect_review",
+        "disconnect_review",
+        "list_reviewers",
+        "add_reviewer",
+        "remove_reviewer",
+        "list_review_posts",
+        "submit_for_review",
+        "record_review_result",
+        "open_review_site",
+        "publish_review_catalog",
+        "import_review_video",
     ];
     require_stamping_script();
     record_build_source();
@@ -98,12 +117,53 @@ fn main() {
 
 /// A release is built only by `npm run tauri:build` (scripts/tauri-build.mjs), which checks the tree
 /// is a clean main and stamps its commit. `cargo test` and `tauri dev` build the debug profile.
+///
+/// Installs from before that script existed update themselves with a plain `npm run tauri build`.
+/// Refusing those would strand them on an old version forever, so an unstamped release is still
+/// allowed when it passes the same check the script makes: a clean tree at the tip of main. Its
+/// commit is then recorded from git by `record_build_source`.
 fn require_stamping_script() {
     const STAMP_ENV: &str = "SOCIALSPACE_BUILD_STAMPED";
     println!("cargo:rerun-if-env-changed={STAMP_ENV}");
     let release = std::env::var("PROFILE").is_ok_and(|profile| profile == "release");
-    if release && std::env::var(STAMP_ENV).is_err() {
-        panic!("Build releases with `npm run tauri:build`: it checks the tree is a clean main and stamps its commit.");
+    if !release || std::env::var(STAMP_ENV).is_ok() {
+        return;
+    }
+    match unstamped_release_problem() {
+        None => println!("cargo:warning=Building a clean main without `npm run tauri:build` (an older updater); the commit is read from git."),
+        Some(problem) => panic!("Build releases with `npm run tauri:build`: it checks the tree is a clean main and stamps its commit. ({problem})"),
+    }
+}
+
+/// Why an unstamped release must not be built, or None when the tree is a clean tip of main.
+fn unstamped_release_problem() -> Option<String> {
+    let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").ok()?);
+    let tree = manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf();
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&tree)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    };
+    let Some(head) = git(&["rev-parse", "HEAD"]).filter(|head| !head.is_empty()) else {
+        return Some("the tree is not a git checkout".into());
+    };
+    match git(&["status", "--porcelain", "--untracked-files=no"]) {
+        Some(changed) if changed.is_empty() => {}
+        _ => return Some("the tree has uncommitted changes".into()),
+    }
+    let on_main = ["refs/remotes/origin/main^{commit}", "refs/heads/main^{commit}"]
+        .iter()
+        .filter_map(|reference| git(&["rev-parse", "--verify", "--quiet", reference]))
+        .any(|main| main == head);
+    if on_main {
+        None
+    } else {
+        Some(format!("HEAD {} is not the tip of main or origin/main", head.get(..7).unwrap_or(&head)))
     }
 }
 
@@ -117,6 +177,7 @@ fn record_build_source() {
     const COMMIT_ENV: &str = "SOCIALSPACE_BUILD_COMMIT";
     const SOURCE_ENV: &str = "SOCIALSPACE_SOURCE_DIR";
     println!("cargo:rerun-if-env-changed={COMMIT_ENV}");
+    println!("cargo:rerun-if-env-changed=SOCIALSPACE_RELEASE_CHANNEL");
     println!("cargo:rerun-if-env-changed={SOURCE_ENV}");
     let manifest_dir = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let tree = manifest_dir.parent().unwrap_or(&manifest_dir).to_path_buf();

@@ -97,6 +97,9 @@ pub struct InstagramConnection {
 #[derive(Deserialize, Serialize)]
 pub struct InstagramPost {
     id: String,
+    /// The live post's address on instagram.com, when Meta gives it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    permalink: Option<String>,
 }
 #[derive(Deserialize)]
 struct ContainerStatus {
@@ -392,7 +395,33 @@ async fn publish_container(
     if !response.status().is_success() {
         return Err(format!("Instagram returned HTTP {} when publishing. Check Instagram before retrying; the post may have been published.", response.status().as_u16()));
     }
-    response.json().await.map_err(|_| "Instagram's publish response was unreadable. Check Instagram before retrying; the post may have been published.".into())
+    let mut post: InstagramPost = response.json().await.map_err(|_| "Instagram's publish response was unreadable. Check Instagram before retrying; the post may have been published.")?;
+    // The link is a nicety: the post is already live, so a failed lookup is not an error.
+    if valid_id(&post.id) {
+        if let Ok(response) = http.get(format!("{}/{}", credential.kind.api_base(), post.id))
+            .query(&[("fields", "permalink")]).bearer_auth(&credential.access_token).send().await {
+            if let Ok(found) = response.json::<InstagramPost>().await {
+                post.permalink = found.permalink.filter(|link| instagram_post_url(link));
+            }
+        }
+    }
+    Ok(post)
+}
+
+/// Only links to a post or Reel on instagram.com may be opened from the app.
+fn instagram_post_url(value: &str) -> bool {
+    Url::parse(value).is_ok_and(|url| url.scheme() == "https"
+        && matches!(url.host_str(), Some("www.instagram.com") | Some("instagram.com"))
+        && (url.path().starts_with("/reel/") || url.path().starts_with("/p/") || url.path().starts_with("/tv/")))
+}
+
+/// Opens a published post in an app window.
+#[tauri::command]
+pub async fn open_instagram_post(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !instagram_post_url(url.trim()) {
+        return Err("That is not a link to an Instagram post.".into());
+    }
+    crate::browser::open_remote(&app, url.trim(), false)
 }
 
 async fn publish_from_url(slot: &str, media: (&str, &str), media_type: Option<&str>, caption: &str) -> Result<InstagramPost, String> {
@@ -575,6 +604,21 @@ pub async fn choose_instagram_video() -> Result<Option<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn only_instagram_post_links_can_be_opened() {
+        assert!(instagram_post_url("https://www.instagram.com/reel/DfnCU8kGNgI/"));
+        assert!(instagram_post_url("https://www.instagram.com/p/ABC123/"));
+        for url in ["http://www.instagram.com/reel/x/", "https://evil.com/reel/x/", "https://www.instagram.com/accounts/edit/", "https://www.instagram.com.evil.com/p/x/"] {
+            assert!(!instagram_post_url(url), "{url}");
+        }
+    }
+    #[test]
+    fn posts_read_with_or_without_a_link() {
+        let plain: InstagramPost = serde_json::from_str(r#"{"id":"1"}"#).unwrap();
+        assert!(plain.permalink.is_none());
+        let linked: InstagramPost = serde_json::from_str(r#"{"id":"1","permalink":"https://www.instagram.com/reel/x/"}"#).unwrap();
+        assert_eq!(linked.permalink.as_deref(), Some("https://www.instagram.com/reel/x/"));
+    }
     #[test]
     fn each_profile_has_its_own_slot() {
         assert_eq!(slot(None).unwrap(), "primary");

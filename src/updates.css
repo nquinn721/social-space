@@ -11,6 +11,7 @@
 .update-settings .update-note{color:var(--text-2)}
 .update-settings .update-error{color:var(--danger)}
 .update-commits{margin:0 0 16px;padding-left:18px;font-size:13px;color:var(--text-2);line-height:1.7;max-height:180px;overflow:auto}
+.update-commit-time{display:inline-block;min-width:118px;margin-right:10px;color:var(--text-3,var(--text-2));opacity:.8;font-variant-numeric:tabular-nums}
 .update-actions{display:flex;gap:10px;flex-wrap:wrap}
 .update-settings .update-actions .primary-button{margin-top:0}
 .update-banner.done{border-color:var(--success-line);background:var(--success-soft)}
@@ -38,6 +39,8 @@
 .update-footnote{color:var(--text-3);font-size:12.5px;margin:16px 0 0}
 .update-banner .small-button{min-height:30px}
 .spin{animation:update-spin 1s linear infinite}
+.header-update{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.header-update.failed{color:var(--danger);border-color:var(--danger-line)}
 @keyframes update-spin{to{transform:rotate(360deg)}}
 .nav-item .update-dot{margin-left:auto;width:8px;height:8px;flex:none;border-radius:99px;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 @media (max-width: 900px){.nav-item .update-dot{position:absolute;top:7px;right:7px;margin:0}}

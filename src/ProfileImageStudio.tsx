@@ -1,33 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, Play, RefreshCw, Sparkles, Wand2, X as Close } from 'lucide-react';
-import { buildPrompt, generateProfileImage, imageAiStatus, REFINE_STRENGTH, startImageAi, STYLES, type GeneratedImage, type ImageAiStatus, type ImageStyle, type Look, type RefineAmount } from './imageAiService';
+import { Check, Loader2, Sparkles, Wand2, X as Close } from 'lucide-react';
+import { buildPrompt, buildRefinePrompt, generateProfileImage, STYLES, type GeneratedImage, type ImageStyle } from './imageAiService';
 import { errorText } from './ui';
 import './imageStudio.css';
 
-const LOOKS: { id: Look; label: string; hint: string }[] = [
-  { id: 'detailed', label: 'Best quality', hint: 'Qwen-Image, about 1 to 2 minutes' },
-  { id: 'fast', label: 'Fast', hint: 'SDXL, about 15 seconds' },
-];
-const AMOUNTS: RefineAmount[] = ['light', 'medium', 'strong'];
 const MAX_HISTORY = 8;
+const GENERATING = 'Generating with Grok, about 10 to 20 seconds…';
+const REFINING = 'Refining with Grok, about 10 to 20 seconds…';
 
 type Result = GeneratedImage & { prompt: string };
 
-/**
- * Makes a profile picture with ComfyUI on this computer: describe it, generate,
- * then regenerate for a new take or refine the current one with a change.
- * Portraits are always of a fictional person.
- */
 /** A picture idea to make straight away, e.g. from the assistant's suggestion. A new key starts a new one. */
 export type AutoImage = { description: string; style: ImageStyle; key: number };
 
+/**
+ * Makes a profile picture with Grok Imagine: describe it, generate, then
+ * regenerate for a new take or refine the current one with a change.
+ * Portraits are always of a fictional person.
+ */
 export default function ProfileImageStudio({ suggestion = '', auto, disabled = false, onUse, onAutoUse, onClose }: { suggestion?: string; auto?: AutoImage; disabled?: boolean; onUse: (path: string) => void; onAutoUse?: (path: string) => void; onClose: () => void }) {
-  const [status, setStatus] = useState<ImageAiStatus | null>(null);
   const [description, setDescription] = useState(auto?.description ?? suggestion);
   const [style, setStyle] = useState<ImageStyle>(auto?.style ?? 'photo');
-  const [look, setLook] = useState<Look>('detailed');
   const [refinement, setRefinement] = useState('');
-  const [amount, setAmount] = useState<RefineAmount>('medium');
   const [results, setResults] = useState<Result[]>([]);
   const [selected, setSelected] = useState(0);
   const [working, setWorking] = useState('');
@@ -35,63 +29,44 @@ export default function ProfileImageStudio({ suggestion = '', auto, disabled = f
   const panel = useRef<HTMLElement>(null);
   const current = results[selected];
   const busy = Boolean(working) || disabled;
-  const ready = Boolean(status?.running && status.looks.length);
-  const lookAvailable = (id: Look) => Boolean(status?.looks.includes(id));
 
   async function run(label: string, action: () => Promise<void>) {
     if (working) return;
     setWorking(label); setError('');
     try { await action(); } catch (reason) { setError(errorText(reason)); } finally { setWorking(''); }
   }
-  const check = () => run('Checking ComfyUI…', async () => {
-    const found = await imageAiStatus();
-    setStatus(found);
-    if (found.looks.length && !found.looks.includes(look)) setLook(found.looks[0]);
-  });
-  // With an auto idea: start ComfyUI if needed, then make the picture without waiting for a click.
-  const makeAuto = (idea: AutoImage) => run('Getting ComfyUI ready…', async () => {
-    setDescription(idea.description); setStyle(idea.style);
-    let found = await imageAiStatus();
-    if (!found.running && found.canStart) { setWorking('Starting ComfyUI, this takes about a minute…'); await startImageAi(); found = await imageAiStatus(); }
-    setStatus(found);
-    const chosen = found.looks.includes(look) ? look : found.looks[0];
-    if (!chosen) return;
-    setLook(chosen);
-    setWorking(chosen === 'detailed' ? 'Generating with Qwen-Image, about 1 to 2 minutes…' : 'Generating…');
-    const { prompt, negative } = buildPrompt(idea.description, idea.style);
-    const image = await generateProfileImage({ prompt, negative, look: chosen });
-    keep(image, prompt);
-    onAutoUse?.(image.path);
-  });
-  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); if (!auto?.description) void check(); }, []);
-  useEffect(() => { if (auto?.description) void makeAuto(auto); }, [auto?.key]);
-  const start = () => run('Starting ComfyUI, this takes about a minute…', async () => { await startImageAi(); setStatus(await imageAiStatus()); });
-
   function keep(image: GeneratedImage, prompt: string) {
     setResults((list) => [{ ...image, prompt }, ...list].slice(0, MAX_HISTORY));
     setSelected(0);
   }
-  const generate = () => run(look === 'detailed' ? 'Generating with Qwen-Image, about 1 to 2 minutes…' : 'Generating…', async () => {
-    const { prompt, negative } = buildPrompt(description, style);
-    keep(await generateProfileImage({ prompt, negative, look }), prompt);
+  // With an auto idea: make the picture without waiting for a click.
+  const makeAuto = (idea: AutoImage) => run(GENERATING, async () => {
+    setDescription(idea.description); setStyle(idea.style);
+    const prompt = buildPrompt(idea.description, idea.style);
+    const image = await generateProfileImage({ prompt });
+    keep(image, prompt);
+    onAutoUse?.(image.path);
   });
-  const refine = () => run(look === 'detailed' ? 'Refining with Qwen-Image, about 1 to 2 minutes…' : 'Refining…', async () => {
+  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, []);
+  useEffect(() => { if (auto?.description) void makeAuto(auto); }, [auto?.key]);
+
+  const generate = () => run(GENERATING, async () => {
+    const prompt = buildPrompt(description, style);
+    keep(await generateProfileImage({ prompt }), prompt);
+  });
+  const refine = () => run(REFINING, async () => {
     if (!current) return;
-    const { prompt, negative } = buildPrompt(description, style, [refinement]);
-    keep(await generateProfileImage({ prompt, negative, look, sourcePath: current.path, strength: REFINE_STRENGTH[amount] }), prompt);
+    const prompt = buildRefinePrompt(refinement, style);
+    keep(await generateProfileImage({ prompt, sourcePath: current.path }), prompt);
     setRefinement('');
   });
 
   return <section ref={panel} className="image-studio" aria-label="Generate a profile picture">
     <header className="studio-head">
-      <h4><Sparkles size={15}/> Generate with local AI</h4>
-      <span className="studio-sub">ComfyUI on this PC. Nothing is uploaded.</span>
+      <h4><Sparkles size={15}/> Generate with Grok</h4>
+      <span className="studio-sub">Grok Imagine from xAI, using your xAI key.</span>
       <button type="button" className="icon-button" aria-label="Close image generator" disabled={Boolean(working)} onClick={onClose}><Close size={16}/></button>
     </header>
-
-    {status && !ready && <div className="status-line off"><span className="dot">●</span><span>{status.running ? 'ComfyUI is running but has no SDXL or Qwen-Image model.' : 'ComfyUI is not running.'}</span>
-      {!status.running && status.canStart && <button type="button" className="outline-button small-button" disabled={busy} onClick={() => void start()}><Play size={13}/> Start ComfyUI</button>}
-      <button type="button" className="ghost-button small-button" disabled={busy} onClick={() => void check()}><RefreshCw size={13}/> Check</button></div>}
 
     <div className="studio-grid">
       <div className="studio-controls">
@@ -99,23 +74,21 @@ export default function ProfileImageStudio({ suggestion = '', auto, disabled = f
         <textarea id="studio-prompt" rows={3} maxLength={600} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="e.g. woman in her 30s, curly red hair, warm smile, cozy craft studio background"/>
         <div className="studio-options">
           <div className="segmented" role="group" aria-label="Style">{STYLES.map((item) => <button key={item.id} type="button" aria-pressed={style === item.id} onClick={() => setStyle(item.id)}>{item.label}</button>)}</div>
-          <div className="segmented" role="group" aria-label="Model">{LOOKS.map((item) => <button key={item.id} type="button" title={item.hint} aria-pressed={look === item.id} disabled={!lookAvailable(item.id)} onClick={() => setLook(item.id)}>{item.label}</button>)}</div>
         </div>
         <div className="studio-actions">
-          <button type="button" className="primary-button" disabled={busy || !ready || !description.trim() || !lookAvailable(look)} onClick={() => void generate()}><Wand2 size={15}/> {results.length ? 'Regenerate' : 'Generate'}</button>
+          <button type="button" className="primary-button" disabled={busy || !description.trim()} onClick={() => void generate()}><Wand2 size={15}/> {results.length ? 'Regenerate' : 'Generate'}</button>
         </div>
         {current && <div className="studio-refine">
           <label htmlFor="studio-refine">Refine this picture</label>
           <div className="idea-row"><input id="studio-refine" maxLength={300} value={refinement} onChange={(event) => setRefinement(event.target.value)} placeholder="e.g. add glasses, warmer light, blue background" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (refinement.trim() && !busy) void refine(); } }}/>
             <button type="button" className="outline-button" disabled={busy || !refinement.trim()} onClick={() => void refine()}><Sparkles size={14}/> Refine</button></div>
-          <div className="segmented studio-amount" role="group" aria-label="How much to change">{AMOUNTS.map((item) => <button key={item} type="button" aria-pressed={amount === item} onClick={() => setAmount(item)}>{item[0].toUpperCase() + item.slice(1)} change</button>)}</div>
         </div>}
         {working && <p className="studio-working" role="status"><Loader2 size={14} className="spin"/> {working}</p>}
         {error && <div className="error-message" role="alert">{error}</div>}
       </div>
 
       <div className="studio-result">
-        <div className={`studio-canvas ${working && !working.startsWith('Checking') ? 'pending' : ''}`}>{current ? <img src={current.preview} alt="Generated profile picture"/> : <span>Your picture shows here</span>}</div>
+        <div className={`studio-canvas ${working ? 'pending' : ''}`}>{current ? <img src={current.preview} alt="Generated profile picture"/> : <span>Your picture shows here</span>}</div>
         {current && <button type="button" className="primary-button studio-use" disabled={busy} onClick={() => onUse(current.path)}><Check size={15}/> Use this picture</button>}
         {results.length > 1 && <div className="studio-history" aria-label="Earlier pictures">{results.map((item, index) => <button key={item.path} type="button" className={index === selected ? 'selected' : ''} aria-label={`Picture ${results.length - index}`} aria-pressed={index === selected} onClick={() => setSelected(index)}><img src={item.preview} alt=""/></button>)}</div>}
       </div>

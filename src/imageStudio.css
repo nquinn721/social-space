@@ -18,7 +18,6 @@
 .studio-options .segmented button:disabled { opacity: 0.4; cursor: not-allowed; }
 .studio-actions { display: flex; gap: 8px; margin-top: 12px; }
 .studio-refine { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-strong); }
-.studio-amount { margin-top: 8px; }
 .studio-working { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 12.5px; color: var(--accent-text); }
 .spin { animation: studio-spin 0.9s linear infinite; }
 @keyframes studio-spin { to { transform: rotate(360deg); } }

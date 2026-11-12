@@ -1,7 +1,7 @@
 {
   "name": "social-manager",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "test": "vitest run",
     "tauri": "tauri",
     "tauri:build": "node scripts/tauri-build.mjs",
-    "app-version": "node scripts/app-version.mjs"
+    "app-version": "node scripts/app-version.mjs",
+    "deploy:review-site": "cd website && npx -y firebase-tools@14 deploy --project socialspace-review"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",

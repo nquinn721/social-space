@@ -1,0 +1,201 @@
+[
+ {
+  "id": "accounts",
+  "notes": [],
+  "paths": [
+   "src/pages/AccountsPage.tsx",
+   "src/CreateAccountWizard.tsx",
+   "src/AccountDrawer.tsx",
+   "src/brands.ts",
+   "src/setupNeeds.ts",
+   "src/SetupTracker.tsx",
+   "src/SignIns.tsx",
+   "src-tauri/src/autofill.rs",
+   "src-tauri/src/account_passwords.rs",
+   "src-tauri/src/backup.rs",
+   "src-tauri/src/lib.rs"
+  ],
+  "summary": "Brands and their per-social profiles: create, sign up, autofill, passwords, setup tracker",
+  "terms": [
+   "brand",
+   "account",
+   "profile",
+   "signup",
+   "password",
+   "autofill",
+   "setup"
+  ]
+ },
+ {
+  "id": "connections",
+  "notes": [],
+  "paths": [
+   "src/Connections.tsx",
+   "src/profileConnections.ts",
+   "src/socialConnectService.ts",
+   "src/devAppsService.ts",
+   "src-tauri/src/social_connect.rs",
+   "src-tauri/src/x_integration.rs",
+   "src-tauri/src/dev_apps.rs"
+  ],
+  "summary": "Per-profile connections to YouTube, TikTok, X and Instagram, and the developer apps behind them",
+  "terms": [
+   "connect",
+   "youtube",
+   "tiktok",
+   "x",
+   "oauth",
+   "developer app"
+  ]
+ },
+ {
+  "id": "email",
+  "notes": [],
+  "paths": [
+   "src/InboxList.tsx",
+   "src/EmailSettings.tsx",
+   "src/GmailConnect.tsx",
+   "src/emailService.ts",
+   "src-tauri/src/email.rs",
+   "src-tauri/src/gmail_session.rs"
+  ],
+  "summary": "Read-only inbox for verification codes: IMAP or the user's Gmail sign-in",
+  "terms": [
+   "email",
+   "inbox",
+   "gmail",
+   "imap",
+   "code",
+   "verification"
+  ]
+ },
+ {
+  "id": "instagram",
+  "notes": [],
+  "paths": [
+   "src-tauri/src/instagram.rs",
+   "src-tauri/src/instagram_login.rs",
+   "src/instagramService.ts",
+   "src/useBrandInstagram.ts",
+   "src/InstagramAppSetup.tsx",
+   "src/InstagramIdPrompt.tsx"
+  ],
+  "summary": "Connect a brand's Instagram and publish photos/reels through Meta's API",
+  "terms": [
+   "instagram",
+   "meta",
+   "reel",
+   "publish",
+   "post"
+  ]
+ },
+ {
+  "id": "partner-review",
+  "notes": [],
+  "paths": [
+   "src-tauri/src/review.rs",
+   "src/reviewService.ts",
+   "src/partnerReview.ts",
+   "src/usePartnerReview.tsx",
+   "src/PartnerReviewControls.tsx",
+   "src/PartnerReviewSettings.tsx",
+   "website/"
+  ],
+  "summary": "Partner approves posts on the review site; the app posts approved ones",
+  "terms": [
+   "review",
+   "partner",
+   "approve",
+   "firebase"
+  ]
+ },
+ {
+  "id": "profile-images",
+  "notes": [],
+  "paths": [
+   "src/ProfileImageStudio.tsx",
+   "src/imageAiService.ts",
+   "src-tauri/src/grok_ai.rs"
+  ],
+  "summary": "Profile pictures made and refined with xAI Grok Imagine (images/generations and images/edits)",
+  "terms": [
+   "image",
+   "picture",
+   "avatar",
+   "grok",
+   "xai"
+  ]
+ },
+ {
+  "id": "updates",
+  "notes": [],
+  "paths": [
+   "src/AppUpdates.tsx",
+   "src/updateService.ts",
+   "src-tauri/src/updater.rs",
+   "src-tauri/src/hub.rs",
+   "scripts/tauri-build.mjs",
+   "hub-app.json"
+  ],
+  "summary": "Self-update from main and Ava's hub update contract",
+  "terms": [
+   "update",
+   "release",
+   "hub",
+   "ava",
+   "version",
+   "rollback"
+  ]
+ },
+ {
+  "id": "video-library",
+  "notes": [],
+  "paths": [
+   "src/VideoLibrary.tsx",
+   "src/VideoSources.tsx",
+   "src/useVideoGenerations.ts",
+   "src/postDetails.ts",
+   "src/videoProviders.ts",
+   "src/videoFileService.ts",
+   "src-tauri/src/video_gen.rs",
+   "src-tauri/src/video_sources.rs",
+   "src-tauri/src/video_files.rs",
+   "src-tauri/src/kling.rs",
+   "src-tauri/src/grok.rs"
+  ],
+  "summary": "Brand video library: categories, AI generation (Kling, Grok), post details, local files",
+  "terms": [
+   "video",
+   "library",
+   "kling",
+   "grok",
+   "generate",
+   "category",
+   "caption"
+  ]
+ },
+ {
+  "id": "assistant-grok",
+  "notes": [
+   "Chat uses the xAI key of the Grok video source; settings keep only the model id (default grok-4.3)."
+  ],
+  "paths": [
+   "src/assistant/grokClient.ts",
+   "src/assistant/AssistantPanel.tsx",
+   "src/assistant/suggest.ts",
+   "src/assistant/postSuggest.ts",
+   "src/pages/SettingsPage.tsx",
+   "src-tauri/src/grok_ai.rs",
+   "src-tauri/src/video_sources.rs"
+  ],
+  "summary": "In-app assistant and Suggest buttons on xAI Grok chat completions with tool calling",
+  "terms": [
+   "assistant",
+   "chat",
+   "grok",
+   "xai",
+   "suggest",
+   "model"
+  ]
+ }
+]

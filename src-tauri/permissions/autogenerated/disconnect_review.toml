@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disconnect-review"
+description = "Enables the disconnect_review command without any pre-configured scope."
+commands.allow = ["disconnect_review"]
+
+[[permission]]
+identifier = "deny-disconnect-review"
+description = "Denies the disconnect_review command without any pre-configured scope."
+commands.deny = ["disconnect_review"]

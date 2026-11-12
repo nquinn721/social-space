@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
-import { AppWindow, ArrowLeft, ChevronRight, Pencil, Plus, Search, Trash2, TriangleAlert, UserPlus, UsersRound } from 'lucide-react';
+import { AppWindow, ArrowLeft, Pencil, Plus, Search, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import VideoLibrary from '../VideoLibrary';
 import type { OpenBrand } from '../App';
-import { getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from '../model';
-import { migrateWorkspace, planPresence, presenceIssues } from '../brands';
+import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from '../model';
+import { emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
+import { ensureSharedPassword } from '../profileService';
+import BrandAccounts from '../BrandAccounts';
 import { AccountAvatar, BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
 import Connections from '../Connections';
-import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
+import { DEFAULT_SIGNUP_BIRTHDAY, DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
 
 type Props = {
   workspace: Workspace;
@@ -77,6 +79,33 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     void onSave({ ...workspace, setup: next }, done ? 'Marked done.' : 'Marked not done.');
   } : undefined;
 
+  const [adding, setAdding] = useState(false);
+  /** The new profile shares the brand's password, so every social signs in the same way. */
+  async function startSignUp(account: Account, siblings: Account[]) {
+    if (!onSignUp) return;
+    const others = siblings.filter((item) => item.id !== account.id).sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active'));
+    await ensureSharedPassword([...others.map((item) => item.id), account.id]).catch(() => undefined);
+    onSignUp([account]);
+  }
+  /** One click: saves the brand's profile on this social, then opens its sign-up page filled in. */
+  async function addSocial(group: BrandGroup, platform: Platform) {
+    if (adding || !onSave) return;
+    setAdding(true);
+    try {
+      const { brand, accounts } = group;
+      const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
+      const base = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
+      // TikTok and X need their own email per account: the brand's plus-address reaches the same inbox.
+      const plan = planPresence(all, platform, brand.name, sharesLogins(platform) ? base : plusAddress(base, emailTag(brand.name)));
+      const birthday = accounts.find((account) => account.birthday)?.birthday || DEFAULT_SIGNUP_BIRTHDAY;
+      const account: Account = { ...createAccount(platform, brand.name, lead?.handle || emailTag(brand.name), 'planned', ''), brandId: brand.id,
+        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath, birthday };
+      const saved = await onSave({ ...workspace, accounts: [...workspace.accounts, account] }, `${getPlatform(platform).name} profile added to ${brand.name}.`);
+      if (saved === false) return;
+      await startSignUp(account, accounts);
+    } finally { setAdding(false); }
+  }
+
   const actions = <>
     <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
     <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
@@ -107,31 +136,10 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       </div>
       {brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')}/> : null) : <>
-      <section className="brand-card" aria-label={`${brand.name} profiles`}>
-        <div className="brand-section-title"><h2>Profiles</h2></div>
-        <div className="account-rows">{accounts.map((account) => {
-          const name = getPlatform(account.platform).name;
-          const live = account.status === 'active';
-          const problems = issues.filter((issue) => issue.accountId === account.id);
-          return <div key={account.id} className="account-row-wrap">
-            <button className="account-row" onClick={() => onEditAccount(account)}>
-              <BrandMark platform={account.platform}/>
-              <div><strong>{name}{account.handle && <span className="row-handle"> @{account.handle}</span>}</strong>{problems.map((problem) => <small key={problem.text} className="row-warning"><TriangleAlert size={12}/> {problem.text}</small>)}</div>
-              <span className={`pill ${account.status}`}><span className="dot"/>{live ? 'Live' : 'Not created yet'}</span>
-              <ChevronRight size={16}/>
-            </button>
-            {!live && onSignUp && <button className="outline-button small-button create-on" disabled={!loaded || busy} onClick={() => onSignUp([account])}><AppWindow size={14}/> Create on {name}</button>}
-            {!live && onAlreadyCreated && <button className="ghost-button small-button already-made" disabled={!loaded || busy} onClick={() => onAlreadyCreated(account)}>I already made it</button>}
-            {!live && onRemoveAccount && <button className="icon-button remove-profile" aria-label={`Delete ${name} profile`} title="Delete this profile from the app" disabled={!loaded || busy} onClick={() => onRemoveAccount(account)}><Trash2 size={15}/></button>}
-          </div>;
-        })}</div>
-        {missing.length > 0 && <div className="add-platforms"><span>Add a profile on</span>{missing.map((platform) => {
-          const plan = planPresence(all, platform.id, brand.name, baseEmail);
-          return <button key={platform.id} className="chip-button" title={plan.reason} disabled={!loaded || busy} onClick={() => onCreateAccounts([platform.id], { brandId: brand.id, label: brand.name, handle: lead?.handle, displayName: lead?.displayName, bio: lead?.bio, website: lead?.website, signupEmail: baseEmail, imagePath: lead?.imagePath, birthday: lead?.birthday })}><Plus size={13}/> {platform.name}</button>;
-        })}</div>}
-      </section>
-      {onNavigate && <div id="brand-connections"><Connections onNavigate={onNavigate} accounts={accounts} brands={[brand]} profilesOnly marks={marks} onMark={mark} onEditAccount={onEditAccount}/></div>}
-      <SignIns workspace={{ ...workspace, accounts }} busy={busy} onEdit={onEditAccount} onRestore={async () => false} showBackup={false}/>
+      <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount}
+        onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
+        onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
+        addHint={(platform) => planPresence(all, platform, brand.name, baseEmail).reason} warnings={(account) => issues.filter((issue) => issue.accountId === account.id).map((issue) => issue.text)}/>
       {onRemoveBrand && <div className="danger-zone"><button type="button" className="remove-button" disabled={!loaded || busy} onClick={() => onRemoveBrand(brand)}><Trash2 size={14}/> Delete {brand.name}</button><small>{accounts.some((account) => account.status === 'active') ? 'Live profiles stay on the socials; only their saved details here are removed.' : 'Removes the brand, its profiles and its videos from the app.'}</small></div>}
       </>}
     </>;
