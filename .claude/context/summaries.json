@@ -1,0 +1,38 @@
+{
+ "dirs": {
+  "": {
+   "n": "da39a3ee5e6b",
+   "s": "Social Space: Tauri 2 desktop app (React + Rust) that runs brands' social profiles: account setup, AI videos, posting, partner review; self-updates from main, managed by Ava."
+  },
+  "scripts": {
+   "n": "16728d18790d",
+   "s": "Version bump (app-version.mjs) and the guarded release build (tauri-build.mjs)."
+  },
+  "src": {
+   "n": "ddcf4fa5ef27",
+   "s": "React front end: App shell and views, feature components, *Service.ts wrappers around Tauri commands, use* hooks."
+  },
+  "src-tauri": {
+   "n": "5da89ec3b25b",
+   "s": "Rust back end: Tauri commands per feature, build.rs command list, capabilities, generated schemas."
+  },
+  "src-tauri/src": {
+   "n": "886db9068ed6",
+   "s": "One module per feature (instagram, review, queue, video_*, email, updater, hub...); lib.rs holds the Workspace and registers commands."
+  },
+  "src/assistant": {
+   "n": "84d01ae916d6",
+   "s": "In-app assistant on a local Ollama model: chat panel, post suggestions, tools it can call."
+  },
+  "src/pages": {
+   "n": "3b92af373421",
+   "s": "The top-level views: Overview, Brands/Accounts, Settings."
+  },
+  "website": {
+   "n": "2191d0653612",
+   "s": "Partner review site (Firebase Hosting, project socialspace-review)."
+  }
+ },
+ "files": {},
+ "version": 1
+}
