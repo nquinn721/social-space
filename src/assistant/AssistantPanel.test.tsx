@@ -3,11 +3,11 @@ import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AssistantPanel from './AssistantPanel';
-import * as client from './ollamaClient';
+import * as client from './grokClient';
 import * as x from '../xService';
 import type { Workspace } from '../model';
 
-vi.mock('./ollamaClient', async (original) => ({ ...(await original<typeof import('./ollamaClient')>()), chat: vi.fn(), listModels: vi.fn() }));
+vi.mock('./grokClient', async (original) => ({ ...(await original<typeof import('./grokClient')>()), chat: vi.fn(), listModels: vi.fn() }));
 vi.mock('../xService', () => ({ postToX: vi.fn() }));
 
 const workspace: Workspace = { businessName: 'Example LLC', brands: [], accounts: [], channels: [] };
@@ -18,7 +18,7 @@ afterEach(cleanup);
 describe('assistant panel', () => {
   it('runs tool calls, feeds results back, and shows the reply', async () => {
     vi.mocked(client.chat)
-      .mockResolvedValueOnce({ role: 'assistant', content: '', tool_calls: [{ function: { name: 'go_to_page', arguments: { page: 'accounts' } } }] })
+      .mockResolvedValueOnce({ role: 'assistant', content: '', tool_calls: [{ id: 'call_1', function: { name: 'go_to_page', arguments: { page: 'accounts' } } }] })
       .mockResolvedValueOnce({ role: 'assistant', content: 'Here are your accounts.' });
     const user = userEvent.setup();
     render(<AssistantPanel context={context} onClose={vi.fn()}/>);
@@ -27,7 +27,7 @@ describe('assistant panel', () => {
     expect(context.navigate).toHaveBeenCalledWith('accounts');
     expect(screen.getByText(/Changed page/)).toBeInTheDocument();
     const second = vi.mocked(client.chat).mock.calls[1][1];
-    expect(second.at(-1)).toMatchObject({ role: 'tool', tool_name: 'go_to_page' });
+    expect(second.at(-1)).toMatchObject({ role: 'tool', tool_call_id: 'call_1', tool_name: 'go_to_page' });
     expect(second[0].role).toBe('system');
   });
 
@@ -46,11 +46,11 @@ describe('assistant panel', () => {
     expect(vi.mocked(client.chat).mock.calls[1][1].at(-1)?.content).toContain('declined');
   });
 
-  it('shows a clear error when Ollama is not running', async () => {
-    vi.mocked(client.chat).mockRejectedValue('Could not reach Ollama. Make sure it is running (ollama serve).');
+  it('shows a clear error when Grok cannot be used', async () => {
+    vi.mocked(client.chat).mockRejectedValue('Add your xAI key under Settings > Video sources (Grok Imagine).');
     const user = userEvent.setup();
     render(<AssistantPanel context={context} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Message the assistant'), 'hi{Enter}');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach Ollama');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add your xAI key');
   });
 });

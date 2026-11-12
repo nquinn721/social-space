@@ -3,7 +3,7 @@ import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck, U
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
-import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/ollamaClient';
+import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
 import { PageHeader } from '../ui';
 
 type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null };
@@ -20,26 +20,22 @@ function AssistantSettingsCard() {
   const [settings, setSettings] = useState<AssistantSettings>(loadSettings);
   const [models, setModels] = useState<string[] | null>(null);
   const [checking, setChecking] = useState(false);
-  async function check(current = settings) {
+  async function check() {
     setChecking(true);
-    try { setModels(await listModels(current)); } catch { setModels([]); } finally { setChecking(false); }
+    try { setModels(await listModels()); } catch { setModels([]); } finally { setChecking(false); }
   }
   useEffect(() => { void check(); }, []);
   function update(next: AssistantSettings) { setSettings(next); saveSettings(next); }
-  const installed = models?.includes(settings.model);
+  const available = models?.includes(settings.model);
   return <section className="settings-card" id="assistant">
     <h2><Bot size={17}/> Assistant</h2>
-    <p>The assistant and the Suggest button in Create accounts use Ollama on this PC. Nothing leaves your computer.</p>
-    <div className={`status-line ${models?.length ? '' : 'off'}`}><span className="dot"/><span>{models === null ? 'Checking Ollama…' : models.length ? `Ollama is running with ${models.length} ${models.length === 1 ? 'model' : 'models'}.` : 'Ollama is not running or has no models.'}</span><button type="button" className="ghost-button small-button" disabled={checking} onClick={() => void check()}><RefreshCw size={14}/> Check</button></div>
+    <p>The assistant, the Suggest buttons and the profile picture maker use Grok from xAI with the key saved under Video sources. Prompts and the workspace details the assistant reads are sent to xAI.</p>
+    <div className={`status-line ${models?.length ? '' : 'off'}`}><span className="dot"/><span>{models === null ? 'Checking your xAI key…' : models.length ? `Grok is ready with ${models.length} ${models.length === 1 ? 'model' : 'models'}.` : 'No working xAI key. Add a Grok source under Video sources.'}</span><button type="button" className="ghost-button small-button" disabled={checking} onClick={() => void check()}><RefreshCw size={14}/> Check</button></div>
     <label htmlFor="settings-model">Model</label>
-    {models?.length ? <select id="settings-model" value={installed ? settings.model : ''} onChange={(event) => update({ ...settings, model: event.target.value })}>
-      {!installed && <option value="" disabled>{settings.model} (not installed)</option>}
-      {models.map((model) => <option key={model} value={model}>{model}</option>)}
+    {models?.length ? <select id="settings-model" value={available ? settings.model : ''} onChange={(event) => update({ ...settings, model: event.target.value })}>
+      {!available && <option value="" disabled>{settings.model} (not available)</option>}
+      {models.map((model) => <option key={model} value={model}>{model}{model === DEFAULT_SETTINGS.model ? ' (default)' : ''}</option>)}
     </select> : <input id="settings-model" value={settings.model} onChange={(event) => update({ ...settings, model: event.target.value })}/>}
-    <label htmlFor="settings-url">Ollama address</label>
-    <input id="settings-url" value={settings.baseUrl} onChange={(event) => update({ ...settings, baseUrl: event.target.value })} onBlur={() => void check()}/>
-    <label className="check-row"><input type="checkbox" checked={settings.think} onChange={(event) => update({ ...settings, think: event.target.checked })}/> Let the model think before answering (slower, sometimes smarter)</label>
-    {models !== null && !installed && <p className="footnote">To install the default model, run <code>ollama pull {DEFAULT_SETTINGS.model}</code> in a terminal.</p>}
   </section>;
 }
 

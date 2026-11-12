@@ -41,7 +41,8 @@ part of it working. Every Tauri command must also be listed in `src-tauri/build.
 - Secrets go to Windows Credential Manager (`account_passwords.rs`, `backup.rs`), never into the workspace file.
 - Social APIs: Instagram (Meta API, `instagram.rs` + `instagram_login.rs`), YouTube/TikTok (`social_connect.rs`),
   X (`x_integration.rs`); video generation is provider-neutral in `video_gen.rs` and `video_sources.rs` (Kling,
-  Grok). Partner review is `review.rs` + `website/` (Firebase site `socialspace-review`).
+  Grok). The assistant, Suggest buttons and picture maker call xAI Grok in `grok_ai.rs` with the key of the Grok
+  video source (`video_sources::xai_key`). Partner review is `review.rs` + `website/` (Firebase site `socialspace-review`).
 - Self-update and Ava's hub contract: `updater.rs`, `hub.rs`, `src/AppUpdates.tsx`, `src/updateService.ts`.
 - Checks: `npm run typecheck`, `npm test`, and `cargo test --locked` in `src-tauri`.
 
@@ -54,7 +55,7 @@ part of it working. Every Tauri command must also be listed in `src-tauri/build.
 | Videos and posting | `VideoLibrary.tsx`, `postDetails.ts`, `useVideoGenerations.ts`, `video_*.rs`, `queue.rs` |
 | Connections per social | `Connections.tsx`, `profileConnections.ts`, `setupNeeds.ts`, `social_connect.rs`, `instagram*.rs` |
 | Email and verification codes | `InboxList.tsx`, `email.rs`, `gmail_session.rs` |
-| Profile pictures (ComfyUI) | `ProfileImageStudio.tsx`, `imageAiService.ts`, `image_ai.rs` |
+| Assistant and profile pictures (Grok) | `src/assistant/grokClient.ts`, `ProfileImageStudio.tsx`, `imageAiService.ts`, `grok_ai.rs` |
 | Partner review site | `partnerReview.ts`, `usePartnerReview.tsx`, `review.rs`, `website/` |
 | Updates | `AppUpdates.tsx`, `updateService.ts`, `updater.rs`, `hub.rs` |
 

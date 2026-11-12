@@ -315,7 +315,7 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
       const idea = await suggestPost({ brand: brandName, category: category.name, title: video.title, prompt: video.prompt, socials: socials.map((platform) => getPlatform(platform).name), currentHashtags: parseHashtags(tags), limit });
       if (idea.description) setCaption(idea.description);
       if (idea.hashtags.length) setTags(hashtagText(idea.hashtags));
-    } catch (reason) { setError(errorText(reason, 'The assistant could not suggest anything. Check that Ollama is running under Settings.')); }
+    } catch (reason) { setError(errorText(reason, 'The assistant could not suggest anything. Check the assistant under Settings.')); }
     finally { setSuggesting(false); }
   }
   async function copy() {

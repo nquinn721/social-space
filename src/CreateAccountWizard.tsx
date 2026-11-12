@@ -134,7 +134,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
     setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
     setAutoImage({ description: suggestion.imagePrompt || `${suggestion.name}, ${idea.trim()}`, style: suggestion.imageStyle, key: Date.now() });
-    setNote('Suggested by your local model, and a matching profile picture is on its way. Edit anything you like.');
+    setNote('Suggested by Grok, and a matching profile picture is on its way. Edit anything you like.');
   });
   // Optional: a separate Gmail for the brand. Plus-addresses are simpler, since their codes reach the connected inbox.
   const makeGmail = () => run(async () => {

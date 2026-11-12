@@ -1,4 +1,4 @@
-import { chat, loadSettings, type ChatMessage } from './ollamaClient';
+import { chat, loadSettings, type ChatMessage } from './grokClient';
 import type { ImageStyle } from '../imageAiService';
 
 export type ProfileSuggestion = { name: string; username: string; displayName: string; description: string; imagePrompt: string; imageStyle: ImageStyle };
@@ -6,7 +6,7 @@ export type ProfileSuggestion = { name: string; username: string; displayName: s
 const IMAGE_STYLES: ImageStyle[] = ['photo', 'product', 'illustration', 'logo'];
 
 /**
- * Small local models write flat, generic copy unless told what good looks like,
+ * Models write flat, generic copy unless told what good looks like,
  * so this spells out the craft and shows one worked example.
  */
 export const PROFILE_GUIDE = `You are a social media brand strategist who sets up standout accounts for small businesses and creators.
@@ -57,10 +57,9 @@ export function fitDescription(text: string, limit: number): string {
   return cut.slice(0, Math.max(cut.lastIndexOf(' '), 1)).trim();
 }
 
-/** Asks the local model for an account name, username, display name, description and picture idea. */
+/** Asks Grok for an account name, username, display name, description and picture idea. */
 export async function suggestProfile(idea: string, limit: number, socials: string[]): Promise<ProfileSuggestion> {
-  // Thinking first gives much more creative names on small models; it takes a few more seconds.
-  const settings = { ...loadSettings(), think: true };
+  const settings = loadSettings();
   const messages: ChatMessage[] = [
     { role: 'system', content: PROFILE_GUIDE },
     { role: 'user', content: EXAMPLE_IDEA },

@@ -10,14 +10,13 @@ mod email;
 mod embedded;
 mod gmail_session;
 mod hub;
-mod image_ai;
 mod grok;
+mod grok_ai;
 mod dev_apps;
 mod instagram;
 mod instagram_login;
 mod social_connect;
 mod kling;
-mod ollama;
 mod queue;
 mod review;
 mod setup_pages;
@@ -421,11 +420,9 @@ pub fn run() {
             queue::complete_queue_job,
             queue::delete_queue_job,
             queue::choose_video_file,
-            ollama::ollama_models,
-            ollama::ollama_chat,
-            image_ai::image_ai_status,
-            image_ai::start_image_ai,
-            image_ai::generate_profile_image,
+            grok_ai::grok_models,
+            grok_ai::grok_chat,
+            grok_ai::generate_profile_image,
             email::email_connection,
             email::connect_email,
             email::disconnect_email,

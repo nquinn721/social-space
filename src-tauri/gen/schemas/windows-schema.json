@@ -429,16 +429,22 @@
           "markdownDescription": "Enables the get_video command without any pre-configured scope."
         },
         {
+          "description": "Enables the grok_chat command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-grok-chat",
+          "markdownDescription": "Enables the grok_chat command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the grok_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-grok-models",
+          "markdownDescription": "Enables the grok_models command without any pre-configured scope."
+        },
+        {
           "description": "Enables the has_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "allow-has-account-password",
           "markdownDescription": "Enables the has_account_password command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the image_ai_status command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-image-ai-status",
-          "markdownDescription": "Enables the image_ai_status command without any pre-configured scope."
         },
         {
           "description": "Enables the import_review_video command without any pre-configured scope.",
@@ -511,18 +517,6 @@
           "type": "string",
           "const": "allow-load-workspace",
           "markdownDescription": "Enables the load_workspace command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the ollama_chat command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-ollama-chat",
-          "markdownDescription": "Enables the ollama_chat command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the ollama_models command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-ollama-models",
-          "markdownDescription": "Enables the ollama_models command without any pre-configured scope."
         },
         {
           "description": "Enables the open_gmail_message command without any pre-configured scope.",
@@ -739,12 +733,6 @@
           "type": "string",
           "const": "allow-set-embedded-bounds",
           "markdownDescription": "Enables the set_embedded_bounds command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the start_image_ai command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-start-image-ai",
-          "markdownDescription": "Enables the start_image_ai command without any pre-configured scope."
         },
         {
           "description": "Enables the submit_for_review command without any pre-configured scope.",
@@ -1041,16 +1029,22 @@
           "markdownDescription": "Denies the get_video command without any pre-configured scope."
         },
         {
+          "description": "Denies the grok_chat command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-grok-chat",
+          "markdownDescription": "Denies the grok_chat command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the grok_models command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-grok-models",
+          "markdownDescription": "Denies the grok_models command without any pre-configured scope."
+        },
+        {
           "description": "Denies the has_account_password command without any pre-configured scope.",
           "type": "string",
           "const": "deny-has-account-password",
           "markdownDescription": "Denies the has_account_password command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the image_ai_status command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-image-ai-status",
-          "markdownDescription": "Denies the image_ai_status command without any pre-configured scope."
         },
         {
           "description": "Denies the import_review_video command without any pre-configured scope.",
@@ -1123,18 +1117,6 @@
           "type": "string",
           "const": "deny-load-workspace",
           "markdownDescription": "Denies the load_workspace command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the ollama_chat command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-ollama-chat",
-          "markdownDescription": "Denies the ollama_chat command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the ollama_models command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-ollama-models",
-          "markdownDescription": "Denies the ollama_models command without any pre-configured scope."
         },
         {
           "description": "Denies the open_gmail_message command without any pre-configured scope.",
@@ -1351,12 +1333,6 @@
           "type": "string",
           "const": "deny-set-embedded-bounds",
           "markdownDescription": "Denies the set_embedded_bounds command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the start_image_ai command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-start-image-ai",
-          "markdownDescription": "Denies the start_image_ai command without any pre-configured scope."
         },
         {
           "description": "Denies the submit_for_review command without any pre-configured scope.",

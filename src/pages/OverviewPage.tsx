@@ -4,7 +4,7 @@ import { brandSocials } from '../VideoLibrary';
 import { videoStage } from '../postDetails';
 import InboxList from '../InboxList';
 import { emailConnection } from '../emailService';
-import { listModels, loadSettings } from '../assistant/ollamaClient';
+import { listModels } from '../assistant/grokClient';
 import { PLATFORMS, type Platform, type View, type Workspace } from '../model';
 import { BrandMark } from '../ui';
 import { useSetupStatus } from '../setupService';
@@ -21,14 +21,13 @@ type Props = {
   onOpenAssistant: () => void;
 };
 
-/** Whether the inbox and the local model are ready; null while still checking. */
+/** Whether the inbox and Grok are ready; null while still checking. */
 function useConnections() {
   const [email, setEmail] = useState<boolean | null>(null);
   const [model, setModel] = useState<boolean | null>(null);
   useEffect(() => {
     emailConnection().then((value) => setEmail(Boolean(value))).catch(() => setEmail(false));
-    const settings = loadSettings();
-    listModels(settings).then((models) => setModel(models.length > 0)).catch(() => setModel(false));
+    listModels().then((models) => setModel(models.length > 0)).catch(() => setModel(false));
   }, []);
   return { email, model };
 }
@@ -56,7 +55,7 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onOpenBran
   const steps = [
     { id: 'name', done: Boolean(workspace.businessName.trim()), title: 'Name your workspace', detail: 'Shown across the app so you know where you are.', action: () => onNavigate('settings', 'workspace'), label: 'Add name' },
     { id: 'email', done: email === true, title: 'Connect your inbox', detail: 'So verification codes show up here during sign-up.', action: () => onNavigate('settings', 'email'), label: 'Connect' },
-    { id: 'model', done: model === true, title: 'Set up the assistant', detail: 'Runs on this PC with Ollama. Suggests names and descriptions.', action: () => onNavigate('settings', 'assistant'), label: 'Set up' },
+    { id: 'model', done: model === true, title: 'Set up the assistant', detail: 'Uses Grok with your xAI key. Suggests names, descriptions and pictures.', action: () => onNavigate('settings', 'assistant'), label: 'Set up' },
     { id: 'accounts', done: workspace.accounts.length > 0, title: 'Create your first brand', detail: 'One form sets up its profile on every social.', action: () => onCreateAccounts(), label: 'Start' },
   ];
   const done = steps.filter((step) => step.done).length;
