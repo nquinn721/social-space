@@ -323,7 +323,8 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
         // The app list (/apps/) shows "link broken" until you are signed in, so start at the home page.
         (Platform::Instagram, "developer") => Some(META_DEVELOPERS_HOME),
-        (Platform::Tiktok, "create") => Some("https://www.tiktok.com/signup"),
+        // Straight to the email sign-up form, past the "Use phone or email / Facebook / Google" chooser.
+        (Platform::Tiktok, "create") => Some("https://www.tiktok.com/signup/phone-or-email/email"),
         (Platform::Tiktok, "manage") => Some("https://www.tiktok.com/setting"),
         (Platform::Tiktok, "post") => Some("https://www.tiktok.com/upload"),
         (Platform::Tiktok, "developer") => Some("https://developers.tiktok.com/"),
@@ -605,6 +606,10 @@ mod tests {
         assert_eq!(
             platform_url(Platform::Tiktok, "post"),
             Some("https://www.tiktok.com/upload")
+        );
+        assert_eq!(
+            platform_url(Platform::Tiktok, "create"),
+            Some("https://www.tiktok.com/signup/phone-or-email/email")
         );
         assert_eq!(platform_url(Platform::X, "https://example.com"), None);
         assert_eq!(platform_url(Platform::Youtube, "unknown"), None);

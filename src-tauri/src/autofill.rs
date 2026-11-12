@@ -186,8 +186,17 @@ fn fill_script(payload: &FillPayload) -> Result<String, String> {
 /// Matches visible inputs by autocomplete, type, name, label, and placeholder;
 /// sets values the way typing would so React-based forms notice them; and
 /// outlines what it filled. Only empty fields are filled (or, with `replace`,
-/// each field once), so the user's own edits are kept. It never clicks or submits anything. With `watch`, it keeps
+/// each field once), so the user's own edits are kept. With `watch`, it keeps
 /// filling fields that appear on later steps of the same page for a while.
+///
+/// The only things it clicks are birthday drop-downs (`role=combobox`) and the
+/// matching month, day or year in them, as TikTok and Instagram draw those
+/// menus themselves instead of using `<select>`. It never presses Next, Send
+/// code, Sign up or any other button, and never submits a form. When a page
+/// needs Nate (a puzzle, a phone check, TikTok's "finish in the app" QR code),
+/// the banner says so instead. Each site's steps are in `docs/signup-flows.md`.
+/// A verification code it is given also shows in a box at the bottom right
+/// with a Copy button.
 const FILL_SCRIPT: &str = r#"function (data) {
   const rules = [
     ['email', { types: ['email'], auto: ['email'], words: /e-?mail/ }],
@@ -201,6 +210,8 @@ const FILL_SCRIPT: &str = r#"function (data) {
     ['website', { types: ['url'], auto: ['url'], words: /website|\burl\b|link/ }],
     ['verificationCode', { auto: ['one-time-code'], words: /code|otp|verif/ }],
   ];
+  const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
   const describe = (el) => [el.name, el.id, el.getAttribute('aria-label'), el.placeholder,
     el.labels ? Array.from(el.labels).map((label) => label.textContent).join(' ') : '']
@@ -236,7 +247,6 @@ const FILL_SCRIPT: &str = r#"function (data) {
     }
     if (data.fields.birthday) {
       const [year, month, day] = data.fields.birthday.split('-').map(Number);
-      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
       const unset = (el) => el.selectedIndex <= 0 || el.value === '' || el.value === '0';
       const choose = (el, pick) => {
         const option = Array.from(el.options).find(pick);
@@ -256,6 +266,12 @@ const FILL_SCRIPT: &str = r#"function (data) {
         else if (/day/.test(text)) picked = choose(el, (o) => Number(o.value) === day || label(o) === String(day)) || picked;
       }
       for (const el of fields.filter((el) => (el.type || '').toLowerCase() === 'date')) { setValue(el, data.fields.birthday); picked = true; }
+      // Google asks for the day and year as plain text boxes next to a month menu.
+      for (const el of candidates.filter((el) => !used.has(el))) {
+        const key = (el.name || el.id || el.getAttribute('aria-label') || '').trim().toLowerCase();
+        if (key === 'day') { setValue(el, String(day)); picked = true; }
+        else if (key === 'year') { setValue(el, String(year)); picked = true; }
+      }
       if (picked) filled.push('birthday');
     }
     if (data.password) {
@@ -278,6 +294,90 @@ const FILL_SCRIPT: &str = r#"function (data) {
     }
     return filled;
   };
+  // Birthday menus drawn by the site (TikTok, Instagram): open each one and pick the value, like a person would.
+  const menuKey = (box) => {
+    const text = (describe(box) + ' ' + (box.textContent || '')).toLowerCase();
+    return /month/.test(text) ? 'month' : /year/.test(text) ? 'year' : /\bday\b/.test(text) ? 'day' : null;
+  };
+  const pickMenus = async () => {
+    if (!data.fields.birthday || window.__socialspaceMenus) return [];
+    window.__socialspaceMenus = true;
+    const picked = [];
+    try {
+      const [year, month, day] = data.fields.birthday.split('-').map(Number);
+      const wanted = {
+        month: (text) => text.startsWith(months[month - 1]) || text === String(month),
+        day: (text) => text === String(day) || text === String(day).padStart(2, '0'),
+        year: (text) => text === String(year),
+      };
+      const boxes = Array.from(document.querySelectorAll('[role=combobox]')).filter((box) =>
+        visible(box) && box.tagName !== 'INPUT' && !done.has(box) && /^(month|day|year)$/i.test((box.textContent || '').trim()));
+      for (const box of boxes) {
+        const key = menuKey(box);
+        if (!key) continue;
+        if (box.getAttribute('aria-expanded') !== 'true') box.click();
+        await wait(250);
+        const option = Array.from(document.querySelectorAll('[role=option]'))
+          .find((item) => visible(item) && wanted[key]((item.textContent || '').trim().toLowerCase()));
+        if (option) { option.click(); done.add(box); box.style.outline = '2px solid #8b5cf6'; picked.push(key); }
+        else if (box.getAttribute('aria-expanded') === 'true') box.click();
+        await wait(200);
+      }
+    } finally { window.__socialspaceMenus = false; }
+    return picked.length ? ['birthday'] : [];
+  };
+  // Steps only Nate can do: the banner says what to do and the page is left alone.
+  const hints = [
+    [/continue on the tiktok app|scan (the |this )?qr code/i, 'TikTok wants this sign-up finished in its phone app. Open TikTok on your phone, tap the scan icon, scan this QR code and finish there. Your email, password and birthday are under Sign-up details in Social Space.'],
+    [/drag the (slider|puzzle)|select \d+ objects|verify (that )?you(')?re (a )?human|not a robot|security check|captcha/i, 'Solve this check yourself, then press the button on the page.'],
+    [/(enter|add) (a |your )?phone number|verify your phone/i, 'This step wants your own phone number. Type it yourself, then the code it texts you.'],
+  ];
+  const hint = () => {
+    const text = (document.body.innerText || '').slice(0, 5000).replace(/’/g, "'");
+    const found = hints.find(([test]) => test.test(text));
+    if (found) return found[1];
+    const send = Array.from(document.querySelectorAll('button, [role=button]'))
+      .find((el) => visible(el) && /^(send|get) code$/i.test((el.textContent || '').trim()));
+    return send && !data.fields.verificationCode ? 'Press Send code yourself. The code from your inbox is entered here when it arrives.' : '';
+  };
+  const showCode = (code) => {
+    const box = document.getElementById('socialspace-code') || document.createElement('div');
+    box.id = 'socialspace-code';
+    box.replaceChildren();
+    box.style.cssText = 'position:fixed;z-index:2147483647;right:16px;bottom:16px;display:flex;align-items:center;gap:10px;' +
+      'background:#1f1530;color:#fff;padding:12px 14px;border-radius:12px;font:14px system-ui;box-shadow:0 8px 28px rgba(0,0,0,.35)';
+    const label = document.createElement('span');
+    label.textContent = 'Code';
+    label.style.cssText = 'opacity:.7';
+    const value = document.createElement('strong');
+    value.textContent = code;
+    value.style.cssText = 'font:600 20px ui-monospace,monospace;letter-spacing:2px;user-select:all';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.textContent = 'Copy';
+    copy.style.cssText = 'border:0;border-radius:8px;padding:6px 12px;background:#8b5cf6;color:#fff;font:600 13px system-ui;cursor:pointer';
+    copy.addEventListener('click', () => {
+      // Copying the selected code works in every site window; the clipboard API is the fallback.
+      const range = document.createRange();
+      range.selectNodeContents(value);
+      const selection = getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const copied = document.execCommand('copy');
+      if (!copied && navigator.clipboard) navigator.clipboard.writeText(code).catch(() => undefined);
+      copy.textContent = 'Copied';
+    });
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Close');
+    close.style.cssText = 'border:0;background:none;color:#fff;font:20px system-ui;cursor:pointer;opacity:.7';
+    close.addEventListener('click', () => box.remove());
+    box.append(label, value, copy, close);
+    if (!box.isConnected) document.body.appendChild(box);
+    clearTimeout(window.__socialspaceCodeTimer);
+    window.__socialspaceCodeTimer = setTimeout(() => box.remove(), 10 * 60 * 1000);
+  };
   const banner = (text) => {
     const box = document.getElementById('socialspace-fill-banner') || document.createElement('div');
     box.id = 'socialspace-fill-banner';
@@ -287,18 +387,37 @@ const FILL_SCRIPT: &str = r#"function (data) {
       'box-shadow:0 6px 24px rgba(0,0,0,.3);max-width:90vw;pointer-events:none';
     if (!box.isConnected) document.body.appendChild(box);
     clearTimeout(window.__socialspaceBannerTimer);
-    window.__socialspaceBannerTimer = setTimeout(() => box.remove(), 12000);
+    window.__socialspaceBannerTimer = setTimeout(() => box.remove(), 20000);
   };
   const report = (filled, always) => {
-    if (filled.length) banner('Socialspace filled: ' + filled.join(', ') + '. Check it, then press the button yourself.');
+    const next = hint();
+    if (next && next !== window.__socialspaceHint) banner(next);
+    else if (filled.length) banner('Socialspace filled: ' + filled.join(', ') + '. Check it, then press the button yourself.');
     else if (always) banner('Socialspace is ready. Fields will fill as each step appears.');
-    console.info('[Socialspace] filled', filled);
+    window.__socialspaceHint = next;
+    if (filled.length) console.info('[Socialspace] filled', filled);
   };
-  report(fill(), true);
+  const step = async (always) => {
+    const filled = fill();
+    const menus = await pickMenus();
+    report(filled.includes('birthday') ? filled : filled.concat(menus), always);
+  };
+  const ours = (node) => {
+    const el = node && node.nodeType === 1 ? node : node && node.parentElement;
+    return !!(el && el.closest && el.closest('#socialspace-fill-banner, #socialspace-code'));
+  };
+  if (data.fields.verificationCode) showCode(data.fields.verificationCode);
+  window.__socialspaceHint = '';
+  step(true);
   if (window.__socialspaceObserver) window.__socialspaceObserver.disconnect();
   if (data.watch) {
     let timer;
-    const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => report(fill(), false), 400); });
+    const observer = new MutationObserver((changes) => {
+      // The banner and code box changing are not a new step of the sign-up.
+      if (changes.every((change) => ours(change.target) || Array.from(change.addedNodes).concat(Array.from(change.removedNodes)).some(ours))) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => step(false), 400);
+    });
     observer.observe(document.body, { childList: true, subtree: true });
     window.__socialspaceObserver = observer;
     setTimeout(() => observer.disconnect(), 10 * 60 * 1000);
@@ -402,8 +521,17 @@ mod tests {
         assert!(script.contains(r#""bio":"Quote \" and </script> stay data""#));
         assert!(!script.contains("\"email\""));
         assert!(!script.contains(".submit("));
-        assert!(!script.contains(".click("));
+        assert!(!script.contains("requestSubmit"));
+        // Only birthday menus and their options are ever clicked; never a button.
+        for line in script.lines().filter(|line| line.contains(".click(")) {
+            assert!(
+                line.contains("box.click()") || line.contains("option.click()"),
+                "unexpected click: {line}"
+            );
+        }
         assert!(script.contains(r#""password":null"#));
+        assert!(script.contains("[role=combobox]"));
+        assert!(script.contains("continue on the tiktok app"));
     }
 
     #[test]

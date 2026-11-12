@@ -7,5 +7,14 @@
    "src/useTeamSync.ts#syncOnce": "95c742f14f55",
    "src/workspaceSync.ts#mergeShared": "2b3f86529518"
   }
+ },
+ {
+  "a": "autofill.rs FILL_SCRIPT fills fields on every page/step (MutationObserver + page_loaded), opens TikTok/Instagram birthday menus (role=combobox) and picks options but never presses buttons, shows step hints in the top banner (TikTok QR, puzzles, phone checks) and a bottom-right code box with Copy. TikTok opens straight on /signup/phone-or-email/email. Wizard shows SIGNUP_FLOWS steps and its own code toast. Flows are documented in docs/signup-flows.md.",
+  "at": "2026-11-12",
+  "q": "How does the sign-up fill handle each social's steps, birthday menus and verification codes?",
+  "refs": {
+   "src/CreateAccountWizard.tsx": "34fb3741030b",
+   "src/signupFlows.ts#SIGNUP_FLOWS": "cf4a4624838c"
+  }
  }
 ]

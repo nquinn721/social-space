@@ -561,8 +561,8 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .wizard.site-open { width: calc(100vw - 24px); height: calc(100vh - 24px); max-width: none; max-height: none; grid-template-columns: 190px minmax(0, 1fr); animation: none; }
 .modal-backdrop:has(.wizard.site-open) { padding: 12px; }
 .site-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; padding: 12px 16px; }
-.site-frame { min-height: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; display: grid; place-items: center; overflow: hidden; }
-.site-frame span { color: #555; font-size: 13.5px; padding: 16px; text-align: center; }
+.site-frame { min-height: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); display: grid; place-items: center; overflow: hidden; }
+.site-frame span { color: var(--text-3); font-size: 13.5px; padding: 16px; text-align: center; }
 .site-side { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 .site-side .copy-list, .site-side .wizard-actions { margin-top: 0; }
 @media (max-width: 1100px) { .wizard.site-open { grid-template-columns: 1fr; } .site-stage { grid-template-columns: minmax(0, 1fr) 280px; } }
@@ -576,3 +576,11 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .confirm-dialog .confirm-body p { margin: 0 0 10px; color: var(--text-2); }
 .confirm-dialog .confirm-caption { white-space: pre-wrap; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; max-height: 200px; overflow: auto; font-size: 13px; }
 .confirm-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.flow-steps li { display: grid; grid-template-columns: auto 1fr; column-gap: 6px; }
+.flow-steps li em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--text-3); align-self: center; }
+.flow-steps li.by-app em { color: var(--accent-text); }
+.flow-steps li span { grid-column: 1 / -1; color: var(--text-2); font-size: 12.5px; }
+.code-toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius-lg); border: 1px solid var(--accent-line); background: var(--surface-3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.code-toast span { color: var(--text-2); font-size: 13px; }
+.code-toast strong { font: 600 20px ui-monospace, monospace; letter-spacing: 2px; user-select: all; }
