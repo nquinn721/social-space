@@ -51,6 +51,33 @@ describe('mergeShared', () => {
     expect(merged.videos).toEqual(base.videos);
   });
 
+  it('shares video records and post details but keeps each PC\'s own file', () => {
+    const shared = sharedOf(base);
+    expect(shared.videos[0].mediaSource).toBe('');
+    const remote = { ...shared, videos: [{ ...shared.videos[0], caption: 'written by partner' }, { ...shared.videos[0], id: 'v2', title: 'New from partner' }] };
+    const merged = mergeShared(sharedOf(base), base, remote);
+    expect(merged.videos?.map((video) => [video.id, video.mediaSource, video.caption])).toEqual([['v1', base.videos![0].mediaSource, 'written by partner'], ['v2', '', '']]);
+  });
+
+  it('shares a video that is a web link as it is', () => {
+    const linked = { ...base, videos: [{ ...base.videos![0], mediaSource: 'https://example.com/v.mp4' }] };
+    expect(sharedOf(linked).videos[0].mediaSource).toBe('https://example.com/v.mp4');
+  });
+
+  it('brings in a new brand with its profiles and developer sign-ins from the other PC', () => {
+    const remote = { ...sharedOf(base), brands: [...base.brands, { id: 'b2', name: 'Cooking', notes: '' }], accounts: [...base.accounts, account('k1', { brandId: 'b2', label: 'Cooking' })], developerLogins: { tiktok: { email: 'dev@x.com' } } };
+    const merged = mergeShared(sharedOf(base), base, remote);
+    expect(merged.brands.map((brand) => brand.name)).toEqual(['Animals', 'Cooking']);
+    expect(merged.accounts.find((item) => item.id === 'k1')?.brandId).toBe('b2');
+    expect(merged.developerLogins).toEqual({ tiktok: { email: 'dev@x.com' } });
+  });
+
+  it('reads a shared copy from before videos were shared', () => {
+    const { videos: _v, developerLogins: _d, ...old } = sharedOf(base);
+    const merged = mergeShared(old as SharedWorkspace, base, old as SharedWorkspace);
+    expect(merged.videos?.[0].mediaSource).toBe(base.videos![0].mediaSource);
+  });
+
   it('keeps a category this PC\'s videos use when the other PC deleted it', () => {
     const remote = shared({ ...base, categories: [] });
     expect(mergeShared(shared(base), base, remote).categories?.map((item) => item.id)).toEqual(['c1']);
