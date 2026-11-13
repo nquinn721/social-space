@@ -9,6 +9,11 @@ const ORDER = PLATFORMS.map((platform) => platform.id);
 
 /** One account's password: hidden until asked, copyable, and changeable or addable in place. */
 export function PasswordCell({ account }: { account: Account }) {
+  return <PasswordField id={account.id} label={`${getPlatform(account.platform).name} ${account.handle ? `@${account.handle}` : account.label}`}/>;
+}
+
+/** A saved password by its Credential Manager id: a profile's, or a developer account's. */
+export function PasswordField({ id, label }: { id: string; label: string }) {
   const [saved, setSaved] = useState<boolean | null>(null);
   const [value, setValue] = useState('');
   const [shown, setShown] = useState(false);
@@ -16,18 +21,17 @@ export function PasswordCell({ account }: { account: Account }) {
   const [draft, setDraft] = useState('');
   const [note, setNote] = useState('');
   useEffect(() => {
-    const check = () => { hasAccountPassword(account.id).then(setSaved).catch(() => setSaved(false)); setValue(''); setShown(false); };
+    const check = () => { hasAccountPassword(id).then(setSaved).catch(() => setSaved(false)); setValue(''); setShown(false); };
     check();
-    return onPasswordSaved(account.id, check);
-  }, [account.id]);
-  async function load() { if (value) return value; const next = await revealAccountPassword(account.id); setValue(next); return next; }
+    return onPasswordSaved(id, check);
+  }, [id]);
+  async function load() { if (value) return value; const next = await revealAccountPassword(id); setValue(next); return next; }
   async function act(action: () => Promise<void>) { setNote(''); try { await action(); } catch (reason) { setNote(errorText(reason)); } }
   function save(event: FormEvent) {
     event.preventDefault();
     if (!draft) return;
-    void act(async () => { await setAccountPassword(account.id, draft); setValue(draft); setDraft(''); setSaved(true); setEditing(false); setShown(false); setNote('Saved.'); });
+    void act(async () => { await setAccountPassword(id, draft); setValue(draft); setDraft(''); setSaved(true); setEditing(false); setShown(false); setNote('Saved.'); });
   }
-  const label = `${getPlatform(account.platform).name} ${account.handle ? `@${account.handle}` : account.label}`;
   if (saved === null) return <span className="muted">…</span>;
   if (!saved || editing) return <form className="password-edit" onSubmit={save}>
     <input type="password" aria-label={`New password for ${label}`} placeholder={saved ? 'New password' : 'Not saved yet. Enter it'} value={draft} onChange={(event) => setDraft(event.target.value)} autoComplete="off"/>
