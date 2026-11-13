@@ -14,7 +14,7 @@ import { suggestPost } from './assistant/postSuggest';
 import { useConfirm } from './ConfirmDialog';
 import { openInstagramPost } from './instagramService';
 import PartnerReviewControls from './PartnerReviewControls';
-import { useBrowserPosting, usesMainLogin } from './useBrowserPosting';
+import { useBrowserPosting, wrongLogin } from './useBrowserPosting';
 import { API_UPLOADS, postModeNote } from './postingMode';
 import { testModeOf, withPosted } from './appReviews';
 import './library.css';
@@ -74,7 +74,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   /** Socials where the brand's profile is only planned: nothing to sign in to or post on until it is made. */
   const notMade = socials.filter((platform) => !workspace.accounts.some((account) => account.brandId === brand?.id && account.platform === platform && account.status === 'active'));
   /** Socials whose profile is saved with the main Gmail: its windows would sign in as Nate, not the brand. */
-  const mainLogin = socials.filter((platform) => !notMade.includes(platform) && usesMainLogin(workspace.developerLogins, workspace.accounts.find((account) => account.brandId === brand?.id && account.platform === platform)));
+  const mainLogin = socials.filter((platform) => !notMade.includes(platform) && wrongLogin(workspace.developerLogins, workspace.accounts.find((account) => account.brandId === brand?.id && account.platform === platform)));
   const inCategory = videos.filter((video) => video.categoryId === category?.id).sort((a, b) => b.createdAt - a.createdAt);
   const shown = stage === 'all' ? inCategory : inCategory.filter((video) => videoStage(video, socials) === stage);
   const disabled = !loaded || busy;

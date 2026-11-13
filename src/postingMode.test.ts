@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { withReviewState } from './appReviews';
 import { postMode, postModeNote } from './postingMode';
-import { brandLogin, markPosted, postRequest } from './useBrowserPosting';
+import { brandLogin, markPosted, postRequest, wrongLogin } from './useBrowserPosting';
 import type { Workspace } from './model';
 
 describe('posting mode', () => {
@@ -38,6 +38,12 @@ describe('browser posting', () => {
     expect(brandLogin(undefined, { ...account, signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: undefined, email: '' });
     expect(brandLogin({ tiktok: { email: 'dev@example.com' } }, { ...account, signupEmail: 'Dev@example.com' })).toEqual({ accountId: undefined, email: '' });
     expect(brandLogin(undefined, account)).toEqual({ accountId: 'a1', email: 'x+animals@example.com' });
+  });
+  it('blocks only TikTok and X profiles saved with the main Gmail; YouTube channels may live under it', () => {
+    const account = workspace.accounts[0];
+    expect(wrongLogin(undefined, { ...account, signupEmail: 'softwings25@gmail.com' })).toBe(true);
+    expect(wrongLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' })).toBe(false);
+    expect(brandLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' }).email).toBe('');
   });
   it('marks a video posted once', () => {
     const next = markPosted(workspace, 'v1', 'tiktok')!;

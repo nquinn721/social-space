@@ -3,7 +3,9 @@ import { AppWindow, ArrowLeft, Pencil, Plus, Search, Trash2, UserPlus, UsersRoun
 import VideoLibrary from '../VideoLibrary';
 import type { OpenBrand } from '../App';
 import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type BrandImage, type Platform, type PlatformAction, type View, type Workspace } from '../model';
-import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, passwordGroup, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
+
+const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id, item])).values()];
 import { ensureSharedPassword } from '../profileService';
 import BrandAccounts from '../BrandAccounts';
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
@@ -100,8 +102,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   /** The new profile shares the brand's password, so every social signs in the same way. */
   async function startSignUp(account: Account, siblings: Account[]) {
     if (!onSignUp) return;
-    const others = siblings.filter((item) => item.id !== account.id).sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active'));
-    await ensureSharedPassword([...others.map((item) => item.id), account.id]).catch(() => undefined);
+    await ensureSharedPassword(passwordGroup(uniqueById([...all, ...siblings]), account)).catch(() => undefined);
     onSignUp([account]);
   }
   /** One click: saves the brand's profile on this social, then opens its sign-up page filled in. */

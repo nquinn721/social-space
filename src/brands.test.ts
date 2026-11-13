@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SIGNUP_BIRTHDAY, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, passwordGroup, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
 import type { Account } from './model';
 
 const BASE = 'softwings25@gmail.com';
@@ -19,20 +19,30 @@ describe('brand model', () => {
     const existing = [account('1', 'instagram', 'MassageMentor'), account('2', 'youtube', 'MassageMentor')];
     const instagram = planPresence(existing, 'instagram', 'Massage With Mia', BASE);
     expect(instagram).toMatchObject({ mode: 'attach', email: BASE });
-    expect(instagram.reason).toContain('2 of 5');
+    expect(instagram.reason).toContain('2 of 4');
     expect(planPresence(existing, 'youtube', 'Massage With Mia', BASE)).toMatchObject({ mode: 'attach', email: BASE });
   });
 
-  it('starts a new Instagram login once five profiles share one', () => {
-    const full = ['a', 'b', 'c', 'd', 'e'].map((id) => account(id, 'instagram', `Brand ${id}`));
+  it('starts a new Instagram login once four profiles share one', () => {
+    const full = ['a', 'b', 'c', 'd'].map((id) => account(id, 'instagram', `Brand ${id}`));
     expect(planPresence(full, 'instagram', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
   });
 
   it('gives TikTok and X their own unused email per account', () => {
-    expect(planPresence([], 'tiktok', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: BASE });
+    expect(planPresence([], 'tiktok', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
     const taken = [account('1', 'x', 'MassageMentor'), account('2', 'x', 'Old', 'softwings25+massagewithmia@gmail.com')];
     expect(planPresence(taken, 'x', 'Massage With Mia', BASE).email).toBe('softwings25+massagewithmia2@gmail.com');
     expect(plusAddress('me+old@outlook.com', 'mia')).toBe('me+mia@outlook.com');
+  });
+
+  it('shares a password with the login a profile joins, or with its own brand, never across brands', () => {
+    const ig1 = { ...account('ig1', 'instagram', 'One'), brandId: 'b1' };
+    const ig2 = { ...account('ig2', 'instagram', 'Two'), brandId: 'b2' };
+    const tt2 = { ...account('tt2', 'tiktok', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
+    expect(passwordGroup([ig1, ig2, tt2], ig2)).toEqual(['ig1', 'ig2']);
+    expect(passwordGroup([ig1, ig2, tt2], tt2)).toEqual(['tt2']);
+    const yt2 = { ...account('yt2', 'youtube', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
+    expect(passwordGroup([ig1, ig2, tt2, yt2], yt2)).toEqual(['tt2', 'yt2']);
   });
 
   it('flags shared emails on TikTok and X and duplicate usernames', () => {
