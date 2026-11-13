@@ -29,7 +29,7 @@ describe('Editing a live Instagram profile', () => {
     drawer();
     await user.click(screen.getByRole('button', { name: /Change name & username/ }));
     expect(profile.openPlatformWindow).toHaveBeenCalledWith('instagram', 'identity');
-    expect(profile.fillSiteForm).toHaveBeenCalledWith('site-7', { username: 'massagewithmia', fullName: 'MassageWithMia' }, { keepFilling: true, replace: true });
+    expect(profile.fillSiteForm).toHaveBeenCalledWith('site-7', { username: 'massagewithmia', fullName: 'MassageWithMia' }, { accountId: expect.any(String), includePassword: 'ifSaved', keepFilling: true, replace: true });
     expect(await screen.findByText(/Accounts Center/)).toBeInTheDocument();
   });
 

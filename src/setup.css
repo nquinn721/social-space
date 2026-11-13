@@ -38,3 +38,8 @@
 .dev-guide .copy-row button { flex-shrink: 0; }
 .dev-guide-keys { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--accent-line); border-radius: var(--radius-sm); background: var(--splash-soft, transparent); }
 .dev-guide-keys label { display: block; font-size: 12.5px; margin-bottom: 4px; }
+.dev-guide-intro { overflow-wrap: anywhere; }
+.dev-guide-login { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-1, transparent); }
+.dev-guide-login strong { font-size: 12.5px; overflow-wrap: anywhere; }
+.dev-guide-login small { color: var(--text-3); line-height: 1.4; }
+.dev-guide-login button { justify-self: start; }

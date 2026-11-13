@@ -30,8 +30,9 @@ const YOUTUBE_SCOPES: &str = "https://www.googleapis.com/auth/youtube.upload htt
 const TIKTOK_AUTH_URL: &str = "https://www.tiktok.com/v2/auth/authorize/";
 const TIKTOK_TOKEN_URL: &str = "https://open.tiktokapis.com/v2/oauth/token/";
 const TIKTOK_USER_URL: &str = "https://open.tiktokapis.com/v2/user/info/";
-/// Must be added as a redirect URI in the TikTok app. It is caught in the window, not served.
-pub const TIKTOK_REDIRECT_URI: &str = "https://localhost/socialspace/tiktok";
+/// Must be added as a Desktop redirect URI in the TikTok app (Desktop only accepts http://localhost:<port>/...).
+/// It is caught in the window, not served.
+pub const TIKTOK_REDIRECT_URI: &str = "http://localhost:49175/socialspace/tiktok/";
 const TIKTOK_SCOPES: &str = "user.info.basic,user.info.profile,video.upload";
 
 static BUSY: Mutex<bool> = Mutex::new(false);
@@ -234,9 +235,12 @@ async fn connect(app: AppHandle, social: Social, profile: String, hint: Option<S
             let _ = sender.send(Err("The window was closed before access was allowed.".into()));
         }
     });
-    // TikTok's sign-in is filled with the profile's saved username and password; the user presses the buttons.
-    if let (Social::Tiktok, Some(name)) = (social, username.as_deref().map(|v| v.trim().trim_start_matches('@')).filter(|v| !v.is_empty())) {
-        if let Ok(fields) = serde_json::from_value(serde_json::json!({ "username": name })) {
+    // The sign-in is filled with the profile's username (TikTok) or email (Google) and its saved password;
+    // the user presses the buttons.
+    let name = username.as_deref().map(|v| v.trim().trim_start_matches('@')).filter(|v| !v.is_empty());
+    let email = hint.as_deref().map(str::trim).filter(|v| v.contains('@'));
+    if name.is_some() || email.is_some() {
+        if let Ok(fields) = serde_json::from_value(serde_json::json!({ "username": name, "email": email })) {
             let has_password = crate::account_passwords::read(&profile).ok().flatten().is_some();
             let _ = crate::autofill::fill_site_form(app.clone(), label.clone(), fields, None, Some(profile.clone()), Some(has_password), Some(true), None);
         }
@@ -379,7 +383,7 @@ mod tests {
         let parse = |value: &str| url::Url::parse(value).unwrap();
         assert_eq!(redirect_result(Social::Youtube, &parse("http://127.0.0.1:49174/socialspace/youtube?state=st&code=4/abc"), "st"), Some(Ok("4/abc".into())));
         assert!(redirect_result(Social::Youtube, &parse("http://127.0.0.1:49174/socialspace/youtube?state=x&code=4/abc"), "st").unwrap().is_err());
-        assert!(redirect_result(Social::Tiktok, &parse("https://localhost/socialspace/tiktok?state=st&error=access_denied"), "st").unwrap().is_err());
+        assert!(redirect_result(Social::Tiktok, &parse("http://localhost:49175/socialspace/tiktok/?state=st&error=access_denied"), "st").unwrap().is_err());
         assert_eq!(redirect_result(Social::Tiktok, &parse("https://www.tiktok.com/login"), "st"), None);
         assert_eq!(redirect_result(Social::Youtube, &parse("http://127.0.0.1:9999/socialspace/youtube?state=st&code=1"), "st"), None);
     }

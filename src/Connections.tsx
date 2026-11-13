@@ -8,7 +8,7 @@ import { saveDeveloperApp } from './devAppsService';
 import { canConnect, connectProfile, disconnectProfile, PROVIDER_OF, useProfileConnections } from './profileConnections';
 import InstagramIdPrompt from './InstagramIdPrompt';
 import { INSTAGRAM_ID_NEEDED } from './instagramService';
-import { getPlatform, normalizeHandle, type Account, type Brand, type Platform, type View } from './model';
+import { getPlatform, normalizeHandle, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
 import { BrandMark, errorText } from './ui';
 import SetupTracker from './SetupTracker';
 import { useSetupStatus } from './setupService';
@@ -44,7 +44,9 @@ type Setup = { provider: Provider; retry?: Account } | null;
  * and opens the social's one-time app setup (then retries) when it is missing. `panels` holds the forms
  * and notices this needs; render it once above the profiles.
  */
-export function useConnectFlow(accounts: Account[], brands: Brand[]) {
+/** developer: the developer accounts the app tracks (one per social, main email) and how to record one. */
+export type DeveloperAccounts = { logins?: Record<string, DeveloperLogin>; onLogin?: (provider: string, email: string) => void };
+export function useConnectFlow(accounts: Account[], brands: Brand[], developer: DeveloperAccounts = {}) {
   const profiles = useProfileConnections(accounts);
   const [working, setWorking] = useState(false);
   const [note, setNote] = useState('');
@@ -93,7 +95,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[]) {
     {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
     {needsId && <InstagramIdPrompt profile={needsId.id} handle={normalizeHandle(needsId.handle)} onCancel={() => setNeedsId(null)}
       onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); recheck(); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
-    {setup && <DevAppSetupGuide key={setup.provider} provider={setup.provider} working={working} onSave={(id, secret, configId) => saveApp(setup.provider, id, secret, configId)} onCancel={() => setSetup(null)}/>}
+    {setup && <DevAppSetupGuide key={setup.provider} provider={setup.provider} login={developer.logins?.[setup.provider]} onTrack={developer.onLogin} working={working} onSave={(id, secret, configId) => saveApp(setup.provider, id, secret, configId)} onCancel={() => setSetup(null)}/>}
   </>;
   return { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp: (provider: Provider) => setSetup({ provider }), recheck, panels, brandName };
 }
@@ -104,9 +106,9 @@ export function useConnectFlow(accounts: Account[], brands: Brand[]) {
  * marks/onMark: the setup checklist's hand-ticked steps, saved in the workspace.
  * onEditAccount: opens a profile to add its username and password.
  */
-export default function Connections({ onNavigate, accounts = [], brands = [], marks = {}, onMark, onEditAccount }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; marks?: Record<string, number>; onMark?: (id: string, done: boolean) => void; onEditAccount?: (account: Account) => void }) {
+export default function Connections({ onNavigate, accounts = [], brands = [], marks = {}, onMark, onEditAccount, developerLogins, onDeveloperLogin }: { onNavigate: (view: View, section?: string) => void; accounts?: Account[]; brands?: Brand[]; marks?: Record<string, number>; onMark?: (id: string, done: boolean) => void; onEditAccount?: (account: Account) => void; developerLogins?: Record<string, DeveloperLogin>; onDeveloperLogin?: (provider: string, email: string) => void }) {
   const { state, loading, refresh } = useConnectionState();
-  const flow = useConnectFlow(accounts, brands);
+  const flow = useConnectFlow(accounts, brands, { logins: developerLogins, onLogin: onDeveloperLogin });
   const { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp, recheck, brandName } = flow;
   const apps = status.apps ?? {};
   const live = accounts.filter((account) => account.status === 'active').sort((a, b) => brandName(a).localeCompare(brandName(b)));

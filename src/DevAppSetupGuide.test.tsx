@@ -2,14 +2,16 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import DevAppSetupGuide from './DevAppSetupGuide';
+import DevAppSetupGuide, { guideFields } from './DevAppSetupGuide';
+import { ensureAccountPassword, fillSiteForm } from './profileService';
 import { GUIDES, lineParts, readPastedKeys } from './devAppGuides';
 import { embedSetupPage } from './setupService';
 
 vi.mock('./setupService', () => ({ embedSetupPage: vi.fn() }));
-vi.mock('./profileService', () => ({ closeEmbeddedPage: vi.fn(async () => undefined), setEmbeddedBounds: vi.fn(async () => undefined) }));
+vi.mock('./InboxList', () => ({ default: () => null }));
+vi.mock('./profileService', () => ({ closeEmbeddedPage: vi.fn(async () => undefined), setEmbeddedBounds: vi.fn(async () => undefined), fillSiteForm: vi.fn(async () => undefined), ensureAccountPassword: vi.fn(async () => undefined), revealAccountPassword: vi.fn(async () => 'Gen3rated!pw') }));
 vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram' }));
-vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'https://localhost/socialspace/tiktok' }));
+vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'http://localhost:49175/socialspace/tiktok/' }));
 beforeEach(() => { vi.mocked(embedSetupPage).mockReset().mockResolvedValue('site-embed-1'); });
 afterEach(cleanup);
 
@@ -29,9 +31,9 @@ describe('guided developer-app setup', () => {
     const user = userEvent.setup();
     render(<DevAppSetupGuide provider="tiktok" working={false} onSave={vi.fn()} onCancel={vi.fn()}/>);
     await user.click(screen.getByRole('button', { name: /Add the redirect address/ }));
-    expect(screen.getByText('https://localhost/socialspace/tiktok')).toBeInTheDocument();
+    expect(screen.getByText('http://localhost:49175/socialspace/tiktok/')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Copy' }));
-    expect(await navigator.clipboard.readText()).toBe('https://localhost/socialspace/tiktok');
+    expect(await navigator.clipboard.readText()).toBe('http://localhost:49175/socialspace/tiktok/');
     expect(screen.getByRole('button', { name: /Copied/ })).toBeInTheDocument();
   });
 
@@ -67,6 +69,33 @@ describe('guided developer-app setup', () => {
     render(<DevAppSetupGuide provider="x" working={false} onSave={vi.fn()} onCancel={onCancel}/>);
     await user.keyboard('{Escape}');
     expect(onCancel).toHaveBeenCalled();
+  });
+});
+
+describe('filling the developer site', () => {
+  it('signs in and signs up with the main-email developer account and its own saved password', async () => {
+    const onTrack = vi.fn();
+    render(<DevAppSetupGuide provider="tiktok" onTrack={onTrack} working={false} onSave={vi.fn()} onCancel={vi.fn()}/>);
+    await waitFor(() => expect(fillSiteForm).toHaveBeenCalledWith('site-embed-1', expect.objectContaining({
+      email: 'softwings25@gmail.com', appName: 'SocialSpace', redirectUri: 'http://localhost:49175/socialspace/tiktok/', website: 'https://socialspace-review.web.app',
+    }), { accountId: 'developer-tiktok', includePassword: 'ifSaved', keepFilling: true }));
+    expect(onTrack).toHaveBeenCalledWith('tiktok', 'softwings25@gmail.com');
+    expect(ensureAccountPassword).toHaveBeenCalledWith('developer-tiktok');
+    expect(within(screen.getByLabelText('Developer account')).getByText('softwings25@gmail.com')).toBeInTheDocument();
+  });
+
+  it('uses the tracked developer email and copies its password', async () => {
+    const onTrack = vi.fn();
+    const user = userEvent.setup();
+    render(<DevAppSetupGuide provider="x" login={{ email: 'main@example.com' }} onTrack={onTrack} working={false} onSave={vi.fn()} onCancel={vi.fn()}/>);
+    await waitFor(() => expect(fillSiteForm).toHaveBeenCalledWith('site-embed-1', expect.objectContaining({ email: 'main@example.com' }), expect.objectContaining({ accountId: 'developer-x' })));
+    expect(onTrack).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /Copy password/ }));
+    expect(await navigator.clipboard.readText()).toBe('Gen3rated!pw');
+  });
+
+  it('still fills the app details when no profile exists yet', () => {
+    expect(guideFields({ appName: 'SocialSpace' })).toEqual({ appName: 'SocialSpace' });
   });
 });
 

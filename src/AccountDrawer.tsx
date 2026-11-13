@@ -39,13 +39,20 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
     try { await action(); } catch (reason) { setError(errorText(reason)); } finally { setWorking(false); }
   }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
-  const openManage = () => run(async () => { if (account) { await openPlatformWindow(account.platform, 'manage'); setNote(`Opened ${getPlatform(account.platform).name}.`); } });
+  // Settings pages often ask to sign in first, so the profile's email, username and saved password are filled.
+  const openManage = () => run(async () => {
+    if (!account) return;
+    const id = await openPlatformWindow(account.platform, 'manage');
+    const sign = { email: account.signupEmail, username: normalizeHandle(account.handle) };
+    await fillSiteForm(id, Object.fromEntries(Object.entries(sign).filter(([, value]) => value)), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
+    setNote(`Opened ${getPlatform(account.platform).name}.`);
+  });
   const fillProfile = () => run(async () => {
     if (!account) return;
     const current = { ...account, handle: normalizeHandle(handle), displayName, bio, website, imagePath };
     const id = await openPlatformWindow(account.platform, 'manage');
     // A live account already shows its old details, so those are replaced (once each) instead of skipped.
-    await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, keepFilling: true, replace: account.status === 'active' });
+    await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, includePassword: 'ifSaved', keepFilling: true, replace: account.status === 'active' });
     setNote(`Opened ${getPlatform(account.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
   });
   // Instagram edits name and username in Accounts Center, not on the profile page.
@@ -54,7 +61,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
     const name = displayName.trim() || label.trim();
     const fields = { username: normalizeHandle(handle), fullName: name };
     const id = await openPlatformWindow(account.platform, 'identity');
-    await fillSiteForm(id, Object.fromEntries(Object.entries(fields).filter(([, value]) => value)), { keepFilling: true, replace: true });
+    await fillSiteForm(id, Object.fromEntries(Object.entries(fields).filter(([, value]) => value)), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true, replace: true });
     setNote('Opened Instagram Accounts Center. Choose your profile, then Name or Username: the new value is filled in for you to check and save.');
   });
   function submit(event: FormEvent) {

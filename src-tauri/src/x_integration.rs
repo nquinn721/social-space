@@ -237,7 +237,7 @@ async fn token_request(form: &[(&str, &str)]) -> Result<TokenResponse, String> {
 }
 
 #[tauri::command]
-pub async fn connect_x(app: tauri::AppHandle, client_id: Option<String>, profile: Option<String>) -> Result<XConnection, String> {
+pub async fn connect_x(app: tauri::AppHandle, client_id: Option<String>, profile: Option<String>, username: Option<String>) -> Result<XConnection, String> {
     let _guard = OperationGuard::acquire()?;
     let slot = slot(profile.as_deref())?;
     // The X developer app is set up once; Connect only needs the Client ID typed when it isn't.
@@ -252,7 +252,14 @@ pub async fn connect_x(app: tauri::AppHandle, client_id: Option<String>, profile
     let state = random_string()?;
     let verifier = random_string()?;
     let url = authorize_url(client_id, &state, &verifier)?;
-    crate::browser::open_remote(&app, &url, true)?;
+    let label = crate::browser::open_remote_window(&app, &url, true)?;
+    // X's sign-in is filled with the profile's username and saved password; the user presses the buttons.
+    if let (Some(id), Some(name)) = (profile.as_deref(), username.as_deref().map(|v| v.trim().trim_start_matches('@')).filter(|v| !v.is_empty())) {
+        if let Ok(fields) = serde_json::from_value(serde_json::json!({ "username": name })) {
+            let has_password = crate::account_passwords::read(id).ok().flatten().is_some();
+            let _ = crate::autofill::fill_site_form(app.clone(), label, fields, None, Some(id.to_string()), Some(has_password), Some(true), None);
+        }
+    }
     let code = tauri::async_runtime::spawn_blocking(move || wait_for_callback(listener, state))
         .await
         .map_err(|_| "X sign-in could not finish.")??;

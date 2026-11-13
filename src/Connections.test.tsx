@@ -13,7 +13,7 @@ vi.mock('./emailService', () => ({ emailConnection: vi.fn(async () => ({ host: '
 vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn(), finishInstagramConnection: vi.fn(), INSTAGRAM_ID_NEEDED: 'INSTAGRAM_ID_NEEDED' }));
 vi.mock('./xService', () => ({ claimXConnection: vi.fn(), connectX: vi.fn(), disconnectX: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({ active: null, sources: [] })) }));
-vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'https://localhost/socialspace/tiktok', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
+vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'http://localhost:49175/socialspace/tiktok/', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
 vi.mock('./devAppsService', () => ({ listDeveloperApps: vi.fn(), saveDeveloperApp: vi.fn() }));
 vi.mock('./service', () => ({ openPlatformAction: vi.fn() }));
 
@@ -104,7 +104,7 @@ describe('connections', () => {
     await user.type(within(form).getByLabelText('OAuth 2.0 Client ID'), 'abc-123');
     await user.click(within(form).getByRole('button', { name: 'Save and connect' }));
     expect(apps.saveDeveloperApp).toHaveBeenCalledWith('x', 'abc-123', '');
-    expect(x.connectX).toHaveBeenLastCalledWith('', 'x-mia');
+    expect(x.connectX).toHaveBeenLastCalledWith('', 'x-mia', 'mia_x');
     expect(await screen.findByText('X connected as @mia_x for Massage With Mia.')).toBeInTheDocument();
   });
   it('asks for the TikTok app once, then connects that TikTok profile with its saved sign-in', async () => {
@@ -123,3 +123,4 @@ describe('connections', () => {
     expect(await screen.findByText('TikTok connected as @mia for Massage With Mia.')).toBeInTheDocument();
   });
 });
+
