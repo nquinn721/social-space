@@ -33,7 +33,11 @@ export type PostDetails = { hashtags: string[]; youtubeTitle: string; coverMs?: 
 /** links: the live post on each social the app published it to. */
 export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration; details?: PostDetails; prompt?: string; links?: Partial<Record<Platform, string>> };
 /** setup: steps of the setup checklist ticked by hand, by step id, with when (ms). */
-export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[]; setup?: Record<string, number> };
+/** A developer-site sign-in tracked by the app (one per social, on the main email). Its password is saved under developerPasswordId(provider). */
+export type DeveloperLogin = { email: string };
+export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[]; setup?: Record<string, number>; developerLogins?: Record<string, DeveloperLogin> };
+/** Where a developer site's generated password is kept, next to the account passwords. */
+export function developerPasswordId(provider: string) { return `developer-${provider}`; }
 export const EMPTY_WORKSPACE: Workspace = { businessName: '', brands: [], accounts: [], channels: [] };
 export const PLATFORMS: { id: Platform; name: string; description: string; color: string; mark: string; postLabel: string }[] = [
   { id: 'instagram', name: 'Instagram', description: 'Photos, reels & stories', color: '#fa5a8d', mark: '◎', postLabel: 'Open Instagram' },

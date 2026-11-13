@@ -78,6 +78,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     if (done) next[id] = Date.now(); else delete next[id];
     void onSave({ ...workspace, setup: next }, done ? 'Marked done.' : 'Marked not done.');
   } : undefined;
+  const developerLogins = workspace.developerLogins ?? {};
+  const trackLogin = onSave ? (provider: string, email: string) => {
+    if (developerLogins[provider]?.email === email) return;
+    void onSave({ ...workspace, developerLogins: { ...developerLogins, [provider]: { email } } }, 'Developer account saved.');
+  } : undefined;
 
   const [adding, setAdding] = useState(false);
   /** The new profile shares the brand's password, so every social signs in the same way. */
@@ -136,7 +141,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       </div>
       {brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')}/> : null) : <>
-      <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount}
+      <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
         onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
         addHint={(platform) => planPresence(all, platform, brand.name, baseEmail).reason} warnings={(account) => issues.filter((issue) => issue.accountId === account.id).map((issue) => issue.text)}/>
@@ -148,7 +153,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   return <>
     <PageHeader eyebrow="Your brands" title="Brands" description="A brand is one account on every social. Open a brand to see its posts by category, and its accounts." actions={actions}/>
     {tabs}
-    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all} brands={groups.map((group) => group.brand)} marks={marks} onMark={mark} onEditAccount={onEditAccount}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
+    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all} brands={groups.map((group) => group.brand)} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
       <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>

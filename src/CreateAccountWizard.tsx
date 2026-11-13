@@ -108,7 +108,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         setWindowId(id);
         await fillSiteForm(id, formFieldsFor(page.account), page.action === 'create'
           ? { accountId: page.account.id, includePassword: true, keepFilling: true }
-          : { imagePath: page.imagePath, accountId: page.account.id, keepFilling: true });
+          : { imagePath: page.imagePath, accountId: page.account.id, includePassword: 'ifSaved', keepFilling: true });
       } catch (reason) { if (!cancelled) setError(errorText(reason)); }
     })();
     return () => { cancelled = true; };
@@ -167,7 +167,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   // A new code shows bottom right even if the page is busy, so it can always be copied.
   const refill = (code?: string) => { if (code) setCode({ value: code, copied: false }); return run(async () => {
     if (!account || !windowId) return;
-    await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: !code, keepFilling: true });
+    await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: code ? 'ifSaved' : true, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
   }); };
   const copyCode = async () => {

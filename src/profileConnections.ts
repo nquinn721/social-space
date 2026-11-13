@@ -30,7 +30,7 @@ export async function profileConnection(account: Account): Promise<string | null
  */
 export async function connectProfile(account: Account): Promise<string> {
   if (account.platform === 'instagram') return (await connectInstagramApp(account.id, normalizeHandle(account.handle), account.platformId)).username;
-  if (account.platform === 'x') return (await connectX('', account.id)).username;
+  if (account.platform === 'x') return (await connectX('', account.id, account.handle)).username;
   if (account.platform === 'youtube') { const channel = await connectYoutube(account.id, account.signupEmail); return channel.username || channel.name; }
   const tiktok = await connectTiktok(account.id, normalizeHandle(account.handle));
   return tiktok.username || tiktok.name;

@@ -1,7 +1,7 @@
 import { Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
-import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type Platform, type View } from './model';
+import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
 import { canConnect } from './profileConnections';
 import { setupNeeds, type Need } from './setupNeeds';
 import { openSetupPage } from './setupService';
@@ -19,6 +19,9 @@ type Props = {
   marks: Record<string, number>;
   onMark?: (id: string, done: boolean) => void;
   onEditAccount: (account: Account) => void;
+  /** The developer accounts the app tracks (main email), and how to record one. */
+  developerLogins?: Record<string, DeveloperLogin>;
+  onDeveloperLogin?: (provider: string, email: string) => void;
   /** Opens the social's sign-up page with this profile's details filled in. */
   onSignUp?: (account: Account) => void;
   onAlreadyCreated?: (account: Account) => void;
@@ -45,8 +48,8 @@ function CopyValue({ value, label }: { value: string; label: string }) {
  * A brand's profiles, one card each: whether it's live and connected, its sign-in, and the steps it
  * still needs, each with a single button. Socials the brand isn't on yet are one click to add.
  */
-export default function BrandAccounts({ brand, accounts, loaded, busy, marks, onMark, onEditAccount, onSignUp, onAlreadyCreated, onRemoveAccount, onAddSocial, onNavigate, addHint, warnings }: Props) {
-  const flow = useConnectFlow(accounts, [brand]);
+export default function BrandAccounts({ brand, accounts, loaded, busy, marks, onMark, onEditAccount, developerLogins, onDeveloperLogin, onSignUp, onAlreadyCreated, onRemoveAccount, onAddSocial, onNavigate, addHint, warnings }: Props) {
+  const flow = useConnectFlow(accounts, [brand], { logins: developerLogins, onLogin: onDeveloperLogin });
   const { status, working, connect, disconnect } = flow;
   const [pageNote, setPageNote] = useState('');
   const groups = setupNeeds({ accounts, brands: [brand], apps: status.apps, connections: status.connections, passwords: status.passwords, marks });
