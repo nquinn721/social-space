@@ -1,0 +1,30 @@
+/* Brand picture: one Gemini picture for every profile of a brand, plus a YouTube banner. */
+.brand-picture { margin-bottom: 16px; display: flex; flex-direction: column; gap: 14px; }
+.brand-picture-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.brand-picture-text { flex: 1; min-width: 220px; }
+.brand-picture-text h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+.brand-picture-text p { margin: 0 0 8px; font-size: 13px; color: var(--text-3); }
+.picture-round { flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text-3); font-weight: 600; }
+.picture-round img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.banner-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.banner-frame { position: relative; width: 256px; max-width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-2); border: 1px dashed var(--border-strong); display: grid; place-items: center; font-size: 12px; color: var(--text-3); text-align: center; }
+.banner-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* YouTube's safe area: 1235 x 338 of 2048 x 1152. */
+.banner-frame .safe-area { position: absolute; left: 19.85%; right: 19.85%; top: 35.33%; bottom: 35.33%; border: 1.5px dashed rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); border-radius: 2px; pointer-events: none; }
+.banner-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; }
+.banner-text small { color: var(--text-3); font-size: 12px; }
+.picture-socials { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.picture-social { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.picture-social-text { flex: 1; min-width: 120px; display: flex; flex-direction: column; }
+.picture-social-text small { color: var(--text-3); font-size: 12px; }
+.picture-social-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.gemini-studio .takes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.gemini-studio.wide .takes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gemini-studio .takes button { padding: 0; border-radius: var(--radius-sm); overflow: hidden; border: 2px solid transparent; aspect-ratio: 1; background: var(--surface-2); }
+.gemini-studio.wide .takes button { aspect-ratio: 16 / 9; }
+.gemini-studio .takes button.selected { border-color: var(--pink); }
+.gemini-studio .takes img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gemini-studio:not(.wide) .takes img { border-radius: 50%; }
+.take-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.take-actions .idea-row { flex: 1; min-width: 220px; }
+@media (max-width: 560px) { .gemini-studio .takes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

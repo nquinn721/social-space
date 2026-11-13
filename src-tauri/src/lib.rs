@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 mod account_passwords;
 mod backup;
+mod brand_images;
+mod gemini_ai;
 mod autofill;
 mod browser;
 mod email;
@@ -145,6 +147,20 @@ struct Brand {
     name: String,
     #[serde(default)]
     notes: String,
+    /// The brand's picture (and YouTube banner) used on every profile; see brand_images.rs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    image: Option<BrandImage>,
+}
+
+/// Names of pictures in the brand pictures folder (`<sha256>.jpg`), not paths, so they sync.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct BrandImage {
+    file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    banner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -166,6 +182,9 @@ struct Account {
     signup_email: String,
     #[serde(default)]
     image_path: String,
+    /// This social's own picture instead of the brand's (a brand pictures folder name).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    image_file: Option<String>,
     #[serde(default)]
     birthday: String,
     /// Older workspaces have none; the app assigns one by name when it loads them.
@@ -451,6 +470,13 @@ pub fn run() {
             grok_ai::grok_models,
             grok_ai::grok_chat,
             grok_ai::generate_profile_image,
+            gemini_ai::gemini_key_status,
+            gemini_ai::save_gemini_key,
+            gemini_ai::remove_gemini_key,
+            gemini_ai::generate_gemini_images,
+            brand_images::save_brand_image,
+            brand_images::brand_image_path,
+            brand_images::reveal_brand_image,
             email::email_connection,
             email::connect_email,
             email::disconnect_email,
@@ -541,6 +567,7 @@ mod tests {
             website: String::new(),
             signup_email: String::new(),
             image_path: String::new(),
+            image_file: None,
             birthday: String::new(),
             brand_id: None,
             platform_id: None,
@@ -574,6 +601,17 @@ mod tests {
     }
 
     #[test]
+    fn brand_pictures_and_per_social_overrides_survive_a_save() {
+        let source = r#"{"businessName":"","brands":[{"id":"b","name":"Mia","notes":"","image":{"file":"a.jpg","banner":"b.jpg","prompt":"a fox"}},{"id":"c","name":"Old","notes":""}],"accounts":[{"id":"x","platform":"x","label":"Mia","handle":"mia","status":"planned","notes":"","imageFile":"c.jpg"}]}"#;
+        let workspace: Workspace = serde_json::from_str(source).unwrap();
+        let saved = serde_json::to_value(&workspace).unwrap();
+        assert_eq!(saved["brands"][0]["image"]["banner"], "b.jpg");
+        assert_eq!(saved["brands"][0]["image"]["prompt"], "a fox");
+        assert!(saved["brands"][1].get("image").is_none());
+        assert_eq!(saved["accounts"][0]["imageFile"], "c.jpg");
+    }
+
+    #[test]
     fn old_workspaces_load_and_channels_require_a_matching_account() {
         let mut workspace: Workspace = serde_json::from_str(r#"{"businessName":"Old LLC","accounts":[]}"#).unwrap();
         assert!(workspace.channels.is_empty());
@@ -589,7 +627,7 @@ mod tests {
 
     #[test]
     fn accounts_must_belong_to_a_saved_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new() }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
         workspace.accounts[0].brand_id = Some("b".into());
         let json = serde_json::to_string(&workspace).unwrap();
         assert!(json.contains(r#""brandId":"b""#));
@@ -601,7 +639,7 @@ mod tests {
 
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
         workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default() });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -615,7 +653,7 @@ mod tests {
 
     #[test]
     fn videos_can_carry_an_ai_generation_in_progress() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
         let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
         workspace.videos.push(serde_json::from_value(json).unwrap());
         assert!(validate_workspace(&workspace).is_ok());

@@ -5,7 +5,7 @@ export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'updates', 'setti
 /** identity: where name and username are edited (Instagram's Accounts Center). */
 export type PlatformAction = 'create' | 'manage' | 'post' | 'developer' | 'identity';
 /** platformId: the account's own ID on the social (e.g. the Instagram account ID), when known. */
-export type AccountProfile = { platformId?: string; displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string };
+export type AccountProfile = { platformId?: string; displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string; /** This social's own picture instead of the brand's (a brand pictures file name, so it syncs). */ imageFile?: string };
 /**
  * One profile of a brand on one social. status says whether it really exists there:
  * 'planned' is only saved in Social Space and still has to be created, 'active' is live on the social.
@@ -13,7 +13,9 @@ export type AccountProfile = { platformId?: string; displayName?: string; bio?: 
  */
 export type Account = { id: string; platform: Platform; label: string; handle: string; status: 'planned' | 'active'; notes: string; brandId?: string } & AccountProfile;
 /** A brand or category, e.g. "Massage With Mia", that owns one profile per social. */
-export type Brand = { id: string; name: string; notes: string };
+/** Names of files in the app's brand pictures folder (`<sha256>.jpg`), not paths, so they sync. */
+export type BrandImage = { file: string; banner?: string; prompt?: string };
+export type Brand = { id: string; name: string; notes: string; /** Used on every profile of the brand unless a profile has its own. */ image?: BrandImage };
 /** Profile description limits on each platform, used to keep drafts postable. */
 export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160 };
 /** What a category's new posts start with: a short description and its usual hashtags. */

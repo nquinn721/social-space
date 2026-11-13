@@ -652,6 +652,8 @@ fn build_update(paths: &UpdatePaths, source: &Path, expected_commit: &str) -> Re
 /// cannot delete it while it runs.
 const STAGED_INSTALLER: &str = "socialspace-update-setup.exe";
 const INSTALL_LOG: &str = "socialspace-install.log";
+/// How many times the helper runs the installer when it aborts (it exits 2 while files are in use).
+const INSTALL_ATTEMPTS: u32 = 3;
 /// The uninstall entry the installer writes, named after `productName` in tauri.conf.json.
 /// Renaming the app from Social Manager moved its install folder, so the restart reads the
 /// install location from here instead of reusing the old exe path, which the installer removes.
@@ -670,15 +672,35 @@ fn install_script(pid: u32, installer: &Path, app_exe: &Path, log: &Path, restar
 function Log($m) {{ Add-Content -Path $log -Value ("{{0:o}} {{1}}" -f (Get-Date), $m) }}
 Log 'Waiting for SocialSpace to close'
 $p = Get-Process -Id {pid} -ErrorAction SilentlyContinue
-if ($p -and -not $p.WaitForExit(60000)) {{ Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 }}
-Get-Process -Name '{exe_name}' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Log 'Running the installer'
-$i = Start-Process -FilePath '{installer}' -ArgumentList '/S' -PassThru -Wait
-Log ("Installer exited with " + $i.ExitCode)
-for ($n = 0; $n -lt 180 -and (Get-Process -Name '{installer_name}' -ErrorAction SilentlyContinue); $n++) {{ Start-Sleep -Seconds 1 }}
+if ($p -and -not $p.WaitForExit(60000)) {{ Stop-Process -Id {pid} -Force -ErrorAction SilentlyContinue }}
+$appDir = '{app_dir}'
+# Every copy of the app and anything else running from its folder holds files the installer
+# replaces; the silent installer aborts (exit 2) while any of them is still alive.
+function Holders {{ @(Get-Process -ErrorAction SilentlyContinue | Where-Object {{ $_.Name -eq '{exe_name}' -or ($appDir -and $_.Path -and $_.Path.StartsWith($appDir, [StringComparison]::OrdinalIgnoreCase)) }}) }}
+function Clear-Holders {{
+  for ($n = 0; $n -lt 30; $n++) {{
+    $h = Holders
+    if ($h.Count -eq 0) {{ return }}
+    $h | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 500
+  }}
+  Log ("Still running after 15 seconds: " + ((Holders | ForEach-Object {{ $_.Name + ' ' + $_.Id }}) -join ', '))
+}}
+for ($attempt = 1; $attempt -le {attempts}; $attempt++) {{
+  Clear-Holders
+  Start-Sleep -Seconds 1
+  Log ("Running the installer (attempt " + $attempt + ")")
+  $i = Start-Process -FilePath '{installer}' -ArgumentList '/S' -PassThru -Wait
+  Log ("Installer exited with " + $i.ExitCode)
+  for ($n = 0; $n -lt 180 -and (Get-Process -Name '{installer_name}' -ErrorAction SilentlyContinue); $n++) {{ Start-Sleep -Seconds 1 }}
+  if ($i.ExitCode -eq 0) {{ break }}
+  Start-Sleep -Seconds 3
+}}
 "#,
         log = quote(log),
         installer = quote(installer),
+        app_dir = app_exe.parent().map(quote).unwrap_or_default(),
+        attempts = INSTALL_ATTEMPTS,
     );
     if !restart {
         return install + "Log 'Installed; not restarting (headless update)'\n";
@@ -1402,7 +1424,32 @@ mod tests {
         assert!(script.contains(r"Uninstall\Social Space' -Name InstallLocation"), "prefers the renamed install folder");
         assert!(script.contains(r#"Join-Path $dir.Trim('"') 'social-manager.exe'"#));
         assert!(script.contains("Get-Process -Id 42"));
-        assert!(script.contains("Get-Process -Name 'social-manager'"), "other open windows are closed first");
+        assert!(script.contains("$_.Name -eq 'social-manager'"), "other open windows are closed first");
+        assert!(script.contains(r"$appDir = 'C:\Apps\Social Manager'"), "anything running from the install folder is closed too");
+        let clear = script.find("Clear-Holders\n  Start-Sleep").unwrap();
+        assert!(clear < install, "the app is fully closed before each installer run");
+    }
+
+    #[test]
+    fn an_aborted_install_is_retried() {
+        let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Space\social-manager.exe"), Path::new(r"C:\Temp\install.log"), true);
+        assert!(script.contains(&format!("$attempt -le {INSTALL_ATTEMPTS}")));
+        assert!(script.contains("if ($i.ExitCode -eq 0) { break }"));
+        assert!(INSTALL_ATTEMPTS >= 2);
+    }
+
+    #[test]
+    fn helper_script_parses_in_powershell() {
+        #[cfg(windows)]
+        {
+            let script = install_script(42, Path::new(r"C:\Temp\socialspace-update-setup.exe"), Path::new(r"C:\Apps\Social Space\social-manager.exe"), Path::new(r"C:\Temp\install.log"), true);
+            let path = std::env::temp_dir().join("socialspace-install-parse-test.ps1");
+            fs::write(&path, &script).unwrap();
+            let check = format!("$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile('{}', [ref]$null, [ref]$e); if ($e.Count) {{ $e | ForEach-Object {{ $_.Message }}; exit 1 }}", path.display());
+            let out = Command::new("powershell.exe").args(["-NoProfile", "-NonInteractive", "-Command", &check]).output().unwrap();
+            let _ = fs::remove_file(&path);
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stdout));
+        }
     }
 
     #[test]
