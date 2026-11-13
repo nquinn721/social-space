@@ -437,6 +437,25 @@ const FILL_SCRIPT: &str = r#"function (data) {
   }
 }"#;
 
+/// The sign-in fill for a posting window: the profile's login (and email) and its saved password.
+/// Returns None when there is nothing to fill.
+pub(crate) fn sign_in_script(login: &str, email: &str, password: Option<String>) -> Result<Option<String>, String> {
+    let login = login.trim();
+    let email = email.trim();
+    let mut fields = FormFields::default();
+    if !email.is_empty() {
+        fields.email = Some(email.to_owned());
+    }
+    if !login.is_empty() && login != email {
+        fields.username = Some(login.to_owned());
+    }
+    if fields.email.is_none() && fields.username.is_none() && password.is_none() {
+        return Ok(None);
+    }
+    validate(&fields)?;
+    fill_script(&FillPayload { fields: &fields, image: None, password, watch: true, replace: false }).map(Some)
+}
+
 #[tauri::command]
 pub fn fill_site_form(
     app: AppHandle,

@@ -17,6 +17,7 @@ mod instagram;
 mod instagram_login;
 mod social_connect;
 mod kling;
+mod posting;
 mod queue;
 mod review;
 mod setup_pages;
@@ -457,6 +458,7 @@ pub fn run() {
             embedded::set_embedded_bounds,
             embedded::close_embedded_page,
             autofill::fill_site_form,
+            posting::open_posting_window,
             autofill::choose_image_file,
             autofill::load_image_preview,
             account_passwords::ensure_account_password,

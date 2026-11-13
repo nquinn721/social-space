@@ -85,6 +85,7 @@
     "allow-set-embedded-bounds",
     "allow-close-embedded-page",
     "allow-fill-site-form",
+    "allow-open-posting-window",
     "allow-choose-image-file",
     "allow-load-image-preview",
     "allow-ensure-account-password",

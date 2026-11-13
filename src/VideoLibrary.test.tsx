@@ -16,6 +16,9 @@ vi.mock('./videoFileService', async (actual) => ({
 }));
 import * as files from './videoFileService';
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: vi.fn() }));
+import { invoke } from '@tauri-apps/api/core';
+let postingHandler: ((event: { payload: unknown }) => void) | undefined;
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async (_name: string, handler: (event: { payload: unknown }) => void) => { postingHandler = handler; return () => {}; }) }));
 vi.mock('./videoSourcesService', () => ({
   DESKTOP_ONLY: 'desktop only',
   listVideoSources: vi.fn(),
@@ -51,6 +54,23 @@ function setup(workspace = base) {
 }
 
 describe('video library', () => {
+  it('posts on TikTok through its page, and asks when the window closes without posting', async () => {
+    const { onSave, user } = setup();
+    const video = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(video).getByRole('button', { name: /Post on TikTok/ }));
+    expect(invoke).toHaveBeenCalledWith('open_posting_window', expect.anything());
+    await act(async () => { postingHandler?.({ payload: { videoId: 'v1', platform: 'tiktok', state: 'closed', posted: false } }); });
+    expect(within(video).getByText(/Did "Bunny hop" go up on TikTok/)).toBeInTheDocument();
+    await user.click(within(video).getByRole('button', { name: /Yes, mark posted/ }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
+  });
+
+  it('marks it posted by itself when the page shows the post went up', async () => {
+    const { onSave } = setup();
+    await act(async () => { postingHandler?.({ payload: { videoId: 'v1', platform: 'tiktok', state: 'posted', posted: true } }); });
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
+  });
+
   it('counts videos per category and how many are on every social', () => {
     expect(categoryProgress(base.videos!, ['instagram'])).toEqual({ total: 1, everywhere: 1 });
     expect(categoryProgress(base.videos!, ['instagram', 'tiktok'])).toEqual({ total: 1, everywhere: 0 });
@@ -65,9 +85,9 @@ describe('video library', () => {
     expect(within(video).getByText('bunny.mp4 · 1 of 3 socials')).toBeInTheDocument();
     expect(within(video).getByRole('button', { name: 'Instagram' })).toHaveAttribute('aria-pressed', 'true');
     await user.click(within(video).getByRole('button', { name: /Edit post/ }));
-    await user.click(within(video).getByRole('button', { name: 'Open TikTok' }));
-    expect(onOpen).toHaveBeenCalledWith('tiktok', 'post');
-    await user.click(within(video).getByRole('button', { name: 'Cancel' }));
+    await user.click(within(video).getByRole('button', { name: /Post on TikTok/ }));
+    expect(invoke).toHaveBeenCalledWith('open_posting_window', { request: expect.objectContaining({ platform: 'tiktok', brandId: 'mia', videoId: 'v1', accountId: '2', handle: 'mia', videoPath: 'C:\\clips\\bunny.mp4' }) });
+    expect(onOpen).not.toHaveBeenCalled();
     await user.click(within(video).getByRole('button', { name: 'TikTok' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
   });

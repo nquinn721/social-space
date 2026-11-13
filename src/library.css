@@ -108,3 +108,6 @@
 .reviewer-list { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
 .reviewer-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
 #partner-review h3 { margin: 18px 0 8px; font-size: 14px; }
+/* Asked after a social's upload window closes without showing the post went up. */
+.post-ask { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 10px; font-size: 13px; }
+.post-ask span { flex: 1; min-width: 160px; }

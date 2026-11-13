@@ -78,6 +78,7 @@ fn main() {
         "set_embedded_bounds",
         "close_embedded_page",
         "fill_site_form",
+        "open_posting_window",
         "choose_image_file",
         "load_image_preview",
         "ensure_account_password",
