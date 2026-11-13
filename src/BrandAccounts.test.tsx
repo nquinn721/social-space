@@ -33,7 +33,9 @@ describe('brand accounts', () => {
     const tiktok = screen.getByRole('article', { name: 'TikTok profile' });
     const user = userEvent.setup();
     await user.click(within(tiktok).getByRole('button', { name: /Open in Social Space/ }));
-    expect(openProfilePage).toHaveBeenLastCalledWith({ platform: 'tiktok', brandId: 'b1', accountId: 'tt', handle: 'softwings', email: 'softwings25@gmail.com', inBrowser: false });
+    // Saved with the main Gmail: the window opens but its sign-in is never filled with it.
+    expect(openProfilePage).toHaveBeenLastCalledWith({ platform: 'tiktok', brandId: 'b1', accountId: undefined, handle: 'softwings', email: '', inBrowser: false });
+    expect(within(tiktok).getByText(/Saved with your main Gmail/)).toBeInTheDocument();
     await user.click(within(tiktok).getByRole('button', { name: /Open in browser/ }));
     expect(openProfilePage).toHaveBeenLastCalledWith(expect.objectContaining({ inBrowser: true }));
   });

@@ -54,6 +54,23 @@ function setup(workspace = base) {
 }
 
 describe('video library', () => {
+  it('never posts through a profile saved with the main Gmail', () => {
+    const tiktok = { ...profile('2', 'tiktok'), signupEmail: 'SoftWings25@gmail.com' };
+    setup({ ...base, accounts: [profile('1', 'instagram'), tiktok] });
+    const video = screen.getByRole('listitem', { name: 'Bunny hop' });
+    expect(within(video).queryByRole('button', { name: /Post on TikTok/ })).not.toBeInTheDocument();
+    expect(within(video).getByRole('button', { name: /own TikTok login/ })).toBeInTheDocument();
+  });
+
+  it('offers to create a profile instead of posting where the brand has none yet', async () => {
+    const { user } = setup({ ...base, accounts: [profile('1', 'instagram'), profile('2', 'tiktok', 'planned')] });
+    const video = screen.getByRole('listitem', { name: 'Bunny hop' });
+    expect(within(video).queryByRole('button', { name: /Post on TikTok/ })).not.toBeInTheDocument();
+    expect(within(video).getByRole('button', { name: /Create TikTok profile/ })).toBeInTheDocument();
+    await user.click(within(video).getByRole('button', { name: /Edit post/ }));
+    expect(within(video).getByText(/has no TikTok profile of its own yet/)).toBeInTheDocument();
+  });
+
   it('posts on TikTok through its page, and asks when the window closes without posting', async () => {
     const { onSave, user } = setup();
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });

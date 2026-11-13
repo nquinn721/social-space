@@ -350,14 +350,23 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
         Some(id) => crate::account_passwords::read(id).ok().flatten(),
         None => None,
     };
-    let login = if request.platform == Platform::Youtube { request.email.as_str() } else { request.handle.as_str() };
-    let sign_in_script = crate::autofill::sign_in_script(login, &request.email, password)?;
+    let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
     let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, file });
     let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
     let window = build_window(&app, url, dir, posting, None)?;
     let label = window.label().to_owned();
     watch(app, window, request);
     Ok(label)
+}
+
+/// The sign-in fill for a brand profile's window. Only a profile the app sends (its own login, never
+/// the main Gmail) is filled; without one the sign-in page is left for Nate.
+fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, email: &str, password: Option<String>) -> Result<Option<String>, String> {
+    if account_id.as_deref().map_or(true, str::is_empty) {
+        return Ok(None);
+    }
+    let login = if platform == Platform::Youtube { email } else { handle.trim().trim_start_matches('@') };
+    crate::autofill::sign_in_script(login, email, password)
 }
 
 /// A profile's public page, where its live videos are.
@@ -412,8 +421,7 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
         Some(id) => crate::account_passwords::read(id).ok().flatten(),
         None => None,
     };
-    let login = if request.platform == Platform::Youtube { request.email.as_str() } else { request.handle.as_str() };
-    let sign_in_script = crate::autofill::sign_in_script(login, &request.email, password)?;
+    let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
     let post = PostRequest {
         platform: request.platform,
         brand_id: request.brand_id.clone(),
@@ -737,6 +745,13 @@ mod tests {
             let page: url::Url = profile_url(platform, "animals").unwrap().parse().unwrap();
             assert!(crate::browser::allowed_navigation(&page, false));
         }
+    }
+
+    #[test]
+    fn no_profile_means_no_sign_in_fill() {
+        assert!(brand_sign_in(&None, Platform::Tiktok, "animals", "a@b.c", Some("pw".into())).unwrap().is_none());
+        assert!(brand_sign_in(&Some(String::new()), Platform::X, "animals", "", None).unwrap().is_none());
+        assert!(brand_sign_in(&Some("a1".into()), Platform::Tiktok, "animals", "x+animals@example.com", None).unwrap().is_some());
     }
 
     #[test]

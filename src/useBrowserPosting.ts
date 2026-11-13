@@ -2,6 +2,22 @@ import { useEffect, useRef, useState } from 'react';
 import { getPlatform, type Platform, type Video, type Workspace } from './model';
 import { detailsOf, formatMs, postText } from './postDetails';
 import { onPostingUpdate, openPostingWindow, type PostRequest } from './postingService';
+import type { Account } from './model';
+
+/** The main Gmail and the developer-account emails: never a brand profile's login. */
+export const MAIN_EMAIL = 'softwings25@gmail.com';
+export function mainEmails(developerLogins: Workspace['developerLogins']): Set<string> {
+  return new Set([MAIN_EMAIL, ...Object.values(developerLogins ?? {}).map((login) => login.email)].map((email) => email.trim().toLowerCase()).filter(Boolean));
+}
+/** Whether a profile is saved with the main Gmail as its login, so its sign-in must not be filled. */
+export function usesMainLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): boolean {
+  return !!account?.signupEmail && mainEmails(developerLogins).has(account.signupEmail.trim().toLowerCase());
+}
+/** The login a window may fill for a profile: its own email and password, never the main Gmail's. */
+export function brandLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): { accountId?: string; email: string } {
+  if (!account || usesMainLogin(developerLogins, account)) return { accountId: undefined, email: '' };
+  return { accountId: account.id, email: account.signupEmail ?? '' };
+}
 
 type Save = (next: Workspace, message: string) => Promise<boolean | undefined>;
 export type Asking = { videoId: string; platform: Platform };
@@ -11,7 +27,7 @@ export function postRequest(workspace: Workspace, video: Video, platform: Platfo
   const account = workspace.accounts.find((item) => item.brandId === video.brandId && item.platform === platform);
   const details = detailsOf(video);
   return {
-    platform, brandId: video.brandId, videoId: video.id, accountId: account?.id, handle: account?.handle ?? '', email: account?.signupEmail ?? '',
+    platform, brandId: video.brandId, videoId: video.id, ...brandLogin(workspace.developerLogins, account), handle: account?.handle ?? '',
     videoPath: video.mediaSource, title: details.youtubeTitle || video.title, text: postText(video), madeWithAi: details.madeWithAi,
     madeForKids: details.madeForKids, cover: details.coverMs == null ? '' : formatMs(details.coverMs), coverMs: details.coverMs,
   };

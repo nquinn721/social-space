@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { withReviewState } from './appReviews';
 import { postMode, postModeNote } from './postingMode';
-import { markPosted, postRequest } from './useBrowserPosting';
+import { brandLogin, markPosted, postRequest } from './useBrowserPosting';
 import type { Workspace } from './model';
 
 describe('posting mode', () => {
@@ -32,6 +32,12 @@ describe('browser posting', () => {
       videoPath: 'C:\\v\\bunny.mp4', title: 'Bunny hops', text: 'Hop\n\n#bunny', madeWithAi: true, madeForKids: false, cover: '0:03.2', coverMs: 3200,
     });
     expect(postRequest(workspace, workspace.videos![0], 'youtube').accountId).toBeUndefined();
+  });
+  it('never fills the main Gmail or a developer login', () => {
+    const account = workspace.accounts[0];
+    expect(brandLogin(undefined, { ...account, signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: undefined, email: '' });
+    expect(brandLogin({ tiktok: { email: 'dev@example.com' } }, { ...account, signupEmail: 'Dev@example.com' })).toEqual({ accountId: undefined, email: '' });
+    expect(brandLogin(undefined, account)).toEqual({ accountId: 'a1', email: 'x+animals@example.com' });
   });
   it('marks a video posted once', () => {
     const next = markPosted(workspace, 'v1', 'tiktok')!;

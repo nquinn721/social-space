@@ -1,6 +1,7 @@
 import { testModeOf } from './appReviews';
 import { AppWindow, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { openProfilePage } from './postingService';
+import { brandLogin, usesMainLogin } from './useBrowserPosting';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
 import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
@@ -87,7 +88,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
 
   /** The profile's public page, in a Social Space window signed in as the brand or in the default browser. */
   async function viewProfile(account: Account, inBrowser: boolean) {
-    try { await openProfilePage({ platform: account.platform, brandId: brand.id, accountId: account.id, handle: account.handle, email: account.signupEmail ?? '', inBrowser }); }
+    try { await openProfilePage({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: account.handle, inBrowser }); }
     catch (reason) { setPageNote(errorText(reason, `Could not open the ${getPlatform(account.platform).name} profile.`)); }
   }
 
@@ -124,6 +125,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
             {!live && onRemoveAccount && <button type="button" className="icon-button" aria-label={`Delete ${platformName} profile`} title="Delete this profile from the app" disabled={disabled} onClick={() => onRemoveAccount(account)}><Trash2 size={15}/></button>}
           </span>
         </header>
+        {usesMainLogin(developerLogins, account) && <p className="row-warning"><TriangleAlert size={12}/> Saved with your main Gmail, so posting and profile windows won't sign in with it. Give {brand.name} its own {platformName} email and password under Edit details.</p>}
         {warnings?.(account).map((text) => <p key={text} className="row-warning"><TriangleAlert size={12}/> {text}</p>)}
         {live && account.handle && <p className="profile-card-note profile-view">See the live videos:
           <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> Open in Social Space</button>
