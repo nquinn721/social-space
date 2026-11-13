@@ -3,6 +3,7 @@ import { getPlatform, type Platform, type Video, type Workspace } from './model'
 import { detailsOf, formatMs, postText } from './postDetails';
 import { onPostingUpdate, openPostingWindow, type PostRequest } from './postingService';
 import type { Account } from './model';
+import { sharesLogins } from './brands';
 
 /** The main Gmail and the developer-account emails: never a brand profile's login. */
 export const MAIN_EMAIL = 'softwings25@gmail.com';
@@ -12,6 +13,14 @@ export function mainEmails(developerLogins: Workspace['developerLogins']): Set<s
 /** Whether a profile is saved with the main Gmail as its login, so its sign-in must not be filled. */
 export function usesMainLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): boolean {
   return !!account?.signupEmail && mainEmails(developerLogins).has(account.signupEmail.trim().toLowerCase());
+}
+/**
+ * A TikTok or X profile saved with the main Gmail is not the brand's own account, so nothing posts through it.
+ * Instagram and YouTube profiles can rightly sit under the main login (shared login, Google account
+ * holding the channels): they post, but their windows are never filled with the main Gmail either.
+ */
+export function wrongLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): boolean {
+  return !!account && !sharesLogins(account.platform) && usesMainLogin(developerLogins, account);
 }
 /** The login a window may fill for a profile: its own email and password, never the main Gmail's. */
 export function brandLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): { accountId?: string; email: string } {

@@ -20,9 +20,8 @@ pub enum Provider {
     Google,
 }
 impl Provider {
-    const ALL: [Provider; 4] = [Provider::Meta, Provider::X, Provider::Tiktok, Provider::Google];
-    #[cfg(windows)]
-    fn key(self) -> &'static str {
+    pub(crate) const ALL: [Provider; 4] = [Provider::Meta, Provider::X, Provider::Tiktok, Provider::Google];
+    pub(crate) fn key(self) -> &'static str {
         match self {
             Provider::Meta => "meta",
             Provider::X => "x",

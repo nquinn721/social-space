@@ -43,7 +43,9 @@ describe('create account wizard', () => {
 
     expect(await screen.findByText('Now: Instagram (1 of 3)')).toBeInTheDocument();
     expect(saved.map((item) => item.platform)).toEqual(['instagram', 'tiktok', 'x']);
-    expect(saved.every((item) => item.handle === 'softwings' && item.bio === 'Wings for little dreamers.' && item.signupEmail === DEFAULT_SIGNUP_EMAIL)).toBe(true);
+    expect(saved.every((item) => item.handle === 'softwings' && item.bio === 'Wings for little dreamers.')).toBe(true);
+    // Instagram starts a login on the inbox address; TikTok and X always get the brand's own plus-address.
+    expect(saved.map((item) => item.signupEmail)).toEqual([DEFAULT_SIGNUP_EMAIL, 'softwings25+softwings@gmail.com', 'softwings25+softwings@gmail.com']);
     expect(profile.ensureSharedPassword).toHaveBeenCalledWith(saved.map((item) => item.id));
     expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('instagram', 'create', expect.objectContaining({ x: 0, y: 0 }));
     await waitFor(() => expect(profile.fillSiteForm).toHaveBeenLastCalledWith('site-embed-4', expect.objectContaining({ username: 'softwings' }), { accountId: saved[0].id, includePassword: true, keepFilling: true }));
@@ -163,7 +165,7 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard initialPlatforms={['instagram', 'tiktok']} existing={existing} prefill={{ brandId: 'brand-mia' }} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     const plan = screen.getByRole('list', { name: 'Login plan' });
-    expect(plan).toHaveTextContent('Adds to your Instagram login softwings25@gmail.com (2 of 5 profiles).');
+    expect(plan).toHaveTextContent('Adds to your Instagram login softwings25@gmail.com (2 of 4 profiles).');
     expect(plan).toHaveTextContent('New TikTok account with its own email softwings25+massagewithmia@gmail.com.');
     await user.click(screen.getByRole('button', { name: /Start with 2 socials/ }));
     await screen.findByText('Now: Instagram (1 of 2)');

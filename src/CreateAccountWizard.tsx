@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
-import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, planPresence } from './brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, passwordGroup, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
 import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
@@ -126,7 +126,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   // Saved accounts that are not created yet go straight to their first sign-up page.
   useEffect(() => {
     if (!resume?.length) return;
-    void run(async () => { await ensureSharedPassword(resume.map((item) => item.id)); openSignup(resume[0]); });
+    void run(async () => { for (const item of resume) await ensureSharedPassword(passwordGroup([...existing, ...resume], item)); openSignup(resume[0]); });
   }, []);
 
   async function run(action: () => Promise<void>) {
@@ -158,7 +158,11 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
       const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, shownHandle, 'planned', ''), displayName: shownName, bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, birthday, ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
       for (const item of made) await onSave(item);
       setAccounts(made);
-      await ensureSharedPassword(made.map((item) => item.id));
+      // Profiles added to a shared login (Instagram, YouTube) use that login's password; the brand's new
+      // accounts share one new password of their own.
+      const fresh = made.filter((_, index) => plans[index].mode === 'new');
+      for (const item of made.filter((_, index) => plans[index].mode === 'attach')) await ensureSharedPassword(passwordGroup([...existing, ...made], item));
+      if (fresh.length) await ensureSharedPassword(fresh.map((item) => item.id));
       setCurrent(0);
       setStep('signup');
       openSignup(made[0]);

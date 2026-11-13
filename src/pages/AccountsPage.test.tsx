@@ -7,7 +7,7 @@ import { ensureSharedPassword } from '../profileService';
 import { migrateWorkspace } from '../brands';
 import type { Account, Workspace } from '../model';
 
-vi.mock('../profileService', () => ({ ensureSharedPassword: vi.fn(async () => undefined), onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
+vi.mock('../profileService', () => ({ ensureSharedPassword: vi.fn(async () => undefined), onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), exportAccountsJson: vi.fn(), importSignIns: vi.fn() }));
 afterEach(cleanup);
 const account = (id: string, platform: Account['platform'], label: string, status: Account['status'] = 'planned'): Account => ({ id, platform, label, handle: 'softwings', status, notes: '', bio: 'Wings.', signupEmail: 'softwings25@gmail.com' });
 const accounts = [account('1', 'x', 'Soft Wings'), account('2', 'instagram', 'soft wings ', 'active'), { ...account('3', 'youtube', 'Clip Lab'), handle: 'cliplab' }, { ...account('4', 'instagram', 'Clip Lab'), handle: 'cliplab' }];
@@ -43,9 +43,9 @@ describe('brands page', () => {
     expect(within(profiles).getByRole('article', { name: 'Instagram profile' })).toHaveTextContent(/Live/);
     expect(within(profiles).getByText('Not created yet')).toBeInTheDocument();
     await user.click(within(profiles).getByRole('button', { name: 'Create on X' }));
-    // The new X profile gets the brand's password (the live Instagram one comes first).
+    // The brand's Instagram sits on a login shared with Clip Lab, so its password is not the brand's: X gets its own.
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })]));
-    expect(ensureSharedPassword).toHaveBeenCalledWith(['2', '1']);
+    expect(ensureSharedPassword).toHaveBeenCalledWith(['1']);
     expect(within(profiles).queryByRole('button', { name: 'Create on Instagram' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /All brands/ }));
     expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('brands page', () => {
     const tiktok = saved.accounts.find((item) => item.platform === 'tiktok');
     expect(tiktok).toMatchObject({ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.', status: 'planned', signupEmail: 'softwings25+softwings@gmail.com', birthday: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: tiktok!.id })]));
-    expect(ensureSharedPassword).toHaveBeenLastCalledWith(['2', '1', tiktok!.id]);
+    expect(ensureSharedPassword).toHaveBeenLastCalledWith(['1', tiktok!.id]);
   });
 
   it('searches brands by name or username', async () => {

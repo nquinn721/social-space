@@ -7,7 +7,7 @@ import { mergeRestored } from './brands';
 import * as profile from './profileService';
 import type { Account, Workspace } from './model';
 
-vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
+vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), exportAccountsJson: vi.fn(), importSignIns: vi.fn() }));
 const secret = ['pass', 'word', '42'].join('-');
 const account = (id: string, platform: Account['platform'], handle: string): Account => ({ id, platform, label: 'Mia', handle, status: 'active', notes: '', signupEmail: 'softwings25@gmail.com', brandId: 'mia' });
 const workspace: Workspace = { businessName: '', channels: [], brands: [{ id: 'mia', name: 'Massage With Mia', notes: '' }], accounts: [account('ig', 'instagram', 'softwings'), account('tt', 'tiktok', 'massagewithmia')] };
@@ -26,6 +26,18 @@ describe('sign-ins', () => {
     await user.type(await screen.findByLabelText('New password for TikTok @massagewithmia'), secret);
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(profile.setAccountPassword).toHaveBeenCalledWith('tt', secret);
+  });
+
+  it('exports every account as plain JSON only after the warning is accepted', async () => {
+    vi.mocked(profile.exportAccountsJson).mockResolvedValue('socialspace-accounts.json');
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const user = userEvent.setup();
+    render(<SignIns workspace={workspace} busy={false} onEdit={vi.fn()} onRestore={vi.fn()}/>);
+    await user.click(screen.getByRole('button', { name: 'Export JSON' }));
+    expect(profile.exportAccountsJson).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Export JSON' }));
+    expect(await screen.findByText(/Saved socialspace-accounts.json. It is not encrypted/)).toBeInTheDocument();
+    expect(confirm.mock.calls[0][0]).toMatch(/plain text/);
   });
 
   it('backs up with a passphrase and restores missing accounts', async () => {

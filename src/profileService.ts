@@ -62,6 +62,8 @@ export function onPasswordSaved(accountId: string, callback: () => void) {
 /** Gives all these accounts one shared password (reusing one already saved, or a new strong one). */
 export async function ensureSharedPassword(accountIds: string[]): Promise<void> { desktopOnly(); return invoke('ensure_shared_password', { accountIds }); }
 /** Saves an encrypted file with every username, email and password. Returns its name, or null if cancelled. */
+/** Saves every profile, login, developer account and API key as plain-text JSON; returns the file name, or null if cancelled. */
+export async function exportAccountsJson(): Promise<string | null> { desktopOnly(); return invoke('export_accounts_json'); }
 export async function exportSignIns(passphrase: string): Promise<string | null> { desktopOnly(); return invoke('export_sign_ins', { passphrase }); }
 export type RestoredSignIns = { workspace: Workspace; passwordsRestored: number; createdAt: number };
 /** Restores passwords from a backup file and returns its saved workspace, or null if cancelled. */
