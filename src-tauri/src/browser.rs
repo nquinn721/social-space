@@ -32,6 +32,30 @@ pub(crate) fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
     }
 }
 
+/// TikTok's sign-in always opens on its email-and-password form, never the choice screen (QR code,
+/// Google, phone): the page the app can fill with the profile's saved login. Keeps `redirect_url`.
+pub(crate) fn email_login_page(url: &url::Url) -> Option<url::Url> {
+    let host = url.host_str()?.trim_start_matches("www.");
+    if url.scheme() != "https" || host != "tiktok.com" {
+        return None;
+    }
+    let path = url.path().trim_end_matches('/');
+    if path != "/login" && !path.starts_with("/login/") || path.starts_with("/login/phone-or-email/email") {
+        return None;
+    }
+    let mut next = url.clone();
+    next.set_path("/login/phone-or-email/email");
+    Some(next)
+}
+
+/// Sends a page that loaded on a sign-in choice screen to the email form instead.
+pub(crate) fn to_email_login(webview: &tauri::Webview) -> bool {
+    match webview.url().ok().as_ref().and_then(email_login_page) {
+        Some(next) => webview.navigate(next).is_ok(),
+        None => false,
+    }
+}
+
 pub(crate) fn make_window(
     app: &AppHandle,
     url: url::Url,
@@ -45,7 +69,7 @@ pub(crate) fn make_window(
         .inner_size(1100.0, 800.0)
         .on_navigation(move |url| allowed_navigation(url, oauth_callback))
         .on_page_load(|window, payload| {
-            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished && !to_email_login(window.as_ref()) {
                 crate::autofill::page_loaded(window.as_ref());
             }
         })
@@ -92,6 +116,19 @@ pub fn open_remote_window(app: &AppHandle, address: &str, oauth_callback: bool) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tiktok_sign_in_goes_straight_to_the_email_form() {
+        let next = |value: &str| email_login_page(&value.parse().unwrap()).map(|url| url.to_string());
+        assert_eq!(next("https://www.tiktok.com/login?redirect_url=https%3A%2F%2Fwww.tiktok.com%2Ftiktokstudio%2Fupload").as_deref(),
+            Some("https://www.tiktok.com/login/phone-or-email/email?redirect_url=https%3A%2F%2Fwww.tiktok.com%2Ftiktokstudio%2Fupload"));
+        assert_eq!(next("https://www.tiktok.com/login/qrcode").as_deref(), Some("https://www.tiktok.com/login/phone-or-email/email"));
+        assert_eq!(next("https://www.tiktok.com/login/phone-or-email").as_deref(), Some("https://www.tiktok.com/login/phone-or-email/email"));
+        assert!(next("https://www.tiktok.com/login/phone-or-email/email").is_none());
+        assert!(next("https://www.tiktok.com/loginx").is_none());
+        assert!(next("https://www.tiktok.com/tiktokstudio/upload").is_none());
+        assert!(next("https://x.com/login").is_none());
+    }
+
     #[test]
     fn navigation_rejects_local_resources_and_limits_oauth_callback() {
         let allowed = |value: &str, oauth| allowed_navigation(&value.parse().unwrap(), oauth);

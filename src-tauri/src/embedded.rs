@@ -143,7 +143,7 @@ fn embed_address(app: &AppHandle, address: &str, bounds: Bounds, dark: bool) -> 
     let builder = builder
         .on_navigation(|url| crate::browser::allowed_navigation(url, false))
         .on_page_load(|webview, payload| {
-            if payload.event() == PageLoadEvent::Finished {
+            if payload.event() == PageLoadEvent::Finished && !crate::browser::to_email_login(&webview) {
                 crate::autofill::page_loaded(&webview);
             }
         })

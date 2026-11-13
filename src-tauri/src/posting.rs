@@ -222,6 +222,9 @@ struct Posting {
 }
 
 fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
+    if crate::browser::to_email_login(webview) {
+        return;
+    }
     let Ok(url) = webview.url() else { return };
     if !on_social(&url) {
         return;
