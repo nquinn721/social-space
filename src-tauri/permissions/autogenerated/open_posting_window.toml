@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-posting-window"
+description = "Enables the open_posting_window command without any pre-configured scope."
+commands.allow = ["open_posting_window"]
+
+[[permission]]
+identifier = "deny-open-posting-window"
+description = "Denies the open_posting_window command without any pre-configured scope."
+commands.deny = ["open_posting_window"]
