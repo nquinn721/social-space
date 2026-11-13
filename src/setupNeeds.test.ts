@@ -54,4 +54,17 @@ describe('setup needs', () => {
     expect(workspace.setup).toEqual({ 'instagram:app:roles': 5, 'ig:professional': 6 });
     expect(migrateWorkspace({ businessName: '', brands: [], accounts: [], channels: [] })).not.toHaveProperty('setup');
   });
+
+  it('marks a TikTok Sandbox app as testing and moves its review steps to later', () => {
+    const connected = { tt: { state: 'ok' as const, username: 'animals', detail: '' } };
+    const sandbox = setupNeeds(base([profile('tt', 'tiktok')], { apps: { tiktok: 'sbawexample' }, connections: connected, passwords: { tt: true } }))[0];
+    expect(sandbox.testing).toBe('Sandbox (testing)');
+    expect(sandbox.open).toBe(0);
+    const review = sandbox.needs.find((need) => need.id === 'tiktok:app:review');
+    expect(review?.optional).toBe(true);
+    expect(review?.why).toMatch(/^Later: the app runs in Sandbox/);
+    const live = setupNeeds(base([profile('tt', 'tiktok')], { apps: { tiktok: 'aw0production' }, connections: connected, passwords: { tt: true } }))[0];
+    expect(live.testing).toBeUndefined();
+    expect(live.open).toBe(2);
+  });
 });
