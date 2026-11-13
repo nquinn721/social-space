@@ -241,6 +241,15 @@ fn store_key(id: &str, key: &str) -> Result<(), String> {
         .map_err(|_| "Could not save the key in Windows Credential Manager.".into())
 }
 
+/// Every video source with its API key, for the plain-text accounts export.
+pub(crate) fn export_keys(app: &AppHandle, lock: &SourcesLock) -> Result<Vec<(String, VideoProvider, Option<String>)>, String> {
+    let state = {
+        let _guard = lock.0.lock().map_err(|_| "Video sources are unavailable.")?;
+        load_or_migrate(&sources_path(app)?)?
+    };
+    Ok(state.sources.iter().map(|source| (source.name.clone(), source.provider, read_key(&source.id).ok())).collect())
+}
+
 #[cfg(windows)]
 fn read_key(id: &str) -> Result<String, String> {
     match key_entry(id)?.get_password() {

@@ -387,6 +387,7 @@ pub fn run() {
             load_workspace,
             save_workspace,
             team_sync::team_sync_status,
+            backup::export_accounts_json,
             team_sync::team_sync_enable,
             team_sync::team_sync_disable,
             team_sync::team_sync_fetch,

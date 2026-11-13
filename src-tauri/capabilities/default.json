@@ -10,6 +10,7 @@
     "allow-load-workspace",
     "allow-save-workspace",
     "allow-team-sync-status",
+    "allow-export-accounts-json",
     "allow-team-sync-enable",
     "allow-team-sync-disable",
     "allow-team-sync-fetch",

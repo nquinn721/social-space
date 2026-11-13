@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Copy, DatabaseBackup, Eye, EyeOff, KeyRound, Pencil, Upload } from 'lucide-react';
+import { Copy, DatabaseBackup, Eye, EyeOff, FileJson, KeyRound, Pencil, Upload } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Workspace } from './model';
 import { mergeRestored } from './brands';
-import { exportSignIns, hasAccountPassword, importSignIns, onPasswordSaved, revealAccountPassword, setAccountPassword } from './profileService';
+import { exportAccountsJson, exportSignIns, hasAccountPassword, importSignIns, onPasswordSaved, revealAccountPassword, setAccountPassword } from './profileService';
 import { BrandMark, errorText } from './ui';
 
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -66,6 +66,17 @@ export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup
   const brandName = (account: Account) => workspace.brands.find((brand) => brand.id === account.brandId)?.name ?? account.label;
   const rows = [...workspace.accounts].sort((a, b) => brandName(a).localeCompare(brandName(b)) || ORDER.indexOf(a.platform) - ORDER.indexOf(b.platform));
 
+  /** Plain-text export: every brand's profiles, which login controls which profile, developer accounts and API keys. */
+  function exportJson() {
+    if (working) return;
+    if (!window.confirm('The JSON file lists every username, email, password and API key in plain text, readable by anyone who opens it. Save it only somewhere private and delete it when you are done. Continue?')) return;
+    setWorking(true); setError(''); setMessage('');
+    exportAccountsJson()
+      .then((file) => { if (file) setMessage(`Saved ${file}. It is not encrypted: keep it private and delete it when you are done.`); })
+      .catch((reason) => setError(errorText(reason)))
+      .finally(() => setWorking(false));
+  }
+
   function submit(event: FormEvent) {
     event.preventDefault();
     if (working || !mode) return;
@@ -90,6 +101,7 @@ export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup
       {showBackup && <div className="heading-buttons">
         <button type="button" className="primary-button small-button" disabled={working} onClick={() => { setMode('backup'); setError(''); }}><DatabaseBackup size={14}/> Back up sign-ins</button>
         <button type="button" className="outline-button small-button" disabled={working} onClick={() => { setMode('restore'); setError(''); }}><Upload size={14}/> Restore</button>
+        <button type="button" className="ghost-button small-button" disabled={working} onClick={exportJson}><FileJson size={14}/> Export JSON</button>
       </div>}
     </div>
     {mode && <form className="card backup-form" onSubmit={submit}>
