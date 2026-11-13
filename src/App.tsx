@@ -17,6 +17,10 @@ import { initialOf, PageHeader } from './ui';
 import { PartnerReviewProvider, usePartnerReview } from './usePartnerReview';
 import { useTeamSync } from './useTeamSync';
 import { mergeWorkspaces } from './workspaceSync';
+import ReviewNotice from './ReviewNotice';
+import { useReviewWatch } from './useReviewWatch';
+import { seenKey, stateLabel, reviewOf, withReviewState, type ReviewState } from './appReviews';
+import type { DevProvider } from './devAppsService';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 /** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
@@ -73,6 +77,17 @@ function App() {
     });
   }
   const teamSync = useTeamSync({ loaded, workspaceRef, exclusive, apply: store });
+  // Watches the inbox for the socials' developer-app review results.
+  const reviewWatch = useReviewWatch({ loaded, workspaceRef, save: commit, notify: showMessage });
+  function setReview(provider: DevProvider, state: ReviewState) {
+    const at = Date.now();
+    // Set by hand: the user already knows, so no "review finished" notice for it.
+    void persist({ ...workspace, setup: { ...withReviewState(workspace.setup, provider, state, at), [seenKey(provider)]: at } }, `${reviewOf(provider)?.name ?? 'Review'}: ${stateLabel(state)}.`);
+  }
+  function dismissReviews(providers: string[]) {
+    const at = Date.now();
+    void commit({ ...workspaceRef.current, setup: { ...(workspaceRef.current.setup ?? {}), ...Object.fromEntries(providers.map((provider) => [seenKey(provider as DevProvider), at])) } }).catch(() => showError('Could not save your changes. Please try again.'));
+  }
   async function persist(next: Workspace, success: string) {
     if (busy || !loaded) return;
     setBusy(true); setMessage('');
@@ -167,12 +182,13 @@ function App() {
       </header>
       <div className="page-content">
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
+        <ReviewNotice marks={workspace.setup} onOpen={() => navigate('settings', 'developer-accounts')} onDismiss={dismissReviews}/>
         {message && <div role={messageIsError ? 'alert' : 'status'} className={messageIsError ? 'notice notice-error' : 'notice'}>{messageIsError ? <AlertTriangle size={16}/> : <Check size={16}/>}{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id) => { setOpenBrand({ id, tab: 'content' }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
         {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
-        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync}/>}
+        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync} reviews={{ marks: workspace.setup, onSet: setReview, watch: reviewWatch, busy: busy || !loaded }}/>}
       </div>
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>

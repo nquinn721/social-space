@@ -40,3 +40,15 @@ describe('developer accounts', () => {
     expect(saveDeveloperApp).toHaveBeenCalledWith('meta', '12345', 'abc');
   });
 });
+
+describe('developer app reviews', () => {
+  it('shows each review state and saves one chosen by hand', async () => {
+    const user = userEvent.setup();
+    const onSet = vi.fn();
+    render(<DeveloperAccounts reviews={{ marks: { 'review:google:submitted': Date.parse('2026-11-10T12:00:00Z') }, onSet }}/>);
+    expect(within(screen.getByLabelText('X Developer')).getByText('None needed')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Google Cloud (YouTube)')).getByLabelText('YouTube API audit status')).toHaveValue('submitted');
+    await user.selectOptions(within(screen.getByLabelText('TikTok for Developers')).getByLabelText('TikTok app review status'), 'submitted');
+    expect(onSet).toHaveBeenCalledWith('tiktok', 'submitted');
+  });
+});

@@ -130,3 +130,16 @@
 .developer-account dt { color: var(--muted, #6b6b76); font-size: 12px; }
 .developer-account dd { margin: 0; min-width: 0; }
 .developer-keys { display: grid; gap: 4px; }
+
+/* App review state on each developer account, and the notice when a review finishes. */
+.review-row dd { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.review-row select { font-size: 12px; padding: 3px 6px; max-width: 100%; }
+.review-pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); background: var(--surface-2); }
+.review-pill.submitted { color: var(--amber); border-color: var(--amber); }
+.review-pill.approved { color: var(--success); border-color: var(--success-line); background: var(--success-soft); }
+.review-pill.rejected { color: var(--danger, #f87171); border-color: var(--danger-line, #f87171); background: var(--danger-soft, transparent); }
+.review-watch { margin: 0 0 12px; }
+.review-watch > span { flex: 1; min-width: 0; }
+.review-notice { flex-wrap: wrap; }
+.review-notice .review-notice-actions { margin-left: auto; display: flex; gap: 6px; }
+.review-notice.rejected { background: var(--danger-soft, transparent); border-color: var(--danger-line, #f87171); color: var(--text); }
