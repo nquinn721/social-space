@@ -7,7 +7,8 @@ import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type
  * TikTok and X: every profile is its own account and needs an email no other account there uses.
  */
 export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number; explain: string }> = {
-  instagram: { profilesPerLogin: 5, explain: 'Instagram lets up to 5 profiles share one email and login.' },
+  // Instagram allows 5; Nate keeps 4 per login, then a new login takes the next brands.
+  instagram: { profilesPerLogin: 4, explain: 'Up to 4 profiles share one Instagram login; the next brand gets a new Instagram account.' },
   youtube: { profilesPerLogin: 100, explain: 'YouTube channels live under one Google account as Brand Accounts.' },
   tiktok: { profilesPerLogin: 1, explain: 'TikTok needs a separate account with its own email for each profile.' },
   x: { profilesPerLogin: 1, explain: 'X needs a separate account with its own email for each profile.' },
@@ -82,7 +83,8 @@ export function planPresence(accounts: Account[], platform: Platform, brandName:
     }
   }
   const used = new Set(accounts.filter((account) => account.platform === platform).map((account) => emailKey(account.signupEmail)));
-  let email = baseEmail.trim();
+  // TikTok and X accounts always get the brand's own plus-address, never the main inbox address itself.
+  let email = sharesLogins(platform) ? baseEmail.trim() : plusAddress(baseEmail, emailTag(brandName));
   if (used.has(emailKey(email))) {
     const tag = emailTag(brandName);
     email = plusAddress(baseEmail, tag);
@@ -163,4 +165,22 @@ export function mergeRestored(current: Workspace, backup: Partial<Workspace>): {
     videos: [...(current.videos ?? []), ...missing(current.videos, backup.videos)],
   });
   return { workspace, added: accounts.length };
+}
+
+/**
+ * The accounts whose saved password a profile should share. A profile on a shared login (an Instagram
+ * login holding several brands, a Google account holding several channels) uses that login's password.
+ * Otherwise it uses its brand's password, taken only from the brand's own logins: never from a login
+ * shared with other brands, so one brand's sign-in never leaks into another's.
+ */
+export function passwordGroup(all: Account[], account: Account): string[] {
+  const key = emailKey(account.signupEmail);
+  if (sharesLogins(account.platform) && key) {
+    const login = all.filter((item) => item.id !== account.id && item.platform === account.platform && emailKey(item.signupEmail) === key);
+    if (login.length) return [...login.map((item) => item.id), account.id];
+  }
+  const sharedLogin = (item: Account) => sharesLogins(item.platform) && all.some((other) => other.id !== item.id && other.platform === item.platform && other.brandId !== item.brandId && emailKey(other.signupEmail) === emailKey(item.signupEmail));
+  const own = all.filter((item) => item.id !== account.id && account.brandId && item.brandId === account.brandId && !sharedLogin(item))
+    .sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active'));
+  return [...own.map((item) => item.id), account.id];
 }
