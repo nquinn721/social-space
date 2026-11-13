@@ -1,4 +1,3 @@
-import { testModeOf } from './appReviews';
 import { AppWindow, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { openProfilePage } from './postingService';
 import { brandLogin, wrongLogin } from './useBrowserPosting';
@@ -9,6 +8,7 @@ import { canConnect } from './profileConnections';
 import { setupNeeds, type Need } from './setupNeeds';
 import { openSetupPage } from './setupService';
 import { PasswordCell } from './SignIns';
+import { postMode } from './postingMode';
 import { BrandMark, errorText } from './ui';
 import './setup.css';
 
@@ -55,17 +55,23 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
   const flow = useConnectFlow(accounts, [brand], { logins: developerLogins, onLogin: onDeveloperLogin });
   const { status, working, connect, disconnect } = flow;
   const [pageNote, setPageNote] = useState('');
-  const groups = setupNeeds({ accounts, brands: [brand], apps: status.apps, connections: status.connections, passwords: status.passwords, marks });
+  const groups = setupNeeds({ accounts, brands: [brand], apps: status.apps, connections: status.connections, passwords: status.passwords, marks, developerLogins });
   const needsOf = (account: Account) => groups.flatMap((group) => group.needs).filter((need) => need.accountId === account.id);
   // Steps on the social's developer side are shared by every brand, so they're only counted here.
   const appStepsLeft = (platform: Platform) => (groups.find((group) => group.platform === platform)?.needs ?? [])
-    .filter((need) => !need.accountId && need.manual && !need.optional && need.status === 'todo').length;
+    .filter((need) => !need.accountId && need.manual && !need.optional && !need.later && need.status === 'todo').length;
   const missing = PLATFORMS.filter((platform) => !accounts.some((account) => account.platform === platform.id));
   const disabled = !loaded || busy || working;
 
   function readiness(account: Account): Readiness {
     if (account.status !== 'active') return { tone: 'planned', text: 'Not created yet' };
     const check = status.connections[account.id];
+    // TikTok, YouTube and X post through their own page in the brand's window: no API connection needed.
+    if (postMode(account.platform) === 'browser') {
+      if (wrongLogin(developerLogins, account)) return { tone: 'warning', text: 'Uses your main Gmail' };
+      if (account.platform !== 'youtube' && status.passwords[account.id] === false) return { tone: 'warning', text: 'Ready · login not saved' };
+      return { tone: 'active', text: 'Ready to post' };
+    }
     if (!canConnect(account)) return { tone: 'active', text: 'Live' };
     if (!check) return { tone: 'planned', text: 'Live · checking…' };
     if (check.state === 'expired' || check.state === 'unchecked') return { tone: 'warning', text: 'Live · reconnect needed' };
@@ -94,12 +100,10 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
 
   return <section className="brand-accounts" aria-label={`${brand.name} profiles`}>
     {flow.panels}
-    {[...new Set(accounts.filter((account) => account.status === 'active').map((account) => account.platform))].map((platform) => testModeOf(marks, platform)).filter((review) => review?.test).map((review) => <p key={review!.provider} className="test-mode-note" role="note"><span className="test-badge">Test</span>{review!.test!.limits} Posting with the Post on {review!.provider === 'google' ? 'YouTube' : 'TikTok'} button goes through its own page, so those posts are real and public.</p>)}
     {pageNote && <div className="notice conn-notice" role="status"><span>{pageNote}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setPageNote('')}>×</button></div>}
     <div className="profile-cards">{accounts.map((account) => {
       const platformName = getPlatform(account.platform).name;
       const live = account.status === 'active';
-      const test = testModeOf(marks, account.platform);
       const check = status.connections[account.id];
       const connectedAs = check?.state === 'ok' ? normalizeHandle(check.username) : '';
       const state = readiness(account);
@@ -107,7 +111,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       // The profile's own manual steps (account type, linked Page…); sign-in and connection have their own rows.
       const steps = needsOf(account).filter((need) => need.manual && need.status !== 'done');
       const appLeft = live ? appStepsLeft(account.platform) : 0;
-      const needsConnect = live && canConnect(account) && check && check.state !== 'ok';
+      const needsConnect = live && postMode(account.platform) === 'api' && canConnect(account) && check && check.state !== 'ok';
       return <article key={account.id} className={`profile-card ${state.tone}`} aria-label={`${platformName} profile`}>
         <header className="profile-card-head">
           <BrandMark platform={account.platform}/>
@@ -116,7 +120,6 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
             <small>{account.handle ? `@${account.handle}` : 'No username yet'}{connectedAs && connectedAs.toLowerCase() !== normalizeHandle(account.handle).toLowerCase() ? ` · connected as @${connectedAs}` : ''}</small>
           </div>
           <span className={`pill ${state.tone}`}><span className="dot"/>{state.text}</span>
-          {live && test?.test && <span className="test-badge" title={test.test.limits}>Test · {test.test.mode}</span>}
           <span className="profile-card-actions">
             {!live && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}>Create on {platformName}</button>}
             {needsConnect && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => void connect(account)}>{check.state === 'none' ? 'Connect' : 'Reconnect'}</button>}

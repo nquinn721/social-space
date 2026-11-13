@@ -42,7 +42,7 @@ describe('brand accounts', () => {
 
   it('shows each profile once with its sign-in, its state and one button for what is next', async () => {
     const ig = profile('ig', 'instagram');
-    const tt = profile('tt', 'tiktok');
+    const tt = { ...profile('tt', 'tiktok'), signupEmail: 'softwings25+softwings@gmail.com' };
     status.connections = { ig: { state: 'ok', username: 'softwings', detail: '' }, tt: { state: 'none', username: '', detail: '' } };
     status.passwords = { ig: true, tt: true };
     const onMark = vi.fn();
@@ -56,10 +56,9 @@ describe('brand accounts', () => {
     expect(onMark).toHaveBeenCalledWith('ig:professional', true);
 
     const tiktok = screen.getByRole('article', { name: 'TikTok profile' });
-    expect(within(tiktok).getByText('Live · not connected')).toBeInTheDocument();
-    await user.click(within(tiktok).getByRole('button', { name: 'Connect' }));
-    const { connectProfile } = await import('./profileConnections');
-    expect(connectProfile).toHaveBeenCalledWith(tt);
+    // TikTok posts through its upload page in the brand's window: ready without an API connection.
+    expect(within(tiktok).getByText('Ready to post')).toBeInTheDocument();
+    expect(within(tiktok).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Add YouTube/ }));
     expect(onAddSocial).toHaveBeenCalledWith('youtube');

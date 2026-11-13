@@ -1,5 +1,8 @@
 import { getPlatform, PLATFORMS, type Account, type Brand, type Platform } from './model';
 import type { DevProvider } from './devAppsService';
+import type { Workspace } from './model';
+import { postMode } from './postingMode';
+import { usesMainLogin } from './useBrowserPosting';
 
 /**
  * Everything a brand needs before the app can post for it, per social: the developer app (set up
@@ -29,6 +32,8 @@ export type Need = {
   manual: boolean;
   /** Nice to have; not counted as needed. */
   optional?: boolean;
+  /** Only matters once this social posts through its API instead of its upload page; not counted. */
+  later?: boolean;
   page?: { id: SetupPage; label: string };
   action?: NeedAction;
   /** When a manual step was ticked (ms). */
@@ -47,6 +52,8 @@ export type SetupInputs = {
   passwords: Record<string, boolean | undefined>;
   /** Manual ticks: step id → when it was ticked. */
   marks: Record<string, number>;
+  /** Developer-site logins (the main email), so a profile saved with one is caught. */
+  developerLogins?: Workspace['developerLogins'];
 };
 
 export const PROVIDER_FOR: Record<Platform, DevProvider> = { instagram: 'meta', x: 'x', youtube: 'google', tiktok: 'tiktok' };
@@ -95,34 +102,52 @@ const manualNeed = (id: string, platform: Platform, step: ManualStep, marks: Rec
   id, platform, accountId, title: prefix + step.title, why: step.why, status: marks[id] ? 'done' : 'todo', manual: true, optional: step.optional, page: step.page, markedAt: marks[id],
 });
 
-/** Everything needed for posting, grouped by social, for the profiles given. */
-export function setupNeeds({ accounts, brands, apps, connections, passwords, marks }: SetupInputs): NeedGroup[] {
+/**
+ * Everything needed for posting, grouped by social, for the profiles given. What counts depends on how the
+ * social posts today: Instagram through its API (developer app, account settings, connection), TikTok,
+ * YouTube and X through their own upload page (the profile, its own login, its saved sign-in). Developer-app
+ * steps for those three only matter once they post through their API, so they are kept as "later".
+ */
+export function setupNeeds({ accounts, brands, apps, connections, passwords, marks, developerLogins }: SetupInputs): NeedGroup[] {
   const brandName = (account: Account) => brands.find((brand) => brand.id === account.brandId)?.name ?? account.label;
   return PLATFORMS.filter((platform) => accounts.some((account) => account.platform === platform.id)).map(({ id: platform, name }) => {
     const provider = PROVIDER_FOR[platform];
     const appId = apps?.[provider];
+    const browser = postMode(platform) === 'browser';
     const testing = isTestingApp(provider, appId) ? 'Sandbox (testing)' : undefined;
     const needs: Need[] = [{
-      id: `${platform}:app`, platform, title: `${APP_NAME[provider]} set up in Social Space${testing ? ` (${testing})` : ''}`, manual: false,
+      id: `${platform}:app`, platform, title: `${APP_NAME[provider]} set up in Social Space${testing ? ` (${testing})` : ''}`, manual: false, later: browser,
       why: `Every ${name} profile connects through one developer app. Its keys are saved once, in Windows Credential Manager.`,
       status: apps === undefined ? 'checking' : appId ? 'done' : 'todo', action: { kind: 'setup-app', provider },
     }];
     needs.push(...APP_STEPS[platform].map((step) => {
       const id = `${platform}:app:${step.key}`;
-      return testing && AFTER_TESTING[id] ? manualNeed(id, platform, { ...step, why: TESTING_NOTE + step.why, optional: true }, marks) : manualNeed(id, platform, step, marks);
+      const need = testing && AFTER_TESTING[id] ? manualNeed(id, platform, { ...step, why: TESTING_NOTE + step.why, optional: true }, marks) : manualNeed(id, platform, step, marks);
+      return browser ? { ...need, later: true } : need;
     }));
     for (const account of accounts.filter((item) => item.platform === platform).sort((a, b) => brandName(a).localeCompare(brandName(b)))) {
       const who = `${brandName(account)}${account.handle ? ` (@${account.handle})` : ''}: `;
       if (account.status !== 'active') {
-        needs.push({ id: `${account.id}:created`, platform, accountId: account.id, title: `${who}profile created on ${name}`, why: 'Create it from the brand\'s Profiles, or press "I already made it" there.', status: 'todo', manual: false });
+        needs.push({ id: `${account.id}:created`, platform, accountId: account.id, title: `${who}profile created on ${name}`, why: 'Create it from the brand\'s Accounts, or press "I already made it" there.', status: 'todo', manual: false });
         continue;
       }
-      const saved = passwords[account.id];
-      needs.push({ id: `${account.id}:sign-in`, platform, accountId: account.id, title: `${who}username and password saved`, why: 'Kept in Windows Credential Manager and in the encrypted backup, so the sign-in is never lost.', status: saved === undefined ? 'checking' : saved ? 'done' : 'todo', manual: false, action: { kind: 'sign-in', account } });
+      const mainLogin = usesMainLogin(developerLogins, account);
+      if (platform === 'tiktok' || platform === 'x') {
+        needs.push({ id: `${account.id}:own-login`, platform, accountId: account.id, title: `${who}its own email, not your main Gmail`, manual: false, action: { kind: 'sign-in', account },
+          why: mainLogin ? `${name} needs a separate email for each account. This profile is saved with your main Gmail, so its window won't sign in as the brand.` : `${name} needs a separate email for each account; this one has its own.`,
+          status: mainLogin ? 'problem' : 'done' });
+      }
+      // YouTube channels live under the main Google account, so there is no brand login to save there.
+      if (!(platform === 'youtube' && mainLogin)) {
+        const saved = passwords[account.id];
+        needs.push({ id: `${account.id}:sign-in`, platform, accountId: account.id, title: `${who}username and password saved`, optional: !browser || platform === 'youtube',
+          why: browser ? 'The posting window fills the sign-in from it. Kept in Windows Credential Manager and the encrypted backup.' : 'Kept in Windows Credential Manager and in the encrypted backup, so the sign-in is never lost.',
+          status: saved === undefined ? 'checking' : saved ? 'done' : 'todo', manual: false, action: { kind: 'sign-in', account } });
+      }
       needs.push(...(PROFILE_STEPS[platform] ?? []).map((step) => manualNeed(`${account.id}:${step.key}`, platform, step, marks, account.id, who)));
       const check = connections[account.id];
       needs.push({
-        id: `${account.id}:connected`, platform, accountId: account.id, title: `${who}connected for posting`, manual: false, action: { kind: 'connect', account },
+        id: `${account.id}:connected`, platform, accountId: account.id, title: `${who}connected for ${browser ? 'API posting' : 'posting'}`, manual: false, action: { kind: 'connect', account }, later: browser,
         why: !check ? 'Checking the connection…'
           : check.state === 'ok' ? `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${check.detail || 'Renews by itself.'}`
           : check.state === 'none' ? `Connect it so the app can post as this ${name} profile.`
@@ -130,7 +155,7 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
         status: !check ? 'checking' : check.state === 'ok' ? 'done' : check.state === 'none' ? 'todo' : 'problem',
       });
     }
-    return { platform, needs, open: needs.filter((need) => (need.status === 'todo' || need.status === 'problem') && !need.optional).length, testing };
+    return { platform, needs, open: needs.filter((need) => (need.status === 'todo' || need.status === 'problem') && !need.optional && !need.later).length, testing };
   });
 }
 

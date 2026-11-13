@@ -68,7 +68,7 @@ describe('workspace account management', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('Account added to your workspace.');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Brands' }));
-    expect(screen.getByRole('button', { name: 'Open Example Channel' })).toHaveTextContent('1 of 1 live');
+    expect(screen.getByRole('button', { name: 'Open Example Channel' })).toHaveTextContent('Ready on all 1');
   });
 
   it('keeps account and settings saves disabled when loading fails', async () => {
