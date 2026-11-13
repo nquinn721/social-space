@@ -39,8 +39,8 @@ describe('browser posting', () => {
     expect(markPosted(next, 'v1', 'tiktok')).toBeNull();
     expect(markPosted(workspace, 'nope', 'tiktok')).toBeNull();
   });
-  it('keeps a post made while the social is in test mode as a test post', () => {
+  it('counts a post made on the page as real even while the API is in test mode', () => {
     const next = markPosted(workspace, 'v1', 'tiktok')!;
-    expect(next.videos![0].testPosts?.tiktok).toEqual(expect.any(Number));
+    expect(next.videos![0].testPosts).toBeUndefined();
   });
 });
