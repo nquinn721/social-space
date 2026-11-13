@@ -5,11 +5,12 @@ import ProfileImageStudio from './ProfileImageStudio';
 import { BIO_LIMITS, createAccount, normalizeHandle, getPlatform, PLATFORMS, type Account, type Platform } from './model';
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
+import { profilePicturePath } from './brandImageService';
 
-type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void; loginNote?: string };
+type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void; loginNote?: string; /** The brand picture this profile uses (its own or the brand's), filled in unless a file is chosen here. */ pictureFile?: string };
 
 /** Side panel to add an account or see and edit one, with its sign-in details on top. */
-export default function AccountDrawer({ account, busy, onClose, onSave, onRemove, onSignUp, loginNote }: Props) {
+export default function AccountDrawer({ account, busy, onClose, onSave, onRemove, onSignUp, loginNote, pictureFile }: Props) {
   const [platform, setPlatform] = useState<Platform>(account?.platform ?? 'instagram');
   const [label, setLabel] = useState(account?.label ?? '');
   const [handle, setHandle] = useState(account?.handle ?? '');
@@ -50,9 +51,11 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
   const fillProfile = () => run(async () => {
     if (!account) return;
     const current = { ...account, handle: normalizeHandle(handle), displayName, bio, website, imagePath };
+    // The brand picture at this social's size, unless a different file was chosen in this panel.
+    const picture = pictureFile && imagePath === (account.imagePath ?? '') ? await profilePicturePath(pictureFile, account.platform) : imagePath;
     const id = await openPlatformWindow(account.platform, 'manage');
     // A live account already shows its old details, so those are replaced (once each) instead of skipped.
-    await fillSiteForm(id, formFieldsFor(current), { imagePath: imagePath || undefined, accountId: account.id, includePassword: 'ifSaved', keepFilling: true, replace: account.status === 'active' });
+    await fillSiteForm(id, formFieldsFor(current), { imagePath: picture || undefined, accountId: account.id, includePassword: 'ifSaved', keepFilling: true, replace: account.status === 'active' });
     setNote(`Opened ${getPlatform(account.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
   });
   // Instagram edits name and username in Accounts Center, not on the profile page.

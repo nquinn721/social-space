@@ -2,6 +2,7 @@ import { hasUpdate, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPag
 import InboxList from './InboxList';
 import CreateAccountWizard, { type WizardPrefill } from './CreateAccountWizard';
 import AccountDrawer from './AccountDrawer';
+import { pictureFileFor } from './brandImageService';
 import AssistantPanel from './assistant/AssistantPanel';
 import OverviewPage from './pages/OverviewPage';
 import AccountsPage from './pages/AccountsPage';
@@ -217,7 +218,7 @@ function App() {
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
     {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} existing={workspace.accounts} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
-    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined}/>}
+    {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined} pictureFile={editingAccount ? pictureFileFor(editingAccount, workspace.brands.find((brand) => brand.id === editingAccount.brandId)) : undefined}/>}
   </div></PartnerReviewProvider>;
 }
 export default App;

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, KeyRound, Mail, RefreshCw, RotateCw, Send, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import { Bot, Building2, Clapperboard, Image, KeyRound, Mail, RefreshCw, RotateCw, Send, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import PostingSettings from '../PostingSettings';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
 import TeamSyncSettings from '../TeamSyncSettings';
+import GeminiKeySettings from '../GeminiKeySettings';
 import DeveloperAccounts, { type ReviewProps } from '../DeveloperAccounts';
 import type { TeamSync } from '../useTeamSync';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
@@ -20,6 +21,7 @@ const SECTIONS = [
   { id: 'partner-review', label: 'Partner review', icon: UserCheck },
   { id: 'team-sync', label: 'Shared accounts', icon: Users },
   { id: 'video-sources', label: 'Video sources', icon: Clapperboard },
+  { id: 'pictures', label: 'Pictures', icon: Image },
   { id: 'assistant', label: 'Assistant', icon: Bot },
 ];
 
@@ -36,7 +38,7 @@ function AssistantSettingsCard() {
   const available = models?.includes(settings.model);
   return <section className="settings-card" id="assistant">
     <h2><Bot size={17}/> Assistant</h2>
-    <p>The assistant, the Suggest buttons and the profile picture maker use Grok from xAI with the key saved under Video sources. Prompts and the workspace details the assistant reads are sent to xAI.</p>
+    <p>The assistant and the Suggest buttons use Grok from xAI with the key saved under Video sources. Prompts and the workspace details the assistant reads are sent to xAI.</p>
     <div className={`status-line ${models?.length ? '' : 'off'}`}><span className="dot"/><span>{models === null ? 'Checking your xAI key…' : models.length ? `Grok is ready with ${models.length} ${models.length === 1 ? 'model' : 'models'}.` : 'No working xAI key. Add a Grok source under Video sources.'}</span><button type="button" className="ghost-button small-button" disabled={checking} onClick={() => void check()}><RefreshCw size={14}/> Check</button></div>
     <label htmlFor="settings-model">Model</label>
     {models?.length ? <select id="settings-model" value={available ? settings.model : ''} onChange={(event) => update({ ...settings, model: event.target.value })}>
@@ -48,7 +50,7 @@ function AssistantSettingsCard() {
 
 export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync, reviews }: Props) {
   return <>
-    <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
+    <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources, pictures and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">{SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }}><Icon size={16}/>{label}</a>)}</nav>
       <div className="settings-stack">
@@ -69,6 +71,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <p>AI video providers you generate with, each under its own name and API key. Keys are checked with the provider and stored in Windows Credential Manager.</p>
           <VideoSources/>
         </section>
+        <GeminiKeySettings/>
         <AssistantSettingsCard/>
         {updatesManagedBy && <section className="settings-card" id="updates"><h2><RotateCw size={17}/> Updates</h2><p className="footnote">Updates managed by {updatesManagedBy}.</p></section>}
         <div className="privacy-note"><ShieldCheck size={18}/><span>Your workspace is stored on this PC{teamSync?.status?.enabled ? ' and shared, encrypted, with your partner' : ''}. Passwords live in Windows Credential Manager and are only shown when you ask.</span></div>

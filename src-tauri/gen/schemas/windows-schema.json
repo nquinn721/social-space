@@ -195,6 +195,12 @@
           "markdownDescription": "Enables the add_video_source command without any pre-configured scope."
         },
         {
+          "description": "Enables the brand_image_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-brand-image-path",
+          "markdownDescription": "Enables the brand_image_path command without any pre-configured scope."
+        },
+        {
           "description": "Enables the check_for_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check-for-update",
@@ -433,6 +439,18 @@
           "type": "string",
           "const": "allow-finish-instagram-connection",
           "markdownDescription": "Enables the finish_instagram_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the gemini_key_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-gemini-key-status",
+          "markdownDescription": "Enables the gemini_key_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the generate_gemini_images command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-generate-gemini-images",
+          "markdownDescription": "Enables the generate_gemini_images command without any pre-configured scope."
         },
         {
           "description": "Enables the generate_profile_image command without any pre-configured scope.",
@@ -687,6 +705,12 @@
           "markdownDescription": "Enables the remove_developer_app command without any pre-configured scope."
         },
         {
+          "description": "Enables the remove_gemini_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-gemini-key",
+          "markdownDescription": "Enables the remove_gemini_key command without any pre-configured scope."
+        },
+        {
           "description": "Enables the remove_reviewer command without any pre-configured scope.",
           "type": "string",
           "const": "allow-remove-reviewer",
@@ -723,16 +747,34 @@
           "markdownDescription": "Enables the reveal_account_password command without any pre-configured scope."
         },
         {
+          "description": "Enables the reveal_brand_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reveal-brand-image",
+          "markdownDescription": "Enables the reveal_brand_image command without any pre-configured scope."
+        },
+        {
           "description": "Enables the review_connection command without any pre-configured scope.",
           "type": "string",
           "const": "allow-review-connection",
           "markdownDescription": "Enables the review_connection command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_brand_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-brand-image",
+          "markdownDescription": "Enables the save_brand_image command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_developer_app command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-developer-app",
           "markdownDescription": "Enables the save_developer_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_gemini_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-gemini-key",
+          "markdownDescription": "Enables the save_gemini_key command without any pre-configured scope."
         },
         {
           "description": "Enables the save_generated_video command without any pre-configured scope.",
@@ -871,6 +913,12 @@
           "type": "string",
           "const": "deny-add-video-source",
           "markdownDescription": "Denies the add_video_source command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the brand_image_path command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-brand-image-path",
+          "markdownDescription": "Denies the brand_image_path command without any pre-configured scope."
         },
         {
           "description": "Denies the check_for_update command without any pre-configured scope.",
@@ -1111,6 +1159,18 @@
           "type": "string",
           "const": "deny-finish-instagram-connection",
           "markdownDescription": "Denies the finish_instagram_connection command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the gemini_key_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-gemini-key-status",
+          "markdownDescription": "Denies the gemini_key_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the generate_gemini_images command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-generate-gemini-images",
+          "markdownDescription": "Denies the generate_gemini_images command without any pre-configured scope."
         },
         {
           "description": "Denies the generate_profile_image command without any pre-configured scope.",
@@ -1365,6 +1425,12 @@
           "markdownDescription": "Denies the remove_developer_app command without any pre-configured scope."
         },
         {
+          "description": "Denies the remove_gemini_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-gemini-key",
+          "markdownDescription": "Denies the remove_gemini_key command without any pre-configured scope."
+        },
+        {
           "description": "Denies the remove_reviewer command without any pre-configured scope.",
           "type": "string",
           "const": "deny-remove-reviewer",
@@ -1401,16 +1467,34 @@
           "markdownDescription": "Denies the reveal_account_password command without any pre-configured scope."
         },
         {
+          "description": "Denies the reveal_brand_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reveal-brand-image",
+          "markdownDescription": "Denies the reveal_brand_image command without any pre-configured scope."
+        },
+        {
           "description": "Denies the review_connection command without any pre-configured scope.",
           "type": "string",
           "const": "deny-review-connection",
           "markdownDescription": "Denies the review_connection command without any pre-configured scope."
         },
         {
+          "description": "Denies the save_brand_image command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-brand-image",
+          "markdownDescription": "Denies the save_brand_image command without any pre-configured scope."
+        },
+        {
           "description": "Denies the save_developer_app command without any pre-configured scope.",
           "type": "string",
           "const": "deny-save-developer-app",
           "markdownDescription": "Denies the save_developer_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_gemini_key command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-gemini-key",
+          "markdownDescription": "Denies the save_gemini_key command without any pre-configured scope."
         },
         {
           "description": "Denies the save_generated_video command without any pre-configured scope.",

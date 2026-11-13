@@ -25,6 +25,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri::Manager;
 
+use crate::brand_images;
 use crate::review::{self, ServiceAccount};
 
 const KEY_SERVICE: &str = "social-manager-team-sync";
@@ -51,6 +52,8 @@ const SHARED_SERVICES: &[(&str, &[&str], bool)] = &[
     ("social-manager-developer-app", &["meta", "x", "tiktok", "google", "meta-production", "x-production", "tiktok-production", "google-production"], false),
     ("social-manager-meta-login-config", &["meta"], false),
     ("social-manager-email", &["primary"], false),
+    // The Gemini key for brand pictures.
+    (crate::gemini_ai::KEY_SERVICE, &[crate::gemini_ai::KEY_ENTRY], false),
     // API keys of the video sources (Kling, Grok), one per source id listed in video-sources.json.
     (VIDEO_SOURCE_SERVICE, &[], false),
 ];
@@ -75,6 +78,9 @@ struct State {
     /// File name -> SHA-256 of the shared file as last synced.
     #[serde(default)]
     file_hashes: BTreeMap<String, String>,
+    /// Brand pictures already in the cloud (each is its own `img-<hash>` document and never changes).
+    #[serde(default)]
+    images_in_cloud: BTreeSet<String>,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -511,9 +517,57 @@ async fn fetch<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &Service
         seen.remote_file_hashes = Some(hashes(&remote_files));
         seen.remote_workspace = Some(payload.workspace);
     }
+    if let Some(workspace) = seen.remote_workspace.as_ref() {
+        download_images(pc, &key, account, workspace).await;
+    }
     let fetched = Fetched { rev: remote_rev, remote: seen.remote_workspace.clone(), base: state.base.clone(), secrets_received: received };
     *pc.seen.lock().map_err(|_| "Sync state is unavailable.")? = Some(seen);
     Ok(fetched)
+}
+
+// ---- Brand pictures -------------------------------------------------------------------------------------
+
+fn image_doc(name: &str) -> String {
+    format!("img-{}", name.replace('.', "-"))
+}
+
+/// Uploads the pictures this workspace names that aren't in the cloud yet, each as its own encrypted
+/// document. Pictures never change (their name is their hash), so each is written once.
+async fn upload_images<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &ServiceAccount, workspace: &Value, state: &mut State) -> Result<(), String> {
+    let missing: Vec<String> = brand_images::refs_in(workspace).into_iter().filter(|name| !state.images_in_cloud.contains(name)).collect();
+    let mut uploaded = false;
+    for name in missing {
+        let Some(bytes) = brand_images::read(&pc.dir, &name) else { continue };
+        let (nonce, data) = seal(key, &bytes)?;
+        if commit(account, vec![update(account, &image_doc(&name), json!({ "nonce": nonce, "data": data }))]).await? {
+            state.images_in_cloud.insert(name);
+            uploaded = true;
+        }
+    }
+    if uploaded {
+        write_state(&pc.dir, state)?;
+    }
+    Ok(())
+}
+
+/// Downloads the pictures this workspace names that this PC doesn't have. A picture that can't be
+/// fetched now is tried again on the next sync; it never stops the sync.
+async fn download_images<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &ServiceAccount, workspace: &Value) {
+    let missing: Vec<String> = brand_images::refs_in(workspace).into_iter().filter(|name| brand_images::read(&pc.dir, name).is_none()).collect();
+    let mut arrived = Vec::new();
+    for name in missing {
+        let Ok(Some((doc, _))) = get_doc(account, &image_doc(&name)).await else { continue };
+        let Ok(bytes) = open(key, doc.get("nonce").and_then(Value::as_str).unwrap_or_default(), doc.get("data").and_then(Value::as_str).unwrap_or_default()) else { continue };
+        if brand_images::name_of(&bytes).as_deref() == Some(name.as_str()) && brand_images::save_bytes(&pc.dir, &bytes).is_ok() {
+            arrived.push(name);
+        }
+    }
+    if !arrived.is_empty() {
+        if let Ok(mut state) = read_state(&pc.dir) {
+            state.images_in_cloud.extend(arrived);
+            let _ = write_state(&pc.dir, &state);
+        }
+    }
 }
 
 /// Step 2 of a sync: uploads the merged shared workspace and this PC's sign-ins if anything differs from
@@ -537,6 +591,8 @@ async fn push<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &ServiceA
         return Ok(Pushed { rev: 0, pushed: false, conflict: true });
     };
     let mut state = read_state(&pc.dir)?;
+    // Pictures go up first, so the other PC finds every picture the new workspace names.
+    upload_images(pc, &key, account, &workspace, &mut state).await?;
     let ids: BTreeSet<String> = account_ids.into_iter().chain(accounts_in(Some(&workspace))).collect();
     // Remote changes were applied during the fetch, so this PC now holds the merged secrets and files.
     // Slots of accounts and sources that no longer exist are left out of the upload.
@@ -729,7 +785,8 @@ mod tests {
         store_a.set("social-manager-developer-app", "tiktok-production", br#"{"id":"prod"}"#).unwrap();
         store_a.set(VIDEO_SOURCE_SERVICE, "ab12", b"xai-key").unwrap();
         std::fs::write(dir_a.path().join(SHARED_FILES[0]), br#"{"active":"ab12","sources":[{"id":"ab12","name":"Grok","provider":"grok"}]}"#).unwrap();
-        let workspace = json!({ "businessName": "Soft Wings", "brands": [{ "id": "b1", "name": "Cooking" }], "accounts": [{ "id": "acc1", "brandId": "b1" }], "developerLogins": { "tiktok": { "email": "dev@x.com" } } });
+        let picture = brand_images::save_bytes(dir_a.path(), &[0xFF, 0xD8, 0xFF, 0xE0, 7, 7, 7]).unwrap();
+        let workspace = json!({ "businessName": "Soft Wings", "brands": [{ "id": "b1", "name": "Cooking", "image": { "file": picture } }], "accounts": [{ "id": "acc1", "brandId": "b1" }], "developerLogins": { "tiktok": { "email": "dev@x.com" } } });
         assert!(fetch(&a, &key, &account, vec!["acc1".into()]).await.unwrap().remote.is_none());
         assert!(push(&a, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed);
 
@@ -741,6 +798,7 @@ mod tests {
         assert_eq!(store_b.get("social-manager-developer-app", "tiktok-production").unwrap().as_deref(), Some(br#"{"id":"prod"}"#.as_slice()));
         assert_eq!(store_b.get(VIDEO_SOURCE_SERVICE, "ab12").unwrap().as_deref(), Some(b"xai-key".as_slice()));
         assert!(std::fs::read(dir_b.path().join(SHARED_FILES[0])).unwrap().starts_with(br#"{"active":"ab12""#));
+        assert!(brand_images::read(dir_b.path(), &picture).is_some(), "the brand picture came across");
         assert!(!push(&b, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed, "nothing new to upload");
 
         // PC B changes the password; PC A picks it up.
@@ -763,6 +821,7 @@ mod tests {
         assert_eq!(fetch(&a, &key, &account, vec![]).await.unwrap().remote.unwrap()["businessName"], "Renamed on B");
 
         assert!(wipe().await.unwrap());
+        assert!(commit(&account, vec![json!({ "delete": doc_name(&account, &image_doc(&picture)) })]).await.unwrap());
     }
 
     #[test]

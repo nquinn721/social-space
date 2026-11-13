@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AppWindow, ArrowLeft, Pencil, Plus, Search, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import VideoLibrary from '../VideoLibrary';
 import type { OpenBrand } from '../App';
-import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from '../model';
+import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type BrandImage, type Platform, type PlatformAction, type View, type Workspace } from '../model';
 import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, passwordGroup, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 
 const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id, item])).values()];
@@ -10,7 +10,8 @@ import { ensureSharedPassword } from '../profileService';
 import BrandAccounts from '../BrandAccounts';
 import { useBrandInstagram } from '../useBrandInstagram';
 import { brandSummary, useBrandStatuses, type SocialStatus } from '../brandStatus';
-import { AccountAvatar, BrandMark, PageHeader } from '../ui';
+import BrandPicture, { BrandAvatar } from '../BrandPicture';
+import { BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
 import Connections from '../Connections';
@@ -90,6 +91,17 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     void onSave({ ...workspace, developerLogins: { ...developerLogins, [provider]: { email } } }, 'Developer account saved.');
   } : undefined;
 
+  /** The brand's picture, saved with the brand so it syncs (brands made before brands were saved are added). */
+  async function saveBrandImage(brand: Brand, image: BrandImage | undefined, message: string) {
+    if (!onSave) return false;
+    const known = workspace.brands.some((item) => item.id === brand.id);
+    const brands = known ? workspace.brands.map((item) => item.id === brand.id ? { ...item, image } : item) : [...workspace.brands, { ...brand, image }];
+    return onSave({ ...workspace, brands }, message);
+  }
+  async function saveAccountImage(account: Account, imageFile: string | undefined, message: string) {
+    if (!onSave) return false;
+    return onSave({ ...workspace, accounts: workspace.accounts.map((item) => item.id === account.id ? { ...item, imageFile } : item) }, message);
+  }
   const [adding, setAdding] = useState(false);
   /** The new profile shares the brand's password, so every social signs in the same way. */
   async function startSignUp(account: Account, siblings: Account[]) {
@@ -138,7 +150,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     return <>
       <button type="button" className="text-button back-link" onClick={() => { setOpened(null); setRenaming(null); }}><ArrowLeft size={15}/> All brands</button>
       <div className="brand-hero">
-        <AccountAvatar account={lead} name={brand.name} size="lg"/>
+        <BrandAvatar brand={brand} lead={lead}/>
         <div>{renaming === null
           ? <h1>{brand.name}{onRenameBrand && <button type="button" className="icon-button rename-brand" aria-label={`Rename ${brand.name}`} disabled={!loaded || busy} onClick={() => setRenaming(brand.name)}><Pencil size={15}/></button>}</h1>
           : <form className="inline-add rename-form" onSubmit={(event) => { event.preventDefault(); const name = renaming.trim(); if (name && onRenameBrand) void onRenameBrand(brand, name).then((ok) => { if (ok) setRenaming(null); }); }}>
@@ -164,6 +176,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       {brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
         instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
+      {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
       <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
         onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
@@ -188,7 +201,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
         const live = accounts.filter((account) => account.status === 'active').length;
         return <button type="button" key={brand.id} className="brand-tile" aria-label={`Open ${brand.name}`} onClick={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}>
-          <AccountAvatar account={lead} name={brand.name} size="lg"/>
+          <BrandAvatar brand={brand} lead={lead}/>
           <strong>{brand.name}</strong>
           <small>{live} of {accounts.length} live</small>
           <span className="tile-socials">{PLATFORMS.map((platform) => {
