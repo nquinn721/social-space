@@ -1,11 +1,12 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import type { Account, Platform, PlatformAction, Workspace } from './model';
 
-export type FormFields = Partial<Record<'email' | 'phone' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'fullName' | 'bio' | 'website' | 'verificationCode' | 'birthday', string>>;
+export type FormFields = Partial<Record<'email' | 'phone' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'fullName' | 'bio' | 'website' | 'verificationCode' | 'birthday' | 'appName' | 'redirectUri', string>>;
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to use this.'); }
 /** Opens a platform page in an app window and returns the window id. */
 export async function openPlatformWindow(platform: Platform, action: PlatformAction): Promise<string> { desktopOnly(); return invoke('open_platform_action', { platform, action }); }
-export type FillOptions = { imagePath?: string; accountId?: string; includePassword?: boolean; keepFilling?: boolean; replace?: boolean };
+/** includePassword 'ifSaved' fills the account's saved password on sign-in pages, and skips it when none is saved. */
+export type FillOptions = { imagePath?: string; accountId?: string; includePassword?: boolean | 'ifSaved'; keepFilling?: boolean; replace?: boolean };
 /**
  * Pre-fills the visible form in that window. It never submits; the user does.
  * The saved password is looked up in Rust, so it never passes through here.
@@ -14,7 +15,10 @@ export type FillOptions = { imagePath?: string; accountId?: string; includePassw
  */
 export async function fillSiteForm(windowLabel: string, fields: FormFields, options: FillOptions = {}): Promise<void> {
   desktopOnly();
-  return invoke('fill_site_form', { windowLabel, fields, imagePath: options.imagePath || null, accountId: options.accountId ?? null, includePassword: options.includePassword ?? false, keepFilling: options.keepFilling ?? false, replace: options.replace ?? false });
+  const includePassword = options.includePassword === 'ifSaved'
+    ? Boolean(options.accountId) && await hasAccountPassword(options.accountId!).catch(() => false)
+    : options.includePassword ?? false;
+  return invoke('fill_site_form', { windowLabel, fields, imagePath: options.imagePath || null, accountId: options.accountId ?? null, includePassword, keepFilling: options.keepFilling ?? false, replace: options.replace ?? false });
 }
 export type Bounds = { x: number; y: number; width: number; height: number };
 /** Shows a platform page inside the app window, over the given area, and returns its id for filling. */

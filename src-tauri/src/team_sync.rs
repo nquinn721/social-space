@@ -41,7 +41,8 @@ const MAX_PAYLOAD: usize = 700 * 1024;
 /// Credential Manager services whose entries are shared, and the fixed entries each one uses besides
 /// one per account (`per_account`). Anything not listed here stays on its own PC.
 const SHARED_SERVICES: &[(&str, &[&str], bool)] = &[
-    ("social-manager-account-password", &[], true),
+    // Account passwords, plus the developer-site passwords of the guided developer-app setup.
+    ("social-manager-account-password", &["developer-meta", "developer-x", "developer-tiktok", "developer-google"], true),
     ("social-manager-instagram-page", &["primary"], true),
     ("social-manager-x-oauth", &["primary"], true),
     ("social-manager-youtube", &[], true),

@@ -2,8 +2,8 @@
 //!
 //! The filled form stays visible and is never submitted: the user reviews it,
 //! completes any captcha or verification step, and presses the button. Only
-//! windows opened by the app on the supported social platforms can be filled,
-//! and password fields are never touched.
+//! windows opened by the app on the supported social platforms and developer
+//! sites can be filled. Password boxes get only the account's own saved password.
 
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
@@ -20,6 +20,9 @@ const PLATFORM_HOSTS: &[&str] = &[
     "tiktok.com",
     "youtube.com",
     "accounts.google.com",
+    // Developer sites of the guided developer-app setup.
+    "console.cloud.google.com",
+    "facebook.com",
 ];
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -48,10 +51,16 @@ pub struct FormFields {
     /// YYYY-MM-DD, filled into birthday dropdowns or date fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     birthday: Option<String>,
+    /// Developer sites: the app or project name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    app_name: Option<String>,
+    /// Developer sites: the redirect or callback address of the app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    redirect_uri: Option<String>,
 }
 
 impl FormFields {
-    fn values(&self) -> [&Option<String>; 11] {
+    fn values(&self) -> [&Option<String>; 13] {
         [
             &self.email,
             &self.phone,
@@ -64,6 +73,8 @@ impl FormFields {
             &self.website,
             &self.verification_code,
             &self.birthday,
+            &self.app_name,
+            &self.redirect_uri,
         ]
     }
 }
@@ -204,9 +215,11 @@ const FILL_SCRIPT: &str = r#"function (data) {
     ['username', { auto: ['username'], words: /user ?name|handle/ }],
     ['firstName', { auto: ['given-name'], words: /first ?name|given/ }],
     ['lastName', { auto: ['family-name'], words: /last ?name|surname|family/ }],
+    ['appName', { words: /app(lication)? name|project name/ }],
     ['displayName', { auto: ['nickname'], words: /display ?name|channel name|nickname/ }],
     ['fullName', { auto: ['name'], words: /full ?name|\bname\b/ }],
     ['bio', { words: /\bbio\b|description|about/ }],
+    ['redirectUri', { words: /redirect|callback/ }],
     ['website', { types: ['url'], auto: ['url'], words: /website|\burl\b|link/ }],
     ['verificationCode', { auto: ['one-time-code'], words: /code|otp|verif/ }],
   ];
@@ -540,6 +553,17 @@ mod tests {
         assert_eq!(image_mime(Path::new("me.jpeg")), Some("image/jpeg"));
         assert_eq!(image_mime(Path::new("me.exe")), None);
         assert!(read_image("/definitely/missing.png").is_err());
+    }
+
+    #[test]
+    fn developer_app_details_are_accepted() {
+        let fields: FormFields = serde_json::from_value(serde_json::json!({ "appName": "SocialSpace", "redirectUri": "https://localhost/socialspace/tiktok" })).unwrap();
+        assert!(validate(&fields).is_ok());
+        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: false }).unwrap();
+        assert!(script.contains("\"redirectUri\":\"https://localhost/socialspace/tiktok\""));
+        assert!(platform_host(&"https://developers.facebook.com/apps/".parse().unwrap()));
+        assert!(platform_host(&"https://console.cloud.google.com/apis/credentials".parse().unwrap()));
+        assert!(!platform_host(&"https://example.com/".parse().unwrap()));
     }
 
     #[test]

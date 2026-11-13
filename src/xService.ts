@@ -5,6 +5,7 @@ function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app t
 export async function xConnection(profile?: string): Promise<XIdentity | null> { desktopOnly(); return invoke('x_connection', { profile: profile ?? null }); }
 export async function claimXConnection(profile: string, username: string): Promise<XIdentity | null> { desktopOnly(); return invoke('claim_x_connection', { profile, username }); }
 /** clientId can be left empty once the X developer app is saved. Rejects with SETUP_NEEDED when neither is there. */
-export async function connectX(clientId: string, profile?: string): Promise<XIdentity> { desktopOnly(); return invoke('connect_x', { clientId: clientId || null, profile: profile ?? null }); }
+/** username fills X's sign-in (with the profile's saved password) in the window that opens. */
+export async function connectX(clientId: string, profile?: string, username?: string): Promise<XIdentity> { desktopOnly(); return invoke('connect_x', { clientId: clientId || null, profile: profile ?? null, username: username || null }); }
 export async function disconnectX(profile?: string): Promise<void> { desktopOnly(); return invoke('disconnect_x', { profile: profile ?? null }); }
 export async function postToX(text: string, profile?: string): Promise<XPost> { desktopOnly(); return invoke('post_to_x', { text, profile: profile ?? null }); }

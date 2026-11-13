@@ -1,5 +1,6 @@
 import type { DevProvider } from './devAppsService';
 import { INSTAGRAM_REDIRECT_URI } from './instagramService';
+import type { FormFields } from './profileService';
 import type { SetupPage } from './setupNeeds';
 import { TIKTOK_REDIRECT_URI, YOUTUBE_REDIRECT_URI } from './socialConnectService';
 
@@ -31,8 +32,12 @@ export type DevAppGuide = {
   fields: { key: KeyField; label: string; secret?: boolean }[];
   /** Where on the site the values are, shown with the fields. */
   where: string;
+  /** Filled into the developer site's forms as they appear (app name, description, addresses). */
+  fill: Pick<FormFields, 'appName' | 'bio' | 'website' | 'redirectUri'>;
 };
 
+const APP_NAME = 'SocialSpace';
+const APP_DESCRIPTION = 'Publishes videos I make to my own TikTok profiles from my desktop app.';
 const TIKTOK_REVIEW_TEXT = 'SocialSpace is a desktop app the owner uses to publish short videos they made to their own TikTok profiles. The owner signs in with Login Kit, picks a video and caption in the app, and the app uploads it with the Content Posting API. It only posts to accounts the owner connects and never reads other users\' data.';
 const X_USE_TEXT = 'I use the X API to publish posts I write (text and short videos) to my own brand accounts from my desktop app, SocialSpace. The app only posts on accounts I own after I sign in, does not read or analyze other users\' data, and does not resell or share any X data.';
 
@@ -41,8 +46,8 @@ export const GUIDES: Record<DevProvider, DevAppGuide> = {
     provider: 'tiktok', name: 'TikTok', site: 'TikTok for Developers', minutes: 10,
     steps: [
       { title: 'Sign in to TikTok for Developers', page: 'tiktok-login', lines: [
-        'Log in with the email of your TikTok for Developers account.',
-        'No developer account yet? Press *Sign up* and make one, then accept the developer terms when TikTok asks.'] },
+        'Your developer email and password are filled in. Press *Log in*.',
+        'If TikTok says the account doesn\'t exist, press *Sign up*: the same email and saved password fill in there. Enter the code TikTok emails you (it shows in Inbox), then accept the developer terms.'] },
       { title: 'Create the app', page: 'tiktok-apps', lines: [
         'Press *Connect an app* (or *Create app*).',
         'Choose *Individual*, name it SocialSpace and press *Confirm*. The app page opens.'] },
@@ -50,7 +55,7 @@ export const GUIDES: Record<DevProvider, DevAppGuide> = {
         'Upload an app icon (a square 1024 × 1024 image) and pick a category such as *Entertainment*.',
         'Paste the description below, and add links to your Terms of Service and Privacy Policy pages (TikTok needs both before review).',
         'Under *Platforms*, tick *Desktop*.'],
-        copy: [{ label: 'Description', value: 'Publishes videos I make to my own TikTok profiles from my desktop app.' }, { label: 'Website', value: APP_WEBSITE }] },
+        copy: [{ label: 'Description', value: APP_DESCRIPTION }, { label: 'Website', value: APP_WEBSITE }] },
       { title: 'Add Login Kit and Content Posting API', lines: [
         'Press *Add products*, add *Login Kit*, then add *Content Posting API*.',
         'In *Content Posting API*, turn on *Direct Post*.'] },
@@ -69,6 +74,7 @@ export const GUIDES: Record<DevProvider, DevAppGuide> = {
     ],
     fields: [{ key: 'id', label: 'Client key' }, { key: 'secret', label: 'Client secret', secret: true }],
     where: 'Top of the app page in TikTok for Developers.',
+    fill: { appName: APP_NAME, bio: APP_DESCRIPTION, website: APP_WEBSITE, redirectUri: TIKTOK_REDIRECT_URI },
   },
   google: {
     provider: 'google', name: 'YouTube', site: 'Google Cloud console', minutes: 10,
@@ -95,6 +101,7 @@ export const GUIDES: Record<DevProvider, DevAppGuide> = {
     ],
     fields: [{ key: 'id', label: 'Client ID' }, { key: 'secret', label: 'Client secret', secret: true }],
     where: 'Credentials → OAuth 2.0 Client IDs → SocialSpace.',
+    fill: { appName: APP_NAME },
   },
   x: {
     provider: 'x', name: 'X', site: 'X developer portal', minutes: 5,
@@ -115,6 +122,7 @@ export const GUIDES: Record<DevProvider, DevAppGuide> = {
     ],
     fields: [{ key: 'id', label: 'OAuth 2.0 Client ID' }],
     where: 'The app\'s Keys and tokens tab → OAuth 2.0 Client ID.',
+    fill: { appName: APP_NAME, bio: X_USE_TEXT, website: APP_WEBSITE, redirectUri: X_CALLBACK },
   },
   meta: {
     provider: 'meta', name: 'Instagram', site: 'Meta for Developers', minutes: 10,
@@ -139,6 +147,7 @@ export const GUIDES: Record<DevProvider, DevAppGuide> = {
     ],
     fields: [{ key: 'id', label: 'App ID' }, { key: 'secret', label: 'App secret', secret: true }, { key: 'config', label: 'Configuration ID' }],
     where: 'App settings → Basic, and the Unified login configuration.',
+    fill: { appName: APP_NAME, redirectUri: INSTAGRAM_REDIRECT_URI },
   },
 };
 

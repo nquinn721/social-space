@@ -104,7 +104,7 @@ describe('connections', () => {
     await user.type(within(form).getByLabelText('OAuth 2.0 Client ID'), 'abc-123');
     await user.click(within(form).getByRole('button', { name: 'Save and connect' }));
     expect(apps.saveDeveloperApp).toHaveBeenCalledWith('x', 'abc-123', '');
-    expect(x.connectX).toHaveBeenLastCalledWith('', 'x-mia');
+    expect(x.connectX).toHaveBeenLastCalledWith('', 'x-mia', 'mia_x');
     expect(await screen.findByText('X connected as @mia_x for Massage With Mia.')).toBeInTheDocument();
   });
   it('asks for the TikTok app once, then connects that TikTok profile with its saved sign-in', async () => {
@@ -123,3 +123,4 @@ describe('connections', () => {
     expect(await screen.findByText('TikTok connected as @mia for Massage With Mia.')).toBeInTheDocument();
   });
 });
+
