@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-brand-image-path"
+description = "Enables the brand_image_path command without any pre-configured scope."
+commands.allow = ["brand_image_path"]
+
+[[permission]]
+identifier = "deny-brand-image-path"
+description = "Denies the brand_image_path command without any pre-configured scope."
+commands.deny = ["brand_image_path"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-generate-gemini-images"
+description = "Enables the generate_gemini_images command without any pre-configured scope."
+commands.allow = ["generate_gemini_images"]
+
+[[permission]]
+identifier = "deny-generate-gemini-images"
+description = "Denies the generate_gemini_images command without any pre-configured scope."
+commands.deny = ["generate_gemini_images"]

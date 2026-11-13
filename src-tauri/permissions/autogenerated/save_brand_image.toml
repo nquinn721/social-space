@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-brand-image"
+description = "Enables the save_brand_image command without any pre-configured scope."
+commands.allow = ["save_brand_image"]
+
+[[permission]]
+identifier = "deny-save-brand-image"
+description = "Denies the save_brand_image command without any pre-configured scope."
+commands.deny = ["save_brand_image"]

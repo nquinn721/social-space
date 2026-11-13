@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reveal-brand-image"
+description = "Enables the reveal_brand_image command without any pre-configured scope."
+commands.allow = ["reveal_brand_image"]
+
+[[permission]]
+identifier = "deny-reveal-brand-image"
+description = "Denies the reveal_brand_image command without any pre-configured scope."
+commands.deny = ["reveal_brand_image"]

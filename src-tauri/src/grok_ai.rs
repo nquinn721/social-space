@@ -141,11 +141,11 @@ pub struct ImageRequest {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeneratedImage {
-    path: String,
-    preview: String,
+    pub(crate) path: String,
+    pub(crate) preview: String,
 }
 
-fn image_folder(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn image_folder(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|path| path.join(IMAGE_FOLDER))
@@ -153,7 +153,7 @@ fn image_folder(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// The picture format from its first bytes, as (extension, MIME type).
-fn image_kind(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
+pub(crate) fn image_kind(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
     if bytes.starts_with(b"\x89PNG") {
         Some(("png", "image/png"))
     } else if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
@@ -166,7 +166,7 @@ fn image_kind(bytes: &[u8]) -> Option<(&'static str, &'static str)> {
 }
 
 /// Only pictures this feature made can be refined.
-fn generated_source(folder: &Path, path: &str) -> Result<PathBuf, String> {
+pub(crate) fn generated_source(folder: &Path, path: &str) -> Result<PathBuf, String> {
     let wrong = || "Only generated pictures can be refined.".to_string();
     let file = Path::new(path).canonicalize().map_err(|_| wrong())?;
     let folder = folder.canonicalize().map_err(|_| wrong())?;
@@ -177,7 +177,7 @@ fn generated_source(folder: &Path, path: &str) -> Result<PathBuf, String> {
     Ok(file)
 }
 
-fn clean_text(text: &str) -> String {
+pub(crate) fn clean_text(text: &str) -> String {
     text.chars().filter(|c| !c.is_control() || *c == '\n').take(MAX_PROMPT_CHARS).collect::<String>().trim().to_owned()
 }
 
