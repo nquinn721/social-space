@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-posting-sign-ins"
+description = "Enables the posting_sign_ins command without any pre-configured scope."
+commands.allow = ["posting_sign_ins"]
+
+[[permission]]
+identifier = "deny-posting-sign-ins"
+description = "Denies the posting_sign_ins command without any pre-configured scope."
+commands.deny = ["posting_sign_ins"]

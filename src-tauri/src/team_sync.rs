@@ -60,7 +60,10 @@ const SHARED_SERVICES: &[(&str, &[&str], bool)] = &[
 const VIDEO_SOURCE_SERVICE: &str = "social-manager-video-source";
 
 /// App data files shared whole: the list of video sources (names, providers, which one is active).
-const SHARED_FILES: &[&str] = &["video-sources.json"];
+const SHARED_FILES: &[&str] = &["video-sources.json", crate::browser_sessions::SESSIONS_FILE];
+/// Shared files that are JSON objects merged key by key (one brand's sign-ins at a time), so both PCs
+/// can save different brands at once. The others are taken whole.
+const KEYED_FILES: &[&str] = &[crate::browser_sessions::SESSIONS_FILE];
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -247,11 +250,59 @@ fn read_files(dir: &std::path::Path) -> BTreeMap<String, Vec<u8>> {
     SHARED_FILES.iter().filter_map(|name| std::fs::read(dir.join(name)).ok().map(|bytes| (name.to_string(), bytes))).collect()
 }
 
+/// Hashes of shared files for the base: whole files by name, keyed files by `name#key` per entry.
+fn file_hashes(files: &BTreeMap<String, Vec<u8>>) -> BTreeMap<String, String> {
+    let mut hashes = BTreeMap::new();
+    for (name, bytes) in files {
+        if KEYED_FILES.contains(&name.as_str()) {
+            for (key, value) in keyed(Some(bytes)) {
+                hashes.insert(format!("{name}#{key}"), hash(value.to_string().as_bytes()));
+            }
+        } else {
+            hashes.insert(name.clone(), hash(bytes));
+        }
+    }
+    hashes
+}
+
+fn keyed(bytes: Option<&Vec<u8>>) -> serde_json::Map<String, Value> {
+    bytes.and_then(|b| serde_json::from_slice::<Value>(b).ok()).and_then(|v| v.as_object().cloned()).unwrap_or_default()
+}
+
+/// A keyed file, entry by entry: an entry takes the server's copy when this PC left it as it was at the
+/// last sync. Returns the merged file when it differs from the local one.
+fn merge_keyed(name: &str, local: Option<&Vec<u8>>, remote: Option<&Vec<u8>>, base: &BTreeMap<String, String>) -> Option<Vec<u8>> {
+    let (mine, theirs) = (keyed(local), keyed(remote));
+    let mut merged = mine.clone();
+    let keys: BTreeSet<&String> = mine.keys().chain(theirs.keys()).collect();
+    for key in keys {
+        let base_hash = base.get(&format!("{name}#{key}")).cloned();
+        let local_hash = mine.get(key).map(|v| hash(v.to_string().as_bytes()));
+        let remote_hash = theirs.get(key).map(|v| hash(v.to_string().as_bytes()));
+        if local_hash == base_hash && remote_hash != base_hash {
+            match theirs.get(key) {
+                Some(value) => { merged.insert(key.clone(), value.clone()); }
+                None => { merged.remove(key); }
+            }
+        }
+    }
+    (merged != mine).then(|| serde_json::to_vec_pretty(&Value::Object(merged)).unwrap_or_default())
+}
+
 /// Same rule as for secrets: a file takes the server's copy when this PC left it unchanged since the last sync.
 fn apply_remote_files(dir: &std::path::Path, base: &BTreeMap<String, String>, remote: &BTreeMap<String, Vec<u8>>) -> Result<usize, String> {
     let local = read_files(dir);
     let mut changed = 0;
-    for name in SHARED_FILES {
+    for name in KEYED_FILES {
+        if let Some(bytes) = merge_keyed(name, local.get(*name), remote.get(*name), base) {
+            std::fs::create_dir_all(dir).map_err(|e| format!("Could not create the app data folder: {e}"))?;
+            let path = dir.join(name);
+            let temporary = path.with_extension("sync-tmp");
+            std::fs::write(&temporary, bytes).and_then(|_| std::fs::rename(&temporary, &path)).map_err(|e| format!("Could not save shared {name}: {e}"))?;
+            changed += 1;
+        }
+    }
+    for name in SHARED_FILES.iter().filter(|name| !KEYED_FILES.contains(name)) {
         let (local_hash, remote_hash, base_hash) = (local.get(*name).map(|v| hash(v)), remote.get(*name).map(|v| hash(v)), base.get(*name).cloned());
         if local_hash == base_hash && remote_hash != base_hash && local_hash != remote_hash {
             let path = dir.join(name);
@@ -514,7 +565,7 @@ async fn fetch<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &Service
         slots.extend(state.secret_hashes.keys().cloned());
         received += apply_remote(pc.store, &slots, &state.secret_hashes, &remote)?;
         seen.remote_hashes = Some(hashes(&remote));
-        seen.remote_file_hashes = Some(hashes(&remote_files));
+        seen.remote_file_hashes = Some(file_hashes(&remote_files));
         seen.remote_workspace = Some(payload.workspace);
     }
     if let Some(workspace) = seen.remote_workspace.as_ref() {
@@ -597,7 +648,7 @@ async fn push<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &ServiceA
     // Remote changes were applied during the fetch, so this PC now holds the merged secrets and files.
     // Slots of accounts and sources that no longer exist are left out of the upload.
     let files = read_files(&pc.dir);
-    let file_hashes = hashes(&files);
+    let file_hashes = file_hashes(&files);
     let local = read_local(pc.store, &candidate_slots(&ids, &source_ids(files.get(SHARED_FILES[0]).map(Vec::as_slice))))?;
     let local_hashes = hashes(&local);
     let remote_hashes = seen.remote_hashes.clone().unwrap_or_else(|| state.secret_hashes.clone());
@@ -717,6 +768,19 @@ mod tests {
     }
 
     #[test]
+    fn brand_sign_ins_merge_brand_by_brand() {
+        let name = crate::browser_sessions::SESSIONS_FILE;
+        let base_file = br#"{"b1":{"savedAt":1},"b2":{"savedAt":1}}"#.to_vec();
+        let base = file_hashes(&[(name.to_string(), base_file)].into());
+        // This PC signed in again on b1; the other PC did on b2 and added b3.
+        let local = br#"{"b1":{"savedAt":5},"b2":{"savedAt":1}}"#.to_vec();
+        let remote = br#"{"b1":{"savedAt":1},"b2":{"savedAt":7},"b3":{"savedAt":8}}"#.to_vec();
+        let merged: Value = serde_json::from_slice(&merge_keyed(name, Some(&local), Some(&remote), &base).unwrap()).unwrap();
+        assert_eq!(merged, json!({ "b1": { "savedAt": 5 }, "b2": { "savedAt": 7 }, "b3": { "savedAt": 8 } }));
+        assert!(merge_keyed(name, Some(&local), Some(&local), &base).is_none(), "nothing new");
+    }
+
+    #[test]
     fn source_ids_read_both_file_shapes() {
         assert_eq!(source_ids(Some(br#"{"active":"a1","sources":[{"id":"a1"},{"id":"b2"}]}"#)), ["a1".to_string(), "b2".to_string()].into());
         assert_eq!(source_ids(Some(br#"[{"id":"c3"}]"#)), ["c3".to_string()].into());
@@ -808,6 +872,21 @@ mod tests {
         fetch(&a, &key, &account, vec!["acc1".into()]).await.unwrap();
         assert_eq!(store_a.get(PW, "acc1").unwrap().as_deref(), Some(b"changed-on-b".as_slice()));
         assert!(!push(&a, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed);
+
+        // A brand signed in on each PC at once: both sign-ins end up on both PCs.
+        let sessions = crate::browser_sessions::SESSIONS_FILE;
+        std::fs::write(dir_a.path().join(sessions), br#"{"b1":{"savedAt":10,"savedBy":"A","cookies":[]}}"#).unwrap();
+        fetch(&a, &key, &account, vec![]).await.unwrap();
+        assert!(push(&a, &key, &account, workspace.clone(), vec![]).await.unwrap().pushed);
+        std::fs::write(dir_b.path().join(sessions), br#"{"b2":{"savedAt":11,"savedBy":"B","cookies":[]}}"#).unwrap();
+        fetch(&b, &key, &account, vec![]).await.unwrap();
+        assert!(push(&b, &key, &account, workspace.clone(), vec![]).await.unwrap().pushed);
+        fetch(&a, &key, &account, vec![]).await.unwrap();
+        let on_a: Value = serde_json::from_slice(&std::fs::read(dir_a.path().join(sessions)).unwrap()).unwrap();
+        let on_b: Value = serde_json::from_slice(&std::fs::read(dir_b.path().join(sessions)).unwrap()).unwrap();
+        assert!(on_a.get("b1").is_some() && on_a.get("b2").is_some(), "A has both brands' sign-ins: {on_a}");
+        assert!(on_b.get("b1").is_some() && on_b.get("b2").is_some(), "B has both brands' sign-ins: {on_b}");
+        assert!(!push(&a, &key, &account, workspace.clone(), vec![]).await.unwrap().pushed);
 
         // Both fetch, B writes first, A's write is refused as a conflict.
         fetch(&a, &key, &account, vec![]).await.unwrap();

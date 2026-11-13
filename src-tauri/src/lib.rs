@@ -5,6 +5,7 @@ use tauri::{Manager, State};
 mod account_passwords;
 mod backup;
 mod brand_images;
+mod browser_sessions;
 mod gemini_ai;
 mod autofill;
 mod browser;
@@ -20,6 +21,7 @@ mod instagram_login;
 mod social_connect;
 mod kling;
 mod posting;
+mod sign_in_state;
 mod queue;
 mod review;
 mod setup_pages;
@@ -493,6 +495,7 @@ pub fn run() {
             autofill::fill_site_form,
             posting::open_posting_window,
             posting::open_profile_page,
+            sign_in_state::posting_sign_ins,
             autofill::choose_image_file,
             autofill::load_image_preview,
             account_passwords::ensure_account_password,
