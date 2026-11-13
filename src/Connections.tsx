@@ -11,6 +11,8 @@ import { INSTAGRAM_ID_NEEDED } from './instagramService';
 import { getPlatform, normalizeHandle, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
 import { BrandMark, errorText } from './ui';
 import SetupTracker from './SetupTracker';
+import { wrongLogin } from './useBrowserPosting';
+import { postMode } from './postingMode';
 import { useSetupStatus } from './setupService';
 
 /** What the app is really connected to. null means not connected (or it could not be checked). */
@@ -140,22 +142,23 @@ export default function Connections({ onNavigate, accounts = [], brands = [], ma
     if (group) group.accounts.push(account); else groups.push({ name, accounts: [account] });
     return groups;
   }, []);
-  const connectedCount = live.filter((account) => profiles.connected[account.id]).length;
+  const browserPosting = (account: Account) => postMode(account.platform) === 'browser';
+  const readyCount = live.filter((account) => browserPosting(account) ? !wrongLogin(developerLogins, account) : profiles.connected[account.id]).length;
   const SOCIAL_OF: Record<Provider, Platform> = { meta: 'instagram', x: 'x', google: 'youtube', tiktok: 'tiktok' };
 
   return <section className="connections" aria-label="Connections">
     <div className="sign-ins-head">
-      <div><h2><Link2 size={16}/> Connections</h2><p>Connect each profile so the app can post as it.</p></div>
+      <div><h2><Link2 size={16}/> What each social needs</h2><p>Instagram posts through Meta's API, so each profile connects once. TikTok, YouTube and X post through their own upload page in the brand's window, so they need the profile and its login, not an API connection.</p></div>
       <button type="button" className="ghost-button small-button" disabled={loading || profiles.loading} onClick={() => { refresh(); void profiles.refresh(); recheck(); }}><RefreshCw size={14}/> Check again</button>
     </div>
 
     {flow.panels}
 
-    <SetupTracker accounts={accounts} brands={brands} apps={status.apps} connections={status.connections} passwords={status.passwords} marks={marks}
+    <SetupTracker accounts={accounts} brands={brands} apps={status.apps} connections={status.connections} passwords={status.passwords} marks={marks} developerLogins={developerLogins}
       onMark={onMark} onConnect={(account) => void connect(account)} onSetupApp={setupApp} onEditAccount={onEditAccount} working={working}/>
 
     <div className="card conn-card" aria-label="Profile connections">
-      <div className="conn-card-head"><h3>Profiles</h3><small>{profiles.loading ? 'Checking…' : `${connectedCount} of ${live.length} connected`}</small></div>
+      <div className="conn-card-head"><h3>Profiles</h3><small>{profiles.loading ? 'Checking…' : `${readyCount} of ${live.length} ready to post`}</small></div>
       {live.length === 0 ? <p className="conn-empty">No live profiles yet. Once a profile exists on its social, connect it here.</p>
         : byBrand.map((group) => <div className="conn-group" key={group.name}>
           <div className="conn-brand">{group.name}</div>
@@ -167,9 +170,10 @@ export default function Connections({ onNavigate, accounts = [], brands = [], ma
             return <div className="conn-row" key={account.id} aria-label={`${name} @${account.handle}`}>
               <BrandMark platform={account.platform} small/>
               <div className="conn-text"><strong>{name}</strong><small>@{account.handle}{mismatch ? ` · connected as @${normalizeHandle(username)}` : ''}</small></div>
-              {!connectable ? <span className="pill planned">Coming soon</span>
+              {browserPosting(account) ? (wrongLogin(developerLogins, account) ? <span className="pill warning"><span className="dot"/>Uses your main Gmail</span> : <span className="pill active" title="Posts through its own upload page in the brand's window. You press Post."><span className="dot"/>Posts in its window</span>)
+                : !connectable ? <span className="pill planned">Coming soon</span>
                 : <span className={`pill ${username ? 'active' : 'planned'}`}><span className="dot"/>{profiles.loading ? 'Checking…' : username ? 'Connected' : 'Not connected'}</span>}
-              <span className="conn-action">{connectable && (username
+              <span className="conn-action">{browserPosting(account) ? (wrongLogin(developerLogins, account) && onEditAccount ? <button type="button" className="outline-button small-button" onClick={() => onEditAccount(account)}>Fix login</button> : null) : connectable && (username
                 ? <button type="button" className="ghost-button small-button" disabled={working} onClick={() => void disconnect(account)}>Disconnect</button>
                 : <button type="button" className="primary-button small-button" disabled={working || profiles.loading} onClick={() => void connect(account)}>Connect</button>)}</span>
             </div>;
@@ -179,11 +183,11 @@ export default function Connections({ onNavigate, accounts = [], brands = [], ma
 
     <div className="conn-columns">
       <div className="card conn-card" aria-label="Developer apps">
-        <div className="conn-card-head"><h3>Set up once</h3><small>One developer app per social</small></div>
+        <div className="conn-card-head"><h3>Developer apps</h3><small>Instagram needs Meta's; the rest only for API posting later</small></div>
         {appRows.map((row) => <div className="conn-row" key={row.provider}>
           <BrandMark platform={SOCIAL_OF[row.provider]} small/>
           <div className="conn-text"><strong>{row.name}</strong></div>
-          <span className={`pill ${apps[row.provider] ? 'active' : 'planned'}`}><span className="dot"/>{apps[row.provider] ? 'Set up' : 'Not set up'}</span>
+          <span className={`pill ${apps[row.provider] ? 'active' : 'planned'}`} title={postMode(SOCIAL_OF[row.provider]) === 'browser' && !apps[row.provider] ? 'Only needed once it posts through its API instead of its upload page.' : undefined}><span className="dot"/>{apps[row.provider] ? 'Set up' : postMode(SOCIAL_OF[row.provider]) === 'browser' ? 'Not needed yet' : 'Not set up'}</span>
           <span className="conn-action"><button type="button" className={apps[row.provider] ? 'ghost-button small-button' : 'outline-button small-button'} disabled={working} onClick={() => setupApp(row.provider)}>{apps[row.provider] ? 'Change' : 'Set up'}</button></span>
         </div>)}
       </div>

@@ -19,13 +19,13 @@ describe('setup tracker', () => {
     const user = userEvent.setup();
     render(<SetupTracker accounts={[yt]} brands={brands} apps={{ google: 'client' }} connections={{ yt: { state: 'expired', username: 'animals', detail: 'Google stopped accepting this connection.' } }} passwords={{ yt: true }} marks={{}} onMark={onMark} onConnect={onConnect}/>);
     const group = screen.getByRole('group', { name: 'YouTube setup' });
-    expect(within(group).getByText('4 left')).toBeInTheDocument();
+    expect(within(group).getByText('Ready')).toBeInTheDocument();
     const published = within(group).getByRole('listitem', { name: 'Consent screen published (In production)' });
     await user.click(within(published).getByRole('button', { name: 'Mark done' }));
     expect(onMark).toHaveBeenCalledWith('youtube:app:published', true);
     await user.click(within(published).getByRole('button', { name: /Open consent screen/ }));
     expect(openSetupPage).toHaveBeenCalledWith('google-consent');
-    const connection = within(group).getByRole('listitem', { name: 'Animals (@animals): connected for posting' });
+    const connection = within(group).getByRole('listitem', { name: 'Animals (@animals): connected for API posting' });
     expect(within(connection).getByText('Google stopped accepting this connection.')).toBeInTheDocument();
     await user.click(within(connection).getByRole('button', { name: 'Reconnect' }));
     expect(onConnect).toHaveBeenCalledWith(yt);

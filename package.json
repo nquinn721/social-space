@@ -1,7 +1,7 @@
 {
   "name": "social-manager",
   "private": true,
-  "version": "0.20.2",
+  "version": "0.21.1",
   "type": "module",
   "scripts": {
     "start": "node scripts/install.mjs",
