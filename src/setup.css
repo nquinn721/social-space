@@ -47,3 +47,7 @@
 .posting-modes li { display: flex; gap: 10px; align-items: flex-start; }
 .posting-modes .footnote { margin: 2px 0 0; }
 .profile-view { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.setup-later { border: 1px dashed var(--border-strong); border-radius: var(--radius); padding: 8px 12px; }
+.setup-later summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.setup-later summary small { font-weight: 400; color: var(--text-3); margin-left: 6px; }
+.setup-later .setup-list { margin-top: 8px; opacity: .85; }

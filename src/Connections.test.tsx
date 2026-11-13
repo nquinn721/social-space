@@ -34,7 +34,9 @@ describe('connections', () => {
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     expect(await within(row('Instagram @massagewithmia')).findByText('Connected')).toBeInTheDocument();
     expect(within(row('Instagram @massagelisa')).getByText('Not connected')).toBeInTheDocument();
-    expect(within(row('TikTok @mia')).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    // TikTok posts through its upload page in the brand's window, so it needs no API connection to post.
+    expect(within(row('TikTok @mia')).getByText('Posts in its window')).toBeInTheDocument();
+    expect(within(row('TikTok @mia')).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
     expect(screen.queryByRole('generic', { name: 'YouTube @lisa' })).not.toBeInTheDocument();
     expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('ig-lisa', 'massagelisa');
     expect(within(screen.getByRole('generic', { name: 'Developer apps' })).getByRole('button', { name: 'Change' })).toBeInTheDocument();
@@ -98,7 +100,7 @@ describe('connections', () => {
     const user = userEvent.setup();
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
-    await user.click(within(row('X @mia_x')).getByRole('button', { name: 'Connect' }));
+    await user.click(await within(screen.getByRole('listitem', { name: 'Massage With Mia (@mia_x): connected for API posting' })).findByRole('button', { name: 'Connect' }));
     await user.click(await screen.findByRole('button', { name: /Copy the client ID$/ }));
     const form = await screen.findByRole('form', { name: 'X keys' });
     await user.type(within(form).getByLabelText('OAuth 2.0 Client ID'), 'abc-123');
@@ -112,7 +114,7 @@ describe('connections', () => {
     const user = userEvent.setup();
     render(<Connections onNavigate={vi.fn()} accounts={accounts} brands={brands}/>);
     await within(row('Instagram @massagewithmia')).findByText('Connected');
-    await user.click(within(row('TikTok @mia')).getByRole('button', { name: 'Connect' }));
+    await user.click(await within(screen.getByRole('listitem', { name: 'Massage With Mia (@mia): connected for API posting' })).findByRole('button', { name: 'Connect' }));
     await user.click(await screen.findByRole('button', { name: /Copy the client key and secret/ }));
     const form = await screen.findByRole('form', { name: 'TikTok keys' });
     await user.type(within(form).getByLabelText('Client key'), 'awkey123');

@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { usesMainLogin } from './useBrowserPosting';
+import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { Copy, DatabaseBackup, Eye, EyeOff, FileJson, KeyRound, Pencil, Upload } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Workspace } from './model';
 import { mergeRestored } from './brands';
@@ -115,12 +116,12 @@ export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup
     {error && <div className="error-message" role="alert">{error}</div>}
     {rows.length === 0 ? <p className="footnote">No accounts yet.</p> : <div className="card sign-ins-table" role="table" aria-label="All sign-ins">
       <div className="sign-ins-row head" role="row"><span role="columnheader">Account</span><span role="columnheader">Username</span><span role="columnheader">Email</span><span role="columnheader">Password</span></div>
-      {rows.map((account) => <div className="sign-ins-row" role="row" key={account.id}>
-        <span role="cell"><button type="button" className="text-button" onClick={() => onEdit(account)} disabled={busy}><BrandMark platform={account.platform} small/> {brandName(account)}</button><em className={`pill ${account.status}`}>{account.status === 'active' ? 'Live' : 'Not created yet'}</em></span>
+      {rows.map((account, index) => <Fragment key={account.id}>{(index === 0 || brandName(rows[index - 1]) !== brandName(account)) && <div className="sign-ins-brand" role="row"><span role="cell">{brandName(account)}</span></div>}<div className="sign-ins-row" role="row">
+        <span role="cell"><button type="button" className="text-button" onClick={() => onEdit(account)} disabled={busy}><BrandMark platform={account.platform} small/> {getPlatform(account.platform).name}</button><em className={`pill ${account.status}`}>{account.status === 'active' ? 'Live' : 'Not created yet'}</em></span>
         <span role="cell"><CopyText text={account.handle ? account.handle : ''} label={`username for ${getPlatform(account.platform).name} ${brandName(account)}`}/></span>
         <span role="cell"><CopyText text={account.signupEmail ?? ''} label={`email for ${getPlatform(account.platform).name} ${brandName(account)}`}/></span>
-        <span role="cell"><PasswordCell account={account}/></span>
-      </div>)}
+        <span role="cell">{account.platform === 'youtube' && usesMainLogin(workspace.developerLogins, account) ? <span className="muted" title="YouTube channels live under your main Google account, so there is no brand password.">Your main Google account</span> : <PasswordCell account={account}/>}</span>
+      </div></Fragment>)}
     </div>}
   </section>;
 }

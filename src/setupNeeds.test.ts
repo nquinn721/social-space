@@ -41,10 +41,11 @@ describe('setup needs', () => {
   it('counts manual ticks, saved sign-ins and not-yet-created profiles', () => {
     const accounts = [profile('x1', 'x'), profile('x2', 'x', 'planned')];
     const before = base(accounts, { apps: { x: 'client' }, connections: { x1: { state: 'ok', username: 'a', detail: '' } }, passwords: { x1: false } });
-    expect(openCount(setupNeeds(before))).toBe(4); // read/write, plan, sign-in, create x2
+    expect(openCount(setupNeeds(before))).toBe(2); // sign-in, create x2 (developer-app steps are for API posting later)
     const after = { ...before, passwords: { x1: true }, marks: { 'x:app:auth': 1, 'x:app:plan': 2 } };
     expect(find(after, 'x:app:plan')).toMatchObject({ status: 'done', markedAt: 2 });
     expect(openCount(setupNeeds(after))).toBe(1);
+    expect(find({ ...after, accounts: [{ ...accounts[0], signupEmail: 'softwings25@gmail.com' }] }, 'x1:own-login')?.status).toBe('problem');
     expect(find(after, 'x2:connected')).toBeUndefined();
     expect(find(after, 'x2:created')?.status).toBe('todo');
   });
@@ -65,6 +66,8 @@ describe('setup needs', () => {
     expect(review?.why).toMatch(/^Later: the app runs in Sandbox/);
     const live = setupNeeds(base([profile('tt', 'tiktok')], { apps: { tiktok: 'aw0production' }, connections: connected, passwords: { tt: true } }))[0];
     expect(live.testing).toBeUndefined();
-    expect(live.open).toBe(2);
+    // TikTok posts through its upload page, so the app review only matters later.
+    expect(live.open).toBe(0);
+    expect(live.needs.find((need) => need.id === 'tiktok:app:review')?.later).toBe(true);
   });
 });

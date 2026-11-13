@@ -9,7 +9,10 @@ const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id,
 import { ensureSharedPassword } from '../profileService';
 import BrandAccounts from '../BrandAccounts';
 import { useBrandInstagram } from '../useBrandInstagram';
-import { brandSummary, useBrandStatuses, type SocialStatus } from '../brandStatus';
+import { brandStatuses, brandSummary, useBrandStatuses, type SocialStatus } from '../brandStatus';
+import BrandCard from '../BrandCard';
+import { useSetupStatus } from '../setupService';
+const NO_ACCOUNTS: Account[] = [];
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
 import { BrandMark, PageHeader } from '../ui';
 import '../brands.css';
@@ -68,7 +71,9 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   const brandTab = opened?.tab ?? 'content';
   const showBrandTab = (tab: 'content' | 'accounts') => { if (opened) setOpened({ ...opened, tab }); };
   const [renaming, setRenaming] = useState<string | null>(null);
-  const groups = useMemo(() => groupByBrand(workspace), [workspace]);
+  // Migrated once, so accounts saved before brands existed keep the same brand on every read.
+  const migrated = useMemo(() => { const moved = migrateWorkspace(workspace); return { ...workspace, brands: moved.brands, accounts: moved.accounts }; }, [workspace]);
+  const groups = useMemo(() => groupByBrand(migrated), [migrated]);
   const all = useMemo(() => groups.flatMap((group) => group.accounts), [groups]);
   const issues = useMemo(() => presenceIssues(all), [all]);
   const shown = useMemo(() => {
@@ -79,6 +84,8 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   const open = groups.find((group) => group.brand.id === openId);
   const instagram = useBrandInstagram(workspace, open?.brand.id);
   const statuses = useBrandStatuses(workspace, open?.brand.id, instagram);
+  // The brand list checks every profile once (Instagram connections, saved logins) for its status lines.
+  const listStatus = useSetupStatus(open || tab !== 'brands' ? NO_ACCOUNTS : all);
   const marks = workspace.setup ?? {};
   const mark = onSave ? (id: string, done: boolean) => {
     const next = { ...marks };
@@ -197,20 +204,8 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     </section> : <>
       <div className="toolbar"><label className="search-input"><span className="sr-only">Search brands</span><Search size={15}/><input type="search" placeholder="Search brands or usernames" value={query} onChange={(event) => setQuery(event.target.value)}/></label></div>
       {shown.length === 0 && <p className="footnote">No brands match that search.</p>}
-      <div className="brand-grid">{shown.map(({ brand, accounts }) => {
-        const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
-        const live = accounts.filter((account) => account.status === 'active').length;
-        return <button type="button" key={brand.id} className="brand-tile" aria-label={`Open ${brand.name}`} onClick={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}>
-          <BrandAvatar brand={brand} lead={lead}/>
-          <strong>{brand.name}</strong>
-          <small>{live} of {accounts.length} live</small>
-          <span className="tile-socials">{PLATFORMS.map((platform) => {
-            const profile = accounts.find((account) => account.platform === platform.id);
-            const state = !profile ? 'none' : profile.status === 'active' ? 'live' : 'planned';
-            return <span key={platform.id} className={`tile-social ${state}`} title={`${platform.name}: ${state === 'live' ? 'Live' : state === 'planned' ? 'Not created yet' : 'No profile'}`}><BrandMark platform={platform.id} small/></span>;
-          })}</span>
-        </button>;
-      })}</div>
+      <div className="brand-cards">{shown.map(({ brand, accounts }) => <BrandCard key={brand.id} brand={brand} accounts={accounts} workspace={workspace}
+        statuses={brandStatuses(migrated, brand.id, { connections: listStatus.connections, passwords: listStatus.passwords })} onOpen={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}/>)}</div>
     </>}
     {tab === 'brands' && <details className="more-tools"><summary>Open a social's own site</summary>
     <div className="platform-shortcuts" style={{ marginTop: 0 }}>{PLATFORMS.map((platform) => <div className="platform-shortcut" key={platform.id}>

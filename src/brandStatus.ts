@@ -70,17 +70,27 @@ export function brandStatuses(workspace: Workspace, brandId: string, inputs: Sta
 /** Only the socials the brand has a profile on (planned or live). */
 export const withProfile = (statuses: SocialStatus[]) => statuses.filter((status) => status.kind !== 'no-profile');
 
+/** A word or two for a small chip. */
+export function chipLabel(status: SocialStatus): string {
+  switch (status.kind) {
+    case 'ready': return 'Ready';
+    case 'no-profile': return 'None';
+    case 'checking': return '…';
+    case 'no-password': return 'Save login';
+    default: return status.action?.short ?? status.label;
+  }
+}
 /** A one-line summary of a brand, e.g. "Ready on 3 of 4 · Instagram not connected". */
-export function brandSummary(statuses: SocialStatus[]): { tone: Tone; text: string } {
+export function brandSummary(statuses: SocialStatus[]): { tone: Tone; text: string; short: string } {
   const own = withProfile(statuses);
-  if (own.length === 0) return { tone: 'muted', text: 'No profiles yet' };
+  if (own.length === 0) return { tone: 'muted', text: 'No profiles yet', short: 'No profiles yet' };
   const ready = own.filter((status) => status.canPost).length;
   const blocking = own.filter((status) => !status.canPost && status.kind !== 'checking');
   const checking = own.some((status) => status.kind === 'checking');
-  if (blocking.length === 0) return { tone: checking ? 'checking' : 'ok', text: checking ? `Ready on ${ready} of ${own.length} · checking…` : `Ready to post on all ${own.length}` };
+  if (blocking.length === 0) return { tone: checking ? 'checking' : 'ok', text: checking ? `Ready on ${ready} of ${own.length} · checking…` : `Ready to post on all ${own.length}`, short: checking ? 'Checking…' : `Ready on all ${own.length}` };
   const first = blocking[0];
   const more = blocking.length > 1 ? ` +${blocking.length - 1} more` : '';
-  return { tone: blocking.some((status) => status.tone === 'problem') ? 'problem' : 'todo', text: `Ready on ${ready} of ${own.length} · ${getPlatform(first.platform).name}: ${first.label.toLowerCase()}${more}` };
+  return { tone: blocking.some((status) => status.tone === 'problem') ? 'problem' : 'todo', text: `Ready on ${ready} of ${own.length} · ${getPlatform(first.platform).name}: ${first.label.toLowerCase()}${more}`, short: `Ready on ${ready} of ${own.length} · ${blocking.length} to fix` };
 }
 
 /** How far one video is across the brand's socials. */
