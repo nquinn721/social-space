@@ -378,8 +378,12 @@ fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, 
     if account_id.as_deref().map_or(true, str::is_empty) {
         return Ok(None);
     }
-    let login = if platform == Platform::Youtube { email } else { handle.trim().trim_start_matches('@') };
-    crate::autofill::sign_in_script(login, email, password)
+    // TikTok and X sign in with the profile's username, which always matches the account, whatever
+    // email it was made with; giving them an email that has no account turns X's sign-in into sign-up.
+    match platform {
+        Platform::Youtube | Platform::Instagram if !email.is_empty() => crate::autofill::sign_in_script(email, email, password),
+        _ => crate::autofill::sign_in_script(handle.trim().trim_start_matches('@'), "", password),
+    }
 }
 
 /// A profile's public page, where its live videos are.
@@ -620,6 +624,7 @@ const POST_SCRIPT: &str = r#"function (data) {
   };
   const status = () => {
     if (state.posted) return 'Posted. Socialspace marked it. You can close this window.';
+    if (window.__socialspaceSignUpBlocked && !state.attached) return name + ' offered to create a new account, so this login has no account there. Socialspace filled nothing. Go back, sign in to @' + data.handle + ' with the email or username you made it with, and save that login on its card under Edit details.';
     const signingIn = location.hostname === 'accounts.google.com' || /\/login|\/i\/flow\//.test(location.pathname)
       || all('input[type=password], input[autocomplete="username"], input[name="text"][autocomplete]').length > 0;
     if (signingIn && !state.attached) return data.loginFilled
@@ -797,6 +802,15 @@ mod tests {
         assert!(brand_sign_in(&None, Platform::Tiktok, "animals", "a@b.c", Some("pw".into())).unwrap().is_none());
         assert!(brand_sign_in(&Some(String::new()), Platform::X, "animals", "", None).unwrap().is_none());
         assert!(brand_sign_in(&Some("a1".into()), Platform::Tiktok, "animals", "x+animals@example.com", None).unwrap().is_some());
+    }
+
+    #[test]
+    fn x_and_tiktok_sign_in_by_username_and_never_fill_sign_up() {
+        let x = brand_sign_in(&Some("a1".into()), Platform::X, "@animals", "x+animals@example.com", None).unwrap().unwrap();
+        assert!(x.contains("\"username\":\"animals\"") && !x.contains("x+animals@example.com"), "{x}");
+        assert!(x.contains("\"signInOnly\":true"));
+        let yt = brand_sign_in(&Some("a1".into()), Platform::Youtube, "animals", "x+animals@example.com", None).unwrap().unwrap();
+        assert!(yt.contains("x+animals@example.com"));
     }
 
     #[test]

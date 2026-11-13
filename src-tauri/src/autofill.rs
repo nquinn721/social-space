@@ -94,6 +94,11 @@ struct FillPayload<'a> {
     watch: bool,
     /// Overwrite values already on the page (editing an existing profile), once per field.
     replace: bool,
+    /// Sign-in only (posting and profile windows): never fill a sign-up form. If the social turns the
+    /// sign-in into "create an account" (the login has no account there), fill nothing more and clear
+    /// what was filled, so no account is ever made by mistake.
+    #[serde(rename = "signInOnly", skip_serializing_if = "std::ops::Not::not")]
+    sign_in_only: bool,
 }
 
 /// Fill scripts to re-run when a window loads its next page during sign-up.
@@ -410,7 +415,23 @@ const FILL_SCRIPT: &str = r#"function (data) {
     window.__socialspaceHint = next;
     if (filled.length) console.info('[Socialspace] filled', filled);
   };
+  const signUpScreen = () => /set up your account|create your account|create an account|sign up for|choose a username|what should we call you/i
+    .test(((document.body && document.body.innerText) || '').slice(0, 5000));
   const step = async (always) => {
+    if (data.signInOnly && signUpScreen()) {
+      // This login has no account here and the site switched to sign-up: undo our fills and stop.
+      document.querySelectorAll('input').forEach((el) => {
+        if (!done.has(el)) return;
+        const proto = HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, '');
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.style.outline = '';
+      });
+      if (window.__socialspaceObserver) window.__socialspaceObserver.disconnect();
+      window.__socialspaceSignUpBlocked = true;
+      banner('This login has no account here, so the site is offering to create one. Socialspace filled nothing; go back and sign in with the login that owns this profile.');
+      return;
+    }
     const filled = fill();
     const menus = await pickMenus();
     report(filled.includes('birthday') ? filled : filled.concat(menus), always);
@@ -453,7 +474,7 @@ pub(crate) fn sign_in_script(login: &str, email: &str, password: Option<String>)
         return Ok(None);
     }
     validate(&fields)?;
-    fill_script(&FillPayload { fields: &fields, image: None, password, watch: true, replace: false }).map(Some)
+    fill_script(&FillPayload { fields: &fields, image: None, password, watch: true, replace: false, sign_in_only: true }).map(Some)
 }
 
 #[tauri::command]
@@ -495,7 +516,7 @@ pub fn fill_site_form(
     };
     let watch = keep_filling.unwrap_or(false);
     let replace = replace.unwrap_or(false);
-    let script = fill_script(&FillPayload { fields: &fields, image, password, watch, replace })?;
+    let script = fill_script(&FillPayload { fields: &fields, image, password, watch, replace, sign_in_only: false })?;
     if still_loading {
         remember(&window_label, Some(script));
         return Ok(());
@@ -548,7 +569,7 @@ mod tests {
             bio: Some("Quote \" and </script> stay data".into()),
             ..Default::default()
         };
-        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: true }).unwrap();
+        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: true, sign_in_only: false }).unwrap();
         assert!(script.contains(r#""replace":true"#));
         assert!(script.contains(r#""bio":"Quote \" and </script> stay data""#));
         assert!(!script.contains("\"email\""));
@@ -578,7 +599,7 @@ mod tests {
     fn developer_app_details_are_accepted() {
         let fields: FormFields = serde_json::from_value(serde_json::json!({ "appName": "SocialSpace", "redirectUri": "https://localhost/socialspace/tiktok" })).unwrap();
         assert!(validate(&fields).is_ok());
-        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: false }).unwrap();
+        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: false, sign_in_only: false }).unwrap();
         assert!(script.contains("\"redirectUri\":\"https://localhost/socialspace/tiktok\""));
         assert!(platform_host(&"https://developers.facebook.com/apps/".parse().unwrap()));
         assert!(platform_host(&"https://console.cloud.google.com/apis/credentials".parse().unwrap()));
