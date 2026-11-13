@@ -5,6 +5,7 @@ use tauri::{Manager, State};
 mod account_passwords;
 mod backup;
 mod brand_images;
+mod browser_sessions;
 mod gemini_ai;
 mod autofill;
 mod browser;

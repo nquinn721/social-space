@@ -227,6 +227,8 @@ struct Posting {
     config_script: Option<String>,
     sign_in_script: Option<String>,
     file: Option<PathBuf>,
+    /// Set once the other PC's sign-in was put into this window's folder.
+    shared_session: std::sync::atomic::AtomicBool,
 }
 
 fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
@@ -240,6 +242,10 @@ fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
     if is_sign_in(&url) || signs_in_over_page(&url) {
         if let Some(script) = &posting.sign_in_script {
             let _ = webview.eval(script);
+        }
+        // The social did not take the session shared from the other PC: say so; the login is filled in.
+        if posting.shared_session.load(Ordering::Relaxed) {
+            let _ = webview.eval(crate::browser_sessions::REJECTED_NOTICE);
         }
     }
     if let Some(script) = &posting.config_script {
@@ -364,12 +370,43 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
         None => None,
     };
     let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
-    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, file });
+    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, file, shared_session: Default::default() });
     let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
-    let window = build_window(&app, url, dir, posting, None)?;
+    let window = open_signed_in(&app, url, dir, posting)?;
     let label = window.label().to_owned();
     watch(app, window, request);
     Ok(label)
+}
+
+/// How often an open brand window's sign-in is saved for the other PC.
+const SESSION_SAVE_EVERY: Duration = Duration::from_secs(20);
+
+/// Opens a brand window: first on a blank page, so the other PC's newer sign-in (if any) is put into
+/// the brand's folder before the social loads, then on `url`. While the window is open its sign-in is
+/// saved now and then, so the other PC gets it too.
+fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sync::Arc<Posting>) -> Result<WebviewWindow, String> {
+    let blank: url::Url = "about:blank".parse().expect("valid blank URL");
+    let brand = posting.request.brand_id.clone();
+    let window = build_window(app, blank, dir, posting.clone(), None)?;
+    let (task_app, task_window) = (app.clone(), window.clone());
+    tauri::async_runtime::spawn(async move {
+        // WebView2 cookies must be handled off the main thread.
+        let (restore_app, restore_window, restore_brand) = (task_app.clone(), task_window.clone(), brand.clone());
+        let shared = tauri::async_runtime::spawn_blocking(move || crate::browser_sessions::restore(&restore_app, &restore_window, &restore_brand)).await.unwrap_or(false);
+        posting.shared_session.store(shared, Ordering::Relaxed);
+        if task_window.navigate(url).is_err() {
+            return;
+        }
+        loop {
+            tokio::time::sleep(SESSION_SAVE_EVERY).await;
+            if task_window.url().is_err() {
+                return;
+            }
+            let (save_app, save_window, save_brand) = (task_app.clone(), task_window.clone(), brand.clone());
+            let _ = tauri::async_runtime::spawn_blocking(move || crate::browser_sessions::capture(&save_app, &save_window, &save_brand)).await;
+        }
+    });
+    Ok(window)
 }
 
 /// The sign-in fill for a brand profile's window. Only a profile the app sends (its own login, never
@@ -454,9 +491,9 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
         cover: String::new(),
         cover_ms: None,
     };
-    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, file: None });
+    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, file: None, shared_session: Default::default() });
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
-    build_window(&app, url, dir, posting, None).map(|_| ())
+    open_signed_in(&app, url, dir, posting).map(|_| ())
 }
 
 /// Runs in the upload page. Shows a panel with the post (and Copy buttons as a fallback), attaches the
