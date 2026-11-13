@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Copy, KeyRound, MailSearch, Pencil } from 'lucide-react';
+import { Check, Copy, KeyRound, MailSearch, Pencil } from 'lucide-react';
 import { listDeveloperApps, saveDeveloperApp, saveProductionApp, type DevAppSummary, type DevProvider } from './devAppsService';
 import { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import { PasswordField } from './SignIns';
 import { BrandMark, errorText } from './ui';
-import type { Platform } from './model';
-import { NO_REVIEW, REVIEW_STATES, reviewOf, reviewStatus, testModeOf, type ReviewState } from './appReviews';
+import { getPlatform, type Platform } from './model';
+import { postMode } from './postingMode';
+import { NO_REVIEW, REVIEW_STATES, reviewOf, reviewStatus, stateLabel, testModeOf, type ReviewState } from './appReviews';
 import type { ReviewWatch } from './useReviewWatch';
 import './brands.css';
 
@@ -86,24 +87,42 @@ function DeveloperCard({ account, app, onSaved, reviews }: { account: typeof DEV
     catch (reason) { setNote(errorText(reason)); }
     finally { setSaving(false); }
   }
+  const test = reviews ? testModeOf(reviews.marks, account.platform) : null;
+  const review = reviewOf(account.provider);
+  const reviewState = reviews && review ? reviewStatus(reviews.marks, account.provider).state : null;
+  const browser = postMode(account.platform) === 'browser';
   return <div className="developer-account" aria-label={account.name}>
-    <h3><BrandMark platform={account.platform}/> {account.name}{reviews && testModeOf(reviews.marks, account.platform) && <span className="test-badge">Test</span>}</h3>
+    <header className="developer-head">
+      <BrandMark platform={account.platform}/>
+      <div><h3>{account.name}</h3><small>{browser ? 'Only for API posting later' : `Needed to post on ${getPlatform(account.platform).name}`}</small></div>
+      <span className={`status-chip ${appId ? 'tone-ok' : browser ? 'tone-muted' : 'tone-todo'}`}><span className="dot"/>{appId ? (test?.test ? `Keys saved · ${test.test.mode}` : 'Keys saved') : 'No keys yet'}</span>
+    </header>
     <dl>
-      <div><dt>Email</dt><dd><span className="copy-text"><span>{DEFAULT_SIGNUP_EMAIL}</span><button type="button" className="icon-button" aria-label={`Copy ${account.name} email`} onClick={() => void navigator.clipboard.writeText(DEFAULT_SIGNUP_EMAIL).catch(() => undefined)}><Copy size={14}/></button></span></dd></div>
+      <div><dt>Email</dt><dd><CopyValue value={DEFAULT_SIGNUP_EMAIL} label={`${account.name} email`}/></dd></div>
       <div><dt>Password</dt><dd><PasswordField id={developerPasswordKey(account.provider)} label={account.name}/></dd></div>
-      <div><dt>{idLabel}</dt><dd>{appId ? <span className="copy-text"><span>{appId}</span><button type="button" className="icon-button" aria-label={`Copy ${account.name} ${idLabel}`} onClick={() => void navigator.clipboard.writeText(appId).catch(() => undefined)}><Copy size={14}/></button></span> : <span className="muted">Not saved yet</span>}</dd></div>
-      <ReviewRow provider={account.provider} reviews={reviews}/>
+      <div><dt>{idLabel}</dt><dd>{appId ? <CopyValue value={appId} label={`${account.name} ${idLabel}`}/> : <span className="muted">Not saved yet</span>}</dd></div>
+      {NO_REVIEW.includes(account.provider) && <ReviewRow provider={account.provider} reviews={reviews}/>}
     </dl>
-    <TestMode provider={account.provider} platform={account.platform} productionId={app?.productionId} reviews={reviews} onSaved={onSaved}/>
+    {review && !NO_REVIEW.includes(account.provider) && reviews && <details className="developer-more">
+      <summary>App review{reviewState && <span className={`review-pill ${reviewState}`}>{stateLabel(reviewState)}</span>}</summary>
+      <dl><ReviewRow provider={account.provider} reviews={reviews}/></dl>
+      <TestMode provider={account.provider} platform={account.platform} productionId={app?.productionId} reviews={reviews} onSaved={onSaved}/>
+    </details>}
     {editing ? <form className="developer-keys" onSubmit={(event) => void save(event)}>
       <label htmlFor={`dev-id-${account.provider}`}>{idLabel}</label>
       <input id={`dev-id-${account.provider}`} autoComplete="off" value={id} onChange={(event) => setId(event.target.value)}/>
       <label htmlFor={`dev-secret-${account.provider}`}>{secretLabel}</label>
       <input id={`dev-secret-${account.provider}`} type="password" autoComplete="off" value={secret} onChange={(event) => setSecret(event.target.value)}/>
       <div className="row-actions"><button className="primary-button small-button" disabled={saving || !id.trim()}>{saving ? 'Saving…' : 'Save keys'}</button><button type="button" className="ghost-button small-button" onClick={() => setEditing(false)}>Cancel</button></div>
-    </form> : <button type="button" className="outline-button small-button" onClick={() => { setEditing(true); setId(appId ?? ''); }}>{appId ? <><Pencil size={14}/> Change keys</> : <><KeyRound size={14}/> Add keys</>}</button>}
+    </form> : <button type="button" className="ghost-button small-button developer-keys-button" onClick={() => { setEditing(true); setId(appId ?? ''); }}>{appId ? <><Pencil size={14}/> Change keys</> : <><KeyRound size={14}/> Add keys</>}</button>}
     {note && <small role="status">{note}</small>}
   </div>;
+}
+
+/** A value with a copy button on one line; long values are cut with … and shown whole on hover. */
+function CopyValue({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return <span className="copy-line" title={value}><span>{value}</span><button type="button" className="icon-button" aria-label={`Copy ${label}`} onClick={() => void navigator.clipboard.writeText(value).then(() => { setCopied(true); window.setTimeout(() => setCopied(false), 1500); }).catch(() => undefined)}>{copied ? <Check size={14}/> : <Copy size={14}/>}</button></span>;
 }
 
 /** Settings section: each social's developer account (email, password) and its app keys, kept apart from brand profiles. */
@@ -114,7 +133,7 @@ export default function DeveloperAccounts({ reviews }: { reviews?: ReviewProps }
   useEffect(load, []);
   return <section className="settings-card" id="developer-accounts">
     <h2><KeyRound size={17}/> Developer accounts</h2>
-    <p>The accounts that own each social's API app, on the main email and separate from the brand profiles. Passwords and app secrets are kept in Windows Credential Manager.</p>
+    <p>The accounts that own each social's API app, on your main email, separate from the brand profiles. Only Meta's is needed to post today; the others matter once TikTok, YouTube or X post through their API. Passwords and secrets stay in Windows Credential Manager.</p>
     {reviews?.watch && <div className="status-line review-watch"><MailSearch size={15}/><span>{reviews.watch.note || `The app reads softwings25@gmail.com every 15 minutes for app review results and tells you when one finishes.${reviews.watch.lastChecked ? ` Last checked ${new Date(reviews.watch.lastChecked).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.` : ''}`}</span><button type="button" className="ghost-button small-button" disabled={reviews.watch.checking} onClick={() => void reviews.watch?.checkNow()}>{reviews.watch.checking ? 'Checking…' : 'Check email now'}</button></div>}
     <div className="developer-accounts">{DEVELOPER_ACCOUNTS.map((account) => <DeveloperCard key={account.provider} account={account} app={apps[account.provider]} onSaved={load} reviews={reviews}/>)}</div>
     {error && <p className="error-message" role="alert">{error}</p>}

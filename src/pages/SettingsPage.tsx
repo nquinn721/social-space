@@ -48,11 +48,33 @@ function AssistantSettingsCard() {
   </section>;
 }
 
+/** The section in view, so the left list shows where you are while scrolling. */
+function useSectionInView() {
+  const [active, setActive] = useState(SECTIONS[0].id);
+  useEffect(() => {
+    const scroller = document.querySelector('.main') ?? window;
+    function update() {
+      let current = SECTIONS[0].id;
+      for (const { id } of SECTIONS) {
+        const top = document.getElementById(id)?.getBoundingClientRect().top;
+        if (top !== undefined && top < 160) current = id;
+      }
+      setActive(current);
+    }
+    scroller.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('scroll', update, { passive: true });
+    return () => { scroller.removeEventListener('scroll', update); window.removeEventListener('scroll', update); };
+  }, []);
+  return [active, setActive] as const;
+}
+
 export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync, reviews }: Props) {
+  const [active, setActive] = useSectionInView();
   return <>
     <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources, pictures and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
     <div className="settings-layout">
-      <nav className="settings-nav" aria-label="Settings sections">{SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} onClick={(event) => { event.preventDefault(); document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }}><Icon size={16}/>{label}</a>)}</nav>
+      <nav className="settings-nav" aria-label="Settings sections">{SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} className={active === id ? 'active' : ''} aria-current={active === id ? 'location' : undefined}
+        onClick={(event) => { event.preventDefault(); setActive(id); document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }}><Icon size={16}/>{label}</a>)}</nav>
       <div className="settings-stack">
         <form className="settings-card" id="workspace" onSubmit={(event) => { event.preventDefault(); onSaveBusinessName(); }}>
           <h2><Building2 size={17}/> Workspace</h2>
