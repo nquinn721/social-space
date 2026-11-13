@@ -48,7 +48,7 @@ export default function SetupTracker({ onMark, onConnect, onSetupApp, onEditAcco
       const shown = group.needs.filter((need) => showDone || need.status !== 'done');
       return <div className="setup-group" key={group.platform} aria-label={`${platformName(group.platform)} setup`} role="group">
         <div className="setup-group-head"><BrandMark platform={group.platform} small/><strong>{platformName(group.platform)}</strong>
-          <span className={`pill ${group.open ? 'warning' : 'active'}`}><span className="dot"/>{group.open ? `${group.open} left` : 'Ready'}</span></div>
+          <span className={`pill ${group.open ? 'warning' : 'active'}`}><span className="dot"/>{group.open ? `${group.open} left` : 'Ready'}</span>{group.testing && <span className="pill testing" title="Posts reach only test users and stay private until the app is approved."><span className="dot"/>{group.testing}</span>}</div>
         {shown.length === 0 ? <p className="footnote setup-all-done">All done. Tick "Show finished" to see every step.</p>
           : <ul className="setup-list">{shown.map((need) => <li key={need.id} className={`${need.status}${need.optional ? ' optional' : ''}`} aria-label={need.title}>
             <span className="check-circle">{need.status === 'problem' ? <TriangleAlert size={12} strokeWidth={3}/> : <Check size={13} strokeWidth={3}/>}</span>
