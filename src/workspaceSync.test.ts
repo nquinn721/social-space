@@ -107,3 +107,10 @@ describe('mergeShared', () => {
     expect(merged.categories?.map((item) => item.id)).toEqual(['c1']);
   });
 });
+
+describe('sharedOf', () => {
+  it('shares every part of the workspace (a new field fails to compile here until it is shared)', () => {
+    const full: Required<Workspace> = { ...base, categories: base.categories!, videos: base.videos!, setup: { 'x:app:plan': 1 }, developerLogins: { x: { email: 'a@b.c' } } };
+    expect(Object.keys(sharedOf(full)).sort()).toEqual(Object.keys(full).sort());
+  });
+});
