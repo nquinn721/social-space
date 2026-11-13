@@ -35,7 +35,7 @@ export function PasswordField({ id, label }: { id: string; label: string }) {
   }
   if (saved === null) return <span className="muted">…</span>;
   if (!saved || editing) return <form className="password-edit" onSubmit={save}>
-    <input type="password" aria-label={`New password for ${label}`} placeholder={saved ? 'New password' : 'Not saved yet. Enter it'} value={draft} onChange={(event) => setDraft(event.target.value)} autoComplete="off"/>
+    <input type="password" aria-label={`New password for ${label}`} placeholder={saved ? 'New password' : 'Not saved yet'} value={draft} onChange={(event) => setDraft(event.target.value)} autoComplete="off"/>
     <button className="outline-button small-button" disabled={!draft}>Save</button>
     {editing && <button type="button" className="ghost-button small-button" onClick={() => { setEditing(false); setDraft(''); }}>Cancel</button>}
     {note && <small role="status">{note}</small>}
