@@ -80,6 +80,8 @@ struct PostConfig<'a> {
     file_name: String,
     /// Why the video is not attached by the app, if it isn't.
     file_note: Option<String>,
+    /// Whether sign-in pages get the profile's own saved login (never the main Gmail).
+    login_filled: bool,
 }
 
 /// What the app hears about a posting window.
@@ -124,6 +126,12 @@ fn on_social(url: &url::Url) -> bool {
                 .iter()
                 .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
         })
+}
+
+/// X shows its sign-in as a pop-up over any page (compose, home) without changing the address, so the
+/// sign-in fill (which only fills empty sign-in fields as they appear) runs on every X page.
+pub(crate) fn signs_in_over_page(url: &url::Url) -> bool {
+    matches!(url.host_str().unwrap_or("").trim_start_matches("www."), "x.com" | "twitter.com")
 }
 
 /// Whether the page shows the post went up: the post script marked it, or TikTok Studio moved on
@@ -229,7 +237,7 @@ fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
     if !on_social(&url) {
         return;
     }
-    if is_sign_in(&url) {
+    if is_sign_in(&url) || signs_in_over_page(&url) {
         if let Some(script) = &posting.sign_in_script {
             let _ = webview.eval(script);
         }
@@ -347,6 +355,7 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
         upload_url: address,
         file_name,
         file_note,
+        login_filled: request.account_id.as_deref().is_some_and(|id| !id.is_empty()),
     };
     let data = serde_json::to_string(&config).map_err(|_| "Could not prepare the post.")?;
     let config_script = format!("({POST_SCRIPT})({data});");
@@ -451,7 +460,17 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
 /// AI label and YouTube's audience, steps YouTube through to Visibility and picks Public, and watches
 /// for the page saying the post went up. The one button it never presses is Post / Publish: Nate does.
 const POST_SCRIPT: &str = r#"function (data) {
-  const state = window.__socialspacePostState || (window.__socialspacePostState = { attached: false, filled: {}, posted: false, nexts: 0, lastClick: 0 });
+  const state = window.__socialspacePostState || (window.__socialspacePostState = { attached: false, filled: {}, posted: false, nexts: 0, lastClick: 0, auto: true });
+  // The moment Nate clicks or types on the page himself, the script stops pressing anything (it still
+  // fills fields once), so it never fights him or moves the steps under his hand.
+  if (!window.__socialspaceHands) {
+    window.__socialspaceHands = true;
+    const takeOver = (event) => { if (event.isTrusted && !(event.target && event.target.closest && event.target.closest('#socialspace-post'))) state.auto = false; };
+    document.addEventListener('pointerdown', takeOver, true);
+    document.addEventListener('keydown', takeOver, true);
+  }
+  // YouTube always gets a thumbnail: the chosen moment, or else the first frame.
+  if (data.coverMs == null && data.platform === 'youtube') data.coverMs = 0;
   const visible = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
   const names = { tiktok: 'TikTok', youtube: 'YouTube', x: 'X' };
   const name = names[data.platform] || data.platform;
@@ -468,7 +487,7 @@ const POST_SCRIPT: &str = r#"function (data) {
   const now = () => Date.now();
   /** Clicks that open a section or step through the form, spaced out so the page can keep up. Never Post or Publish. */
   const press = (el) => {
-    if (!el || now() - state.lastClick < 1500) return false;
+    if (!el || !state.auto || now() - state.lastClick < 1500) return false;
     if (/^(post|publish|schedule|upload|save|done)$/i.test((el.textContent || '').trim())) return false;
     state.lastClick = now();
     el.click();
@@ -560,20 +579,28 @@ const POST_SCRIPT: &str = r#"function (data) {
       if (data.coverMs != null && state.coverFile && !state.filled.cover) {
         const input = document.querySelector('input#file-loader') || fileInputs('image')[0];
         if (input) { attachTo(input, state.coverFile); state.filled.cover = true; }
+        else if (!state.coverWait) state.coverWait = now();
+        else if (now() - state.coverWait > 8000) state.coverMissing = true;
       }
       const kids = document.querySelector('tp-yt-paper-radio-button[name="' + (data.madeForKids ? 'VIDEO_MADE_FOR_KIDS_MFK' : 'VIDEO_MADE_FOR_KIDS_NOT_MFK') + '"]');
       if (!state.filled.kids && visible(kids)) { state.filled.kids = true; if (kids.getAttribute('aria-checked') !== 'true') kids.click(); }
       if (!state.filled.altered) {
         const altered = document.querySelector('tp-yt-paper-radio-button[name="' + (data.madeWithAi ? 'VIDEO_HAS_ALTERED_CONTENT_YES' : 'VIDEO_HAS_ALTERED_CONTENT_NO') + '"]');
         if (visible(altered)) { state.filled.altered = true; if (altered.getAttribute('aria-checked') !== 'true') altered.click(); }
-        else if (!state.filled.more) { const more = document.querySelector('#toggle-button'); if (visible(more) && press(more)) state.filled.more = true; return; }
+        else if (!state.filled.more) { const more = document.querySelector('#toggle-button'); if (visible(more) && press(more)) { state.filled.more = true; state.moreAt = now(); } if (!state.auto) state.filled.altered = 'skipped'; return; }
+        else if (now() - (state.moreAt || 0) > 6000) state.filled.altered = 'skipped';
         else return;
       }
       // Step through Video elements and Checks to Visibility, choose Public, and stop before Publish.
       const isPublic = document.querySelector('tp-yt-paper-radio-button[name="PUBLIC"]');
-      if (visible(isPublic)) { if (!state.filled.public) { state.filled.public = true; if (isPublic.getAttribute('aria-checked') !== 'true') isPublic.click(); } return; }
+      if (visible(isPublic)) {
+        if (!state.filled.public && state.auto) { state.filled.public = true; if (isPublic.getAttribute('aria-checked') !== 'true') isPublic.click(); }
+        state.auto = false;
+        return;
+      }
+      // At most three Nexts (Details, Video elements, Checks), spaced out so each step can load.
       const next = document.querySelector('#next-button');
-      if (state.filled.kids && visible(next) && next.getAttribute('aria-disabled') !== 'true' && state.nexts < 4 && press(next)) state.nexts += 1;
+      if (state.filled.kids && state.nexts < 3 && now() - state.lastClick > 2500 && visible(next) && next.getAttribute('aria-disabled') !== 'true' && press(next)) state.nexts += 1;
     },
     x: () => {
       fillOnce('text', ['[data-testid="tweetTextarea_0"]', 'div[role="textbox"][contenteditable="true"]'], data.text, false);
@@ -582,17 +609,29 @@ const POST_SCRIPT: &str = r#"function (data) {
 
   const reminders = () => {
     const list = [];
-    if (data.coverMs != null && !state.filled.cover && data.platform !== 'x') list.push('Cover: the frame at ' + data.cover + (state.coverFailed ? ' could not be made here; pick it under Edit cover.' : ' is being set.'));
+    if (data.coverMs != null && !state.filled.cover && data.platform !== 'x') {
+      const at = data.cover || 'the start';
+      if (state.coverFailed) list.push('Cover: the frame at ' + at + ' could not be made here; pick it on the page.');
+      else if (state.coverMissing) list.push(data.platform === 'youtube' ? 'Thumbnail: YouTube only takes an uploaded thumbnail on a phone-verified channel, so it picks one itself for now.' : 'Cover: pick the frame at ' + at + ' under Edit cover.');
+      else list.push('Cover: setting the frame at ' + at + '.');
+    }
     if (data.platform === 'tiktok' && data.madeWithAi && !state.filled.ai) list.push('Turning on "AI-generated content" under Show more.');
     return list;
   };
   const status = () => {
     if (state.posted) return 'Posted. Socialspace marked it. You can close this window.';
-    if (location.hostname === 'accounts.google.com' || /\/login/.test(location.pathname)) return 'Sign in as the brand. Its username and password are filled in; press Next or Log in.';
+    const signingIn = location.hostname === 'accounts.google.com' || /\/login|\/i\/flow\//.test(location.pathname)
+      || all('input[type=password], input[autocomplete="username"], input[name="text"][autocomplete]').length > 0;
+    if (signingIn && !state.attached) return data.loginFilled
+      ? 'Sign in as @' + data.handle + '. Its username and password are filled in step by step; press Next or Log in.'
+      : 'Sign in as @' + data.handle + ' yourself: this profile has no login of its own saved in Social Space (it is on your main Gmail). Once signed in, it stays signed in.';
     if (data.fileNote && !state.attached) return data.fileNote;
     if (!state.attached) return 'Attaching ' + (data.fileName || 'the video') + '…';
-    if (data.platform === 'youtube') return document.querySelector('tp-yt-paper-radio-button[name="PUBLIC"]') && state.filled.public
-      ? 'Everything is filled in and set to Public. Press Publish.' : 'Filling in the details…';
+    if (data.platform === 'youtube') {
+      if (state.filled.public) return 'Everything is filled in and set to Public. Press Publish.';
+      if (!state.auto || state.filled.altered) return 'Details are filled in. Go on with Next, choose Public, then press Publish.';
+      return 'Filling in the details…';
+    }
     if (reminders().length) return 'Filling in the details…';
     return 'Everything is filled in. Press Post.';
   };
@@ -717,6 +756,8 @@ mod tests {
         assert!(is_sign_in(&url("https://x.com/i/flow/login")));
         assert!(!is_sign_in(&url("https://x.com/compose/post")));
         assert!(is_sign_in(&url("https://www.instagram.com/accounts/login/")));
+        assert!(signs_in_over_page(&url("https://x.com/compose/post")));
+        assert!(!signs_in_over_page(&url("https://www.tiktok.com/tiktokstudio/upload")));
         assert!(!is_sign_in(&url("https://www.tiktok.com/tiktokstudio/upload")));
     }
 
