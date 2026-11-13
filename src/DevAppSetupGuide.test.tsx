@@ -77,7 +77,7 @@ describe('filling the developer site', () => {
     const onTrack = vi.fn();
     render(<DevAppSetupGuide provider="tiktok" onTrack={onTrack} working={false} onSave={vi.fn()} onCancel={vi.fn()}/>);
     await waitFor(() => expect(fillSiteForm).toHaveBeenCalledWith('site-embed-1', expect.objectContaining({
-      email: 'softwings25@gmail.com', appName: 'SocialSpace', redirectUri: 'https://localhost/socialspace/tiktok', website: 'https://socialspace-review.web.app',
+      email: 'softwings25@gmail.com', appName: 'SocialSpace', redirectUri: 'http://localhost:49175/socialspace/tiktok/', website: 'https://socialspace-review.web.app',
     }), { accountId: 'developer-tiktok', includePassword: 'ifSaved', keepFilling: true }));
     expect(onTrack).toHaveBeenCalledWith('tiktok', 'softwings25@gmail.com');
     expect(ensureAccountPassword).toHaveBeenCalledWith('developer-tiktok');
