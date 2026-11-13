@@ -152,7 +152,6 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
           </div>
           {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
           {panel === 'add' && <AddVideo key={category.id} brandId={brand.id} category={category} disabled={disabled} onSave={(video) => save({ videos: [...videos, video] }, `Added "${video.title}" to ${category.name}.`)} onClose={() => setPanel(null)}/>}
-          {socials.map((platform) => testModeOf(workspace.setup, platform)).filter((review) => review?.test).map((review) => <p key={review!.provider} className="test-mode-note" role="note"><span className="test-badge">Test</span>{review!.test!.limits} Posts made with the Post on {getPlatform(review!.provider === 'google' ? 'youtube' : 'tiktok').name} button go through its own page, so they are real, public posts.</p>)}
           {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Profiles.</p>}
           {inCategory.length > 0 && <div className="segmented library-stages" role="group" aria-label="Stage">
             <button type="button" aria-pressed={stage === 'all'} onClick={() => setStage('all')}>All <small>{inCategory.length}</small></button>
@@ -231,6 +230,10 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   const { confirm, dialog } = useConfirm();
   const instagramLink = video.links?.instagram;
   const openPost = () => { if (instagramLink) openInstagramPost(instagramLink).catch((reason) => setError(errorText(reason))); };
+  async function unmark(platform: Platform) {
+    const name = getPlatform(platform).name;
+    if (await confirm({ title: `Mark as not posted on ${name}?`, body: <p>"{video.title}" goes back to waiting for {name}. Nothing is removed from {name}.</p>, confirmLabel: 'Mark as not posted' })) onToggle(platform);
+  }
   /** Approving posts it: straight to every social the app can post to, after one confirmation. */
   async function approve(draft: Video, saveDefaults: boolean) {
     if (!onPost || !instagram || working) return false;
@@ -274,8 +277,10 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     {!job && socials.length > 0 && <div className="library-posted" role="group" aria-label="Posted on">{socials.map((platform) => {
       const done = video.posted.includes(platform);
       const live = done && platform === 'instagram' && instagramLink;
-      if (live) return <button type="button" key={platform} className="posted-chip done" aria-label="View on Instagram" title="Posted on Instagram. Click to view the post." onClick={openPost}><BrandMark platform={platform} small/><Check size={12}/></button>;
-      return <button type="button" key={platform} className={`posted-chip ${done ? 'done' : ''}`} aria-pressed={done} aria-label={getPlatform(platform).name} title={done ? `Posted on ${getPlatform(platform).name}. Click to unmark.` : `Mark as posted on ${getPlatform(platform).name}`} disabled={disabled} onClick={() => onToggle(platform)}><BrandMark platform={platform} small/>{done && <Check size={12}/>}{done && video.testPosts?.[platform] !== undefined && <span className="test-badge" title="Posted while this social's app was in test mode">Test</span>}</button>;
+      if (live) return <button type="button" key={platform} className="posted-chip done" aria-label="View on Instagram" title="Posted on Instagram. Click to view the post." onClick={openPost}><BrandMark platform={platform} small/><Check size={12} className="posted-check"/></button>;
+      // Logos only show where it is up. Ticking happens when a post is confirmed; a posted logo can be unmarked.
+      if (!done) return <span key={platform} className="posted-chip" role="img" aria-label={`Not posted on ${getPlatform(platform).name} yet`} title={`Not posted on ${getPlatform(platform).name} yet`}><BrandMark platform={platform} small/></span>;
+      return <button type="button" key={platform} className="posted-chip done" aria-label={`Posted on ${getPlatform(platform).name}`} title={`Posted on ${getPlatform(platform).name}. Click to mark it as not posted.`} disabled={disabled} onClick={() => void unmark(platform)}><BrandMark platform={platform} small/><Check size={12} className="posted-check"/>{video.testPosts?.[platform] !== undefined && <span className="test-badge" title="Posted while this social's app was in test mode">Test</span>}</button>;
     })}</div>}
     <div className="library-video-actions">
       {playable && <button type="button" className="ghost-button small-button" aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <><X size={14}/> Close</> : <><Play size={14}/> Watch</>}</button>}

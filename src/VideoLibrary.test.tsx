@@ -79,18 +79,25 @@ describe('video library', () => {
     expect(screen.getByText('1 video · 0 on every social')).toBeInTheDocument();
   });
 
-  it("shows a video's status on each of the brand's socials and marks one posted", async () => {
+  it("shows where a video is up, never marks one posted from a logo, and unmarks after asking", async () => {
     const { onSave, onOpen, user } = setup();
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
     expect(within(video).getByText('bunny.mp4 · 1 of 3 socials')).toBeInTheDocument();
-    expect(within(video).getByRole('button', { name: 'Instagram' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(video).getByRole('img', { name: 'Not posted on TikTok yet' })).toBeInTheDocument();
+    expect(within(video).queryByRole('button', { name: 'TikTok' })).not.toBeInTheDocument();
+    await user.click(within(video).getByRole('img', { name: 'Not posted on TikTok yet' }));
+    expect(onSave).not.toHaveBeenCalled();
     await user.click(within(video).getByRole('button', { name: /Edit post/ }));
     await user.click(within(video).getByRole('button', { name: /Post on TikTok/ }));
     expect(invoke).toHaveBeenCalledWith('open_posting_window', { request: expect.objectContaining({ platform: 'tiktok', brandId: 'mia', videoId: 'v1', accountId: '2', handle: 'mia', videoPath: 'C:\\clips\\bunny.mp4' }) });
     expect(onOpen).not.toHaveBeenCalled();
-    await user.click(within(video).getByRole('button', { name: 'TikTok' }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'], testPosts: { tiktok: expect.any(Number) } })] }), 'Marked "Bunny hop" as posted on TikTok (test: Sandbox).');
+    onSave.mockClear();
+    await user.click(within(video).getByRole('button', { name: 'Posted on Instagram' }));
+    expect(onSave).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Mark as not posted' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: [] })] }), 'Marked "Bunny hop" as not posted on Instagram.');
   });
+
 
   it('keeps the add forms hidden until asked, then adds a category and a video', async () => {
     const { onSave, user } = setup();

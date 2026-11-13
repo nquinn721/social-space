@@ -93,6 +93,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
 
   return <section className="brand-accounts" aria-label={`${brand.name} profiles`}>
     {flow.panels}
+    {[...new Set(accounts.filter((account) => account.status === 'active').map((account) => account.platform))].map((platform) => testModeOf(marks, platform)).filter((review) => review?.test).map((review) => <p key={review!.provider} className="test-mode-note" role="note"><span className="test-badge">Test</span>{review!.test!.limits} Posting with the Post on {review!.provider === 'google' ? 'YouTube' : 'TikTok'} button goes through its own page, so those posts are real and public.</p>)}
     {pageNote && <div className="notice conn-notice" role="status"><span>{pageNote}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setPageNote('')}>×</button></div>}
     <div className="profile-cards">{accounts.map((account) => {
       const platformName = getPlatform(account.platform).name;
