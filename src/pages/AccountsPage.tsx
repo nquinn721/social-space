@@ -8,6 +8,8 @@ import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, passwordGroup, pla
 const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id, item])).values()];
 import { ensureSharedPassword } from '../profileService';
 import BrandAccounts from '../BrandAccounts';
+import { useBrandInstagram } from '../useBrandInstagram';
+import { brandSummary, useBrandStatuses, type SocialStatus } from '../brandStatus';
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
 import { BrandMark, PageHeader } from '../ui';
 import '../brands.css';
@@ -75,6 +77,8 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       || group.accounts.some((account) => account.handle.toLowerCase().includes(text) || (account.displayName ?? '').toLowerCase().includes(text)));
   }, [groups, query]);
   const open = groups.find((group) => group.brand.id === openId);
+  const instagram = useBrandInstagram(workspace, open?.brand.id);
+  const statuses = useBrandStatuses(workspace, open?.brand.id, instagram);
   const marks = workspace.setup ?? {};
   const mark = onSave ? (id: string, done: boolean) => {
     const next = { ...marks };
@@ -132,7 +136,14 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
 
   if (open && tab === 'brands') {
     const { brand, accounts } = open;
-    const missing = PLATFORMS.filter((platform) => !accounts.some((account) => account.platform === platform.id));
+    const summary = brandSummary(statuses);
+    /** The one step that unblocks a social: make its profile, finish its sign-up, or open Accounts to fix the login. */
+    const fixStatus = (status: SocialStatus) => {
+      const kind = status.action?.kind;
+      if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
+      else if (kind === 'finish-signup' && status.account && onSignUp) void startSignUp(status.account, accounts);
+      else showBrandTab('accounts');
+    };
     const notCreated = accounts.filter((account) => account.status !== 'active');
     const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
     const baseEmail = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
@@ -145,16 +156,26 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
           : <form className="inline-add rename-form" onSubmit={(event) => { event.preventDefault(); const name = renaming.trim(); if (name && onRenameBrand) void onRenameBrand(brand, name).then((ok) => { if (ok) setRenaming(null); }); }}>
             <label htmlFor="brand-name" className="sr-only">Brand name</label><input id="brand-name" autoFocus maxLength={120} value={renaming} onChange={(event) => setRenaming(event.target.value)}/>
             <button className="primary-button small-button" disabled={!renaming.trim() || busy}>Save</button><button type="button" className="ghost-button small-button" onClick={() => setRenaming(null)}>Cancel</button>
-          </form>}<p>{accounts.length - notCreated.length} of {accounts.length} {accounts.length === 1 ? 'profile' : 'profiles'} live{missing.length ? ` · not on ${missing.map((platform) => platform.name).join(', ')} yet` : ''}</p></div>
+          </form>}<p className={`brand-summary tone-${summary.tone}`}><span className="dot"/>{summary.text}</p></div>
         {notCreated.length > 1 && onSignUp && <button className="primary-button" disabled={!loaded || busy} onClick={() => onSignUp(notCreated)}><AppWindow size={15}/> Create all {notCreated.length} on the socials</button>}
       </div>
+      <div className="social-strip" role="list" aria-label={`${brand.name} on each social`}>{statuses.map((status) => {
+        const name = getPlatform(status.platform).name;
+        const handle = status.account?.handle ? `@${status.account.handle.replace(/^@/, '')}` : '';
+        return <button type="button" role="listitem" key={status.platform} className={`social-chip tone-${status.tone}`} title={status.detail} disabled={!loaded || busy || adding}
+          onClick={() => fixStatus(status)} aria-label={`${name}: ${status.label}${status.action ? `. ${status.action.label}` : ''}`}>
+          <BrandMark platform={status.platform}/>
+          <span className="social-chip-text"><strong>{name}</strong><small>{handle || status.detail}</small></span>
+          <span className="social-chip-state"><span className="dot"/>{status.action && status.tone !== 'ok' ? status.action.label : status.label}</span>
+        </button>;
+      })}</div>
       <div className="segmented account-tabs brand-tabs" role="tablist" aria-label={`${brand.name} sections`}>
         <button type="button" role="tab" aria-selected={brandTab === 'content'} aria-pressed={brandTab === 'content'} onClick={() => showBrandTab('content')}>Posts</button>
         <button type="button" role="tab" aria-selected={brandTab === 'accounts'} aria-pressed={brandTab === 'accounts'} onClick={() => showBrandTab('accounts')}>Accounts</button>
       </div>
       {brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
-        onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')}
-        onCreateProfile={(platform) => { const account = accounts.find((item) => item.platform === platform && item.status !== 'active'); if (account && onSignUp) void startSignUp(account, accounts); else showBrandTab('accounts'); }}/> : null) : <>
+        onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
+        instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
       {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
       <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
         onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}

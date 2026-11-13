@@ -585,3 +585,24 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .code-toast span { color: var(--text-2); font-size: 13px; }
 .code-toast strong { font: 600 20px ui-monospace, monospace; letter-spacing: 2px; user-select: all; }
 .pill.testing { background: var(--accent-soft); color: var(--accent-text); margin-left: 6px; }
+
+/* ───────────────── Status tones (shared by every page) ───────────────── */
+.tone-ok { --tone: var(--success); --tone-soft: var(--success-soft); --tone-line: var(--success-line); }
+.tone-ready { --tone: var(--accent-text); --tone-soft: var(--accent-soft); --tone-line: var(--accent-line); }
+.tone-todo { --tone: var(--warning); --tone-soft: var(--warning-soft); --tone-line: rgba(255, 178, 36, 0.35); }
+.tone-problem { --tone: var(--danger); --tone-soft: var(--danger-soft); --tone-line: var(--danger-line); }
+.tone-muted, .tone-checking { --tone: var(--text-3); --tone-soft: var(--surface-2); --tone-line: var(--border); }
+.tone-checking .dot { animation: pulse 1.4s infinite; }
+.status-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 999px; color: var(--tone); background: var(--tone-soft); white-space: nowrap; }
+
+/* A brand on every social: one chip per social with its state and the step that moves it on. */
+.social-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 0 0 20px; }
+.social-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; text-align: left; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); transition: border-color .15s, background .15s; min-width: 0; }
+.social-chip:hover:not(:disabled) { border-color: var(--tone-line); background: var(--surface-hover); }
+.social-chip.tone-muted .platform-mark { filter: grayscale(1); opacity: .45; }
+.social-chip-text { flex: 1; min-width: 0; display: grid; }
+.social-chip-text strong { font-size: 13px; }
+.social-chip-text small { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.social-chip-state { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--tone); white-space: nowrap; }
+.brand-summary { display: inline-flex; align-items: center; gap: 7px; }
+.brand-summary .dot { color: var(--tone); }

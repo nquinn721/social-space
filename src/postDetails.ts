@@ -4,7 +4,7 @@ import type { Platform, PostDetails, Video, VideoCategory } from './model';
 export type Stage = 'making' | 'review' | 'posted';
 export const STAGES: { id: Stage; label: string }[] = [
   { id: 'making', label: 'Making' },
-  { id: 'review', label: 'To approve' },
+  { id: 'review', label: 'To post' },
   { id: 'posted', label: 'Posted' },
 ];
 

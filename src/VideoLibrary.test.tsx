@@ -59,16 +59,16 @@ describe('video library', () => {
     setup({ ...base, accounts: [profile('1', 'instagram'), tiktok] });
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
     expect(within(video).queryByRole('button', { name: /Post on TikTok/ })).not.toBeInTheDocument();
-    expect(within(video).getByRole('button', { name: /own TikTok login/ })).toBeInTheDocument();
+    expect(within(video).getByRole('button', { name: /Give it its own login \(TikTok\)/ })).toBeInTheDocument();
   });
 
   it('offers to create a profile instead of posting where the brand has none yet', async () => {
     const { user } = setup({ ...base, accounts: [profile('1', 'instagram'), profile('2', 'tiktok', 'planned')] });
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
     expect(within(video).queryByRole('button', { name: /Post on TikTok/ })).not.toBeInTheDocument();
-    expect(within(video).getByRole('button', { name: /Create TikTok profile/ })).toBeInTheDocument();
+    expect(within(video).getByRole('button', { name: /Finish sign-up \(TikTok\)/ })).toBeInTheDocument();
     await user.click(within(video).getByRole('button', { name: /Edit post/ }));
-    expect(within(video).getByText(/has no TikTok profile of its own yet/)).toBeInTheDocument();
+    expect(within(video).getByText(/TikTok account isn't made yet/)).toBeInTheDocument();
   });
 
   it('posts on TikTok through its page, and asks when the window closes without posting', async () => {
@@ -77,8 +77,8 @@ describe('video library', () => {
     await user.click(within(video).getByRole('button', { name: /Post on TikTok/ }));
     expect(invoke).toHaveBeenCalledWith('open_posting_window', expect.anything());
     await act(async () => { postingHandler?.({ payload: { videoId: 'v1', platform: 'tiktok', state: 'closed', posted: false } }); });
-    expect(within(video).getByText(/Did "Bunny hop" go up on TikTok/)).toBeInTheDocument();
-    await user.click(within(video).getByRole('button', { name: /Yes, mark posted/ }));
+    expect(within(video).getByText('Did it go up?')).toBeInTheDocument();
+    await user.click(within(video).getByRole('button', { name: /Yes, it's on TikTok/ }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
   });
 
@@ -93,23 +93,21 @@ describe('video library', () => {
     expect(categoryProgress(base.videos!, ['instagram', 'tiktok'])).toEqual({ total: 1, everywhere: 0 });
     setup();
     expect(screen.getByRole('button', { name: 'Rabbit 1' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('1 video · 0 on every social')).toBeInTheDocument();
+    expect(screen.getByText('1 video · 2 posts to make')).toBeInTheDocument();
   });
 
   it("shows where a video is up, never marks one posted from a logo, and unmarks after asking", async () => {
     const { onSave, onOpen, user } = setup();
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
-    expect(within(video).getByText('bunny.mp4 · 1 of 3 socials')).toBeInTheDocument();
-    expect(within(video).getByRole('img', { name: 'Not posted on TikTok yet' })).toBeInTheDocument();
+    expect(within(video).getByText('Posted on 1 of 3')).toBeInTheDocument();
+    expect(within(video).getByRole('group', { name: 'Where it goes' })).toHaveTextContent('TikTok');
     expect(within(video).queryByRole('button', { name: 'TikTok' })).not.toBeInTheDocument();
-    await user.click(within(video).getByRole('img', { name: 'Not posted on TikTok yet' }));
-    expect(onSave).not.toHaveBeenCalled();
     await user.click(within(video).getByRole('button', { name: /Edit post/ }));
     await user.click(within(video).getByRole('button', { name: /Post on TikTok/ }));
     expect(invoke).toHaveBeenCalledWith('open_posting_window', { request: expect.objectContaining({ platform: 'tiktok', brandId: 'mia', videoId: 'v1', accountId: '2', handle: 'mia', videoPath: 'C:\\clips\\bunny.mp4' }) });
     expect(onOpen).not.toHaveBeenCalled();
     onSave.mockClear();
-    await user.click(within(video).getByRole('button', { name: 'Posted on Instagram' }));
+    await user.click(within(video).getByRole('button', { name: 'Mark as not posted on Instagram' }));
     expect(onSave).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Mark as not posted' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: [] })] }), 'Marked "Bunny hop" as not posted on Instagram.');
@@ -206,9 +204,9 @@ describe('approving a post', () => {
     const confirmBox = vi.spyOn(window, 'confirm');
     const { onSave, user } = setup(workspace);
     const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
-    expect(within(row).getByText('To approve')).toBeInTheDocument();
+    expect(within(row).getByText('Ready to post')).toBeInTheDocument();
     expect(within(row).getByLabelText('Post')).toHaveTextContent('Crunchy');
-    await user.click(await within(row).findByRole('button', { name: /Approve and post/ }));
+    await user.click(await within(row).findByRole('button', { name: 'Post to Instagram' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('@animals');
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
@@ -223,16 +221,15 @@ describe('approving a post', () => {
     const live: Video = { ...fresh, posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } };
     const { user } = setup({ ...base, videos: [live] });
     const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
-    await user.click(within(row).getByText('View on Instagram'));
-    await user.click(within(within(row).getByRole('group', { name: 'Posted on' })).getByRole('button', { name: 'View on Instagram' }));
-    expect(instagram.openInstagramPost).toHaveBeenCalledTimes(2);
+    await user.click(within(row).getByRole('button', { name: 'View on Instagram' }));
+    expect(instagram.openInstagramPost).toHaveBeenCalledTimes(1);
     expect(instagram.openInstagramPost).toHaveBeenCalledWith('https://www.instagram.com/reel/abc/');
   });
 
   it('does nothing when the confirmation is cancelled', async () => {
     connected();
     const { onSave, user } = setup(workspace);
-    await user.click(await screen.findByRole('button', { name: /Approve and post/ }));
+    await user.click(await screen.findByRole('button', { name: 'Post to Instagram' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(instagram.publishInstagramReelFile).not.toHaveBeenCalled();
@@ -243,7 +240,7 @@ describe('approving a post', () => {
     connected();
     vi.mocked(instagram.publishInstagramReelFile).mockRejectedValue('Instagram refused the video upload (HTTP 400).');
     const { onSave, user } = setup(workspace);
-    await user.click(await screen.findByRole('button', { name: /Approve and post/ }));
+    await user.click(await screen.findByRole('button', { name: 'Post to Instagram' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Post to Instagram' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 400');
     expect(onSave).not.toHaveBeenCalled();
@@ -252,9 +249,9 @@ describe('approving a post', () => {
   it('asks to connect Instagram instead of opening the site when the profile is not connected', async () => {
     vi.mocked(instagram.claimInstagramConnection).mockResolvedValue(null);
     const { onConnectInstagram, onOpen, user } = setup(workspace);
-    await user.click(await screen.findByRole('button', { name: /Connect Instagram to post/ }));
+    await user.click(await screen.findByRole('button', { name: /Connect Instagram \(Instagram\)/ }));
     expect(onConnectInstagram).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /Approve and post/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Post to Instagram' })).not.toBeInTheDocument();
     expect(onOpen).not.toHaveBeenCalled();
   });
 
@@ -268,7 +265,7 @@ describe('approving a post', () => {
     await user.type(within(row).getByLabelText('Hashtags'), ' snow');
     await user.click(within(row).getByLabelText(/main feed/));
     expect(within(row).getByLabelText(/Start new Rabbit videos/)).toBeChecked();
-    await user.click(await within(row).findByRole('button', { name: /Approve and post/ }));
+    await user.click(await within(row).findByRole('button', { name: 'Post to Instagram' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Crunchy #bunny #snow');
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
@@ -334,7 +331,7 @@ describe('content stages', () => {
   it('filters posts by stage', async () => {
     const review: Video = { ...bunny, id: 'v3', title: 'Hop review', posted: [], createdAt: 3 };
     const { user } = setup({ ...base, accounts: [profile('1', 'instagram')], videos: [bunny, review] });
-    await user.click(screen.getByRole('button', { name: 'To approve 1' }));
+    await user.click(screen.getByRole('button', { name: 'To post 1' }));
     expect(screen.getByRole('listitem', { name: 'Hop review' })).toBeInTheDocument();
     expect(screen.queryByRole('listitem', { name: 'Bunny hop' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Posted 1' }));
