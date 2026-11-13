@@ -52,3 +52,13 @@ describe('developer app reviews', () => {
     expect(onSet).toHaveBeenCalledWith('tiktok', 'submitted');
   });
 });
+
+describe('test mode on developer accounts', () => {
+  it('marks TikTok and YouTube as test, and Meta review as not needed', () => {
+    render(<DeveloperAccounts reviews={{ marks: {}, onSet: () => undefined }}/>);
+    expect(within(screen.getByLabelText('TikTok for Developers')).getByText('Test · Sandbox')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Google Cloud (YouTube)')).getByText('Test · Testing')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Meta for Developers')).getByText('Not needed for your accounts')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Meta for Developers')).queryByText(/^Test/)).not.toBeInTheDocument();
+  });
+});

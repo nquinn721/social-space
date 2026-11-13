@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-production-app"
+description = "Enables the save_production_app command without any pre-configured scope."
+commands.allow = ["save_production_app"]
+
+[[permission]]
+identifier = "deny-save-production-app"
+description = "Denies the save_production_app command without any pre-configured scope."
+commands.deny = ["save_production_app"]

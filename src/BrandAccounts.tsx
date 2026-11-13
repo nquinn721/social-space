@@ -1,3 +1,4 @@
+import { testModeOf } from './appReviews';
 import { Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
@@ -89,6 +90,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
     <div className="profile-cards">{accounts.map((account) => {
       const platformName = getPlatform(account.platform).name;
       const live = account.status === 'active';
+      const test = testModeOf(marks, account.platform);
       const check = status.connections[account.id];
       const connectedAs = check?.state === 'ok' ? normalizeHandle(check.username) : '';
       const state = readiness(account);
@@ -105,6 +107,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
             <small>{account.handle ? `@${account.handle}` : 'No username yet'}{connectedAs && connectedAs.toLowerCase() !== normalizeHandle(account.handle).toLowerCase() ? ` · connected as @${connectedAs}` : ''}</small>
           </div>
           <span className={`pill ${state.tone}`}><span className="dot"/>{state.text}</span>
+          {live && test?.test && <span className="test-badge" title={test.test.limits}>Test · {test.test.mode}</span>}
           <span className="profile-card-actions">
             {!live && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}>Create on {platformName}</button>}
             {needsConnect && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => void connect(account)}>{check.state === 'none' ? 'Connect' : 'Reconnect'}</button>}

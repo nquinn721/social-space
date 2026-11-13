@@ -143,3 +143,12 @@
 .review-notice { flex-wrap: wrap; }
 .review-notice .review-notice-actions { margin-left: auto; display: flex; gap: 6px; }
 .review-notice.rejected { background: var(--danger-soft, transparent); border-color: var(--danger-line, #f87171); color: var(--text); }
+
+/* Test mode (TikTok Sandbox, YouTube before the audit): posts are not public yet. */
+.test-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; color: #1b1300; background: var(--amber); white-space: nowrap; }
+.developer-account h3 .test-badge { margin-left: auto; }
+.test-mode-box { display: grid; gap: 6px; padding: 8px 10px; border: 1px dashed var(--amber); border-radius: 8px; font-size: 12.5px; }
+.test-mode-box p { margin: 0; }
+.test-mode-note { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 8px 12px; border: 1px dashed var(--amber); border-radius: 8px; margin: 0 0 10px; }
+.posted-chip .test-badge { font-size: 9px; padding: 0 4px; }
+.developer-account dl > div.review-row { align-items: start; } .review-row dt { padding-top: 3px; }

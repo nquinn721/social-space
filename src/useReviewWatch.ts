@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
 import { emailConnection, listEmails, type EmailSummary } from './emailService';
-import { APP_REVIEWS, reviewChangesFrom, reviewStatus, stateLabel, type AppReview, type ReviewState } from './appReviews';
+import { APP_REVIEWS, reviewChangesFrom, reviewOpen, stateLabel, type AppReview, type ReviewState } from './appReviews';
 import type { Workspace } from './model';
 
 /** How often the inbox is read for review results while a review is still open. */
@@ -29,8 +29,8 @@ export function useReviewWatch({ loaded, workspaceRef, save, notify }: Options):
 
   const check = useCallback(async (manual: boolean) => {
     if (running.current || !isTauri()) return;
-    const open = APP_REVIEWS.filter((review) => reviewStatus(workspaceRef.current.setup, review.provider).state !== 'approved');
-    if (!open.length) { if (manual) setNote('Every review is approved.'); return; }
+    const open = APP_REVIEWS.filter((review) => reviewOpen(workspaceRef.current.setup, review));
+    if (!open.length) { if (manual) setNote('No review is waiting.'); return; }
     running.current = true; setChecking(true);
     try {
       if (!await emailConnection()) { setNote('Connect the email inbox (Settings, Email inbox) so the app can see review results.'); return; }

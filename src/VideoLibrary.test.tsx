@@ -69,7 +69,7 @@ describe('video library', () => {
     expect(onOpen).toHaveBeenCalledWith('tiktok', 'post');
     await user.click(within(video).getByRole('button', { name: 'Cancel' }));
     await user.click(within(video).getByRole('button', { name: 'TikTok' }));
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'], testPosts: { tiktok: expect.any(Number) } })] }), 'Marked "Bunny hop" as posted on TikTok (test: Sandbox).');
   });
 
   it('keeps the add forms hidden until asked, then adds a category and a video', async () => {

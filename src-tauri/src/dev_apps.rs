@@ -46,12 +46,32 @@ pub struct DevApp {
 pub struct AppSummary {
     provider: Provider,
     id: Option<String>,
+    /// Production keys saved ahead, kept apart while the app still runs on its test
+    /// (sandbox) keys, and put in use with one click once the social approves the app.
+    production_id: Option<String>,
 }
 
 #[cfg(windows)]
 fn entry(provider: Provider) -> Result<keyring::Entry, String> {
     keyring::Entry::new(KEYRING_SERVICE, provider.key()).map_err(|_| "Windows Credential Manager is unavailable.".into())
 }
+
+#[cfg(windows)]
+fn production_entry(provider: Provider) -> Result<keyring::Entry, String> {
+    keyring::Entry::new(KEYRING_SERVICE, &format!("{}-production", provider.key())).map_err(|_| "Windows Credential Manager is unavailable.".into())
+}
+
+/// The production keys saved ahead for a social, if any.
+#[cfg(windows)]
+pub fn get_production(provider: Provider) -> Result<Option<DevApp>, String> {
+    match production_entry(provider)?.get_password() {
+        Ok(value) => Ok(serde_json::from_str(&value).ok()),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(_) => Err("Could not read the saved production keys.".into()),
+    }
+}
+#[cfg(not(windows))]
+pub fn get_production(_provider: Provider) -> Result<Option<DevApp>, String> { Ok(None) }
 
 #[cfg(windows)]
 fn read_old_meta() -> Option<DevApp> {
@@ -85,24 +105,54 @@ pub fn valid(provider: Provider, id: &str, secret: &str) -> bool {
     id_ok && secret_ok
 }
 
-/// Saves a social's developer app, once.
-pub fn save(provider: Provider, id: &str, secret: &str) -> Result<(), String> {
-    let (id, secret) = (id.trim(), secret.trim());
+fn checked(provider: Provider, id: &str, secret: &str) -> Result<String, String> {
     if !valid(provider, id, secret) {
         return Err(if provider.needs_secret() { "Enter the app's ID and secret exactly as the developer site shows them." } else { "Enter the app's Client ID exactly as the developer site shows it." }.into());
     }
+    serde_json::to_string(&DevApp { id: id.into(), secret: secret.into() }).map_err(|_| "Could not save the developer app.".into())
+}
+
+/// Saves a social's developer app, once.
+pub fn save(provider: Provider, id: &str, secret: &str) -> Result<(), String> {
+    let value = checked(provider, id.trim(), secret.trim())?;
     #[cfg(windows)]
     {
-        let value = serde_json::to_string(&DevApp { id: id.into(), secret: secret.into() }).map_err(|_| "Could not save the developer app.")?;
         entry(provider)?.set_password(&value).map_err(|_| "Could not save the developer app to Windows Credential Manager.".into())
     }
     #[cfg(not(windows))]
-    Err("Developer apps are supported on Windows only.".into())
+    { let _ = value; Err("Developer apps are supported on Windows only.".into()) }
 }
 
 #[tauri::command]
 pub fn developer_apps() -> Result<Vec<AppSummary>, String> {
-    Provider::ALL.iter().map(|&provider| Ok(AppSummary { provider, id: get(provider)?.map(|app| app.id) })).collect()
+    Provider::ALL
+        .iter()
+        .map(|&provider| Ok(AppSummary { provider, id: get(provider)?.map(|app| app.id), production_id: get_production(provider)?.map(|app| app.id) }))
+        .collect()
+}
+
+/// Saves a social's production keys ahead, without using them yet.
+#[tauri::command]
+pub fn save_production_app(provider: Provider, id: String, secret: Option<String>) -> Result<(), String> {
+    let value = checked(provider, id.trim(), secret.as_deref().unwrap_or("").trim())?;
+    #[cfg(windows)]
+    {
+        production_entry(provider)?.set_password(&value).map_err(|_| "Could not save the production keys to Windows Credential Manager.".to_string())
+    }
+    #[cfg(not(windows))]
+    { let _ = value; Err("Developer apps are supported on Windows only.".into()) }
+}
+
+/// Puts the production keys saved ahead in use: they replace the test keys, and the saved-ahead copy is removed.
+#[tauri::command]
+pub fn use_production_app(provider: Provider) -> Result<(), String> {
+    let Some(app) = get_production(provider)? else { return Err("Save the production keys first.".into()) };
+    save(provider, &app.id, &app.secret)?;
+    #[cfg(windows)]
+    {
+        let _ = production_entry(provider)?.delete_credential();
+    }
+    Ok(())
 }
 
 #[tauri::command]

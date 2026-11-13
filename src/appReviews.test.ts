@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classifyReviewEmail, finishedUnseen, reviewChangesFrom, reviewStatus, seenKey, withReviewState } from './appReviews';
+import { APP_REVIEWS, classifyReviewEmail, finishedUnseen, moveTestVideos, reviewChangesFrom, reviewOpen, reviewStatus, seenKey, testModeOf, testVideos, withPosted, withReviewState } from './appReviews';
+import type { Video } from './model';
 
 const mail = (from: string, subject: string, date: string, uid = 1) => ({ uid, from, subject, date, unread: true });
 
@@ -41,5 +42,40 @@ describe('app reviews', () => {
     const marks = withReviewState({}, 'google', 'rejected', 500);
     expect(finishedUnseen(marks).map((item) => item.review.provider)).toEqual(['google']);
     expect(finishedUnseen({ ...marks, [seenKey('google')]: 600 })).toEqual([]);
+  });
+});
+
+const video = (posted: Video['posted'] = [], testPosts?: Video['testPosts']): Video => ({ id: 'v', brandId: 'b', categoryId: 'c', title: 'Bunny', mediaSource: '', caption: '', posted, createdAt: 1, testPosts });
+
+describe('test mode', () => {
+  it('is on for TikTok and YouTube until their review is approved, never for Instagram or X', () => {
+    expect(testModeOf({}, 'tiktok')?.test?.mode).toBe('Sandbox');
+    expect(testModeOf({}, 'youtube')?.test?.mode).toBe('Testing');
+    expect(testModeOf({}, 'instagram')).toBeNull();
+    expect(testModeOf({}, 'x')).toBeNull();
+    expect(testModeOf(withReviewState({}, 'tiktok', 'approved', 1), 'tiktok')).toBeNull();
+  });
+
+  it('remembers posts marked while in test mode, and forgets them when unmarked', () => {
+    const posted = withPosted(video(), ['tiktok', 'instagram'], {}, 50);
+    expect(posted.testPosts).toEqual({ tiktok: 50 });
+    expect(withPosted(posted, ['instagram'], {}).testPosts).toBeUndefined();
+    expect(withPosted(video(), ['tiktok'], withReviewState({}, 'tiktok', 'approved', 1)).testPosts).toBeUndefined();
+  });
+
+  it('moves test videos back to waiting for that social only', () => {
+    const videos = [video(['tiktok', 'youtube', 'instagram'], { tiktok: 1, youtube: 2 }), { ...video(['tiktok']), id: 'w' }];
+    expect(testVideos(videos, 'tiktok').map((item) => item.id)).toEqual(['v']);
+    const moved = moveTestVideos(videos, 'tiktok');
+    expect(moved[0].posted).toEqual(['youtube', 'instagram']);
+    expect(moved[0].testPosts).toEqual({ youtube: 2 });
+    expect(moved[1]).toBe(videos[1]);
+  });
+
+  it('does not wait on Meta App Review unless it was submitted', () => {
+    const meta = APP_REVIEWS.find((review) => review.provider === 'meta')!;
+    expect(reviewOpen({}, meta)).toBe(false);
+    expect(reviewOpen(withReviewState({}, 'meta', 'submitted', 1), meta)).toBe(true);
+    expect(reviewOpen({}, APP_REVIEWS[0])).toBe(true);
   });
 });
