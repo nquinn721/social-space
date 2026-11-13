@@ -465,6 +465,7 @@ pub fn run() {
             embedded::close_embedded_page,
             autofill::fill_site_form,
             posting::open_posting_window,
+            posting::open_profile_page,
             autofill::choose_image_file,
             autofill::load_image_preview,
             account_passwords::ensure_account_password,

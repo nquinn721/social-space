@@ -19,12 +19,25 @@ vi.mock('./profileConnections', () => ({
   useProfileConnections: () => ({ connected: {}, loading: false, refresh: vi.fn(async () => undefined) }),
 }));
 vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => true), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn() }));
+vi.mock('./postingService', () => ({ openProfilePage: vi.fn(async () => undefined) }));
+import { openProfilePage } from './postingService';
 afterEach(cleanup);
 
 const brand: Brand = { id: 'b1', name: 'Soft Wings', notes: '' };
 const profile = (id: string, platform: Account['platform']): Account => ({ id, platform, label: 'Soft Wings', handle: 'softwings', status: 'active', notes: '', brandId: 'b1', signupEmail: 'softwings25@gmail.com' });
 
 describe('brand accounts', () => {
+  it('opens a live profile in Social Space or the browser to see its videos', async () => {
+    status.connections = {};
+    render(<BrandAccounts brand={brand} accounts={[profile('tt', 'tiktok')]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
+    const tiktok = screen.getByRole('article', { name: 'TikTok profile' });
+    const user = userEvent.setup();
+    await user.click(within(tiktok).getByRole('button', { name: /Open in Social Space/ }));
+    expect(openProfilePage).toHaveBeenLastCalledWith({ platform: 'tiktok', brandId: 'b1', accountId: 'tt', handle: 'softwings', email: 'softwings25@gmail.com', inBrowser: false });
+    await user.click(within(tiktok).getByRole('button', { name: /Open in browser/ }));
+    expect(openProfilePage).toHaveBeenLastCalledWith(expect.objectContaining({ inBrowser: true }));
+  });
+
   it('shows each profile once with its sign-in, its state and one button for what is next', async () => {
     const ig = profile('ig', 'instagram');
     const tt = profile('tt', 'tiktok');

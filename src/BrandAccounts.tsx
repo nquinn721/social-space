@@ -1,5 +1,6 @@
 import { testModeOf } from './appReviews';
-import { Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { AppWindow, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { openProfilePage } from './postingService';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
 import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
@@ -84,6 +85,12 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
     </li>;
   }
 
+  /** The profile's public page, in a Social Space window signed in as the brand or in the default browser. */
+  async function viewProfile(account: Account, inBrowser: boolean) {
+    try { await openProfilePage({ platform: account.platform, brandId: brand.id, accountId: account.id, handle: account.handle, email: account.signupEmail ?? '', inBrowser }); }
+    catch (reason) { setPageNote(errorText(reason, `Could not open the ${getPlatform(account.platform).name} profile.`)); }
+  }
+
   return <section className="brand-accounts" aria-label={`${brand.name} profiles`}>
     {flow.panels}
     {pageNote && <div className="notice conn-notice" role="status"><span>{pageNote}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setPageNote('')}>×</button></div>}
@@ -117,6 +124,9 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           </span>
         </header>
         {warnings?.(account).map((text) => <p key={text} className="row-warning"><TriangleAlert size={12}/> {text}</p>)}
+        {live && account.handle && <p className="profile-card-note profile-view">See the live videos:
+          <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> Open in Social Space</button>
+          <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button></p>}
         {!live && onAlreadyCreated && <p className="profile-card-note">Made it on {platformName} yourself? <button type="button" className="text-button" disabled={disabled} onClick={() => onAlreadyCreated(account)}>Mark it live</button></p>}
         <dl className="profile-signin" aria-label={`${platformName} sign-in`}>
           <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${platformName} email`}/></dd></div>

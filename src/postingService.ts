@@ -18,3 +18,8 @@ export async function onPostingUpdate(handler: (update: PostingUpdate) => void):
   try { return await listen<PostingUpdate>('posting-window', (event) => handler(event.payload)); }
   catch { return () => {}; }
 }
+
+/** Opens a brand profile's public page (its live videos): in a Social Space window signed in as the brand, or the default browser. */
+export async function openProfilePage(request: { platform: Platform; brandId: string; accountId?: string; handle: string; email: string; inBrowser: boolean }): Promise<void> {
+  desktopOnly(); return invoke('open_profile_page', { request });
+}
