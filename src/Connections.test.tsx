@@ -13,7 +13,7 @@ vi.mock('./emailService', () => ({ emailConnection: vi.fn(async () => ({ host: '
 vi.mock('./instagramService', () => ({ INSTAGRAM_REDIRECT_URI: 'https://nquinn721.github.io/socialspace/instagram', claimInstagramConnection: vi.fn(), connectInstagramApp: vi.fn(), disconnectInstagram: vi.fn(), saveInstagramApp: vi.fn(), finishInstagramConnection: vi.fn(), INSTAGRAM_ID_NEEDED: 'INSTAGRAM_ID_NEEDED' }));
 vi.mock('./xService', () => ({ claimXConnection: vi.fn(), connectX: vi.fn(), disconnectX: vi.fn() }));
 vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({ active: null, sources: [] })) }));
-vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'https://localhost/socialspace/tiktok', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
+vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'http://localhost:49175/socialspace/tiktok/', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
 vi.mock('./devAppsService', () => ({ listDeveloperApps: vi.fn(), saveDeveloperApp: vi.fn() }));
 vi.mock('./service', () => ({ openPlatformAction: vi.fn() }));
 
