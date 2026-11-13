@@ -31,7 +31,7 @@ export type VideoGeneration = { sourceId: string; sourceName: string; provider: 
 export type PostDetails = { hashtags: string[]; youtubeTitle: string; coverMs?: number; madeWithAi: boolean; shareToFeed: boolean; madeForKids: boolean };
 /** prompt: what an AI-made video was asked to show, kept to help write its description. */
 /** links: the live post on each social the app published it to. */
-export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration; details?: PostDetails; prompt?: string; links?: Partial<Record<Platform, string>> };
+export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration; details?: PostDetails; prompt?: string; links?: Partial<Record<Platform, string>>; /** Socials it was marked posted on while their app was in test mode (TikTok Sandbox, YouTube before the audit), with when (ms). */ testPosts?: Partial<Record<Platform, number>> };
 /** setup: steps of the setup checklist ticked by hand, by step id, with when (ms). */
 /** A developer-site sign-in tracked by the app (one per social, on the main email). Its password is saved under developerPasswordId(provider). */
 export type DeveloperLogin = { email: string };

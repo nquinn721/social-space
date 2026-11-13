@@ -16,6 +16,7 @@ import { openInstagramPost } from './instagramService';
 import PartnerReviewControls from './PartnerReviewControls';
 import { useBrowserPosting } from './useBrowserPosting';
 import { API_UPLOADS, postModeNote } from './postingMode';
+import { testModeOf, withPosted } from './appReviews';
 import './library.css';
 
 type Props = {
@@ -87,13 +88,14 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   function togglePosted(video: Video, platform: Platform) {
     if (disabled) return;
     const posted = video.posted.includes(platform) ? video.posted.filter((item) => item !== platform) : [...video.posted, platform];
-    void save({ videos: videos.map((item) => item.id === video.id ? { ...item, posted } : item) }, posted.includes(platform) ? `Marked "${video.title}" as posted on ${getPlatform(platform).name}.` : `Marked "${video.title}" as not posted on ${getPlatform(platform).name}.`);
+    const test = testModeOf(workspace.setup, platform);
+    void save({ videos: videos.map((item) => item.id === video.id ? withPosted(item, posted, workspace.setup) : item) }, posted.includes(platform) ? `Marked "${video.title}" as posted on ${getPlatform(platform).name}${test ? ` (test: ${test.test?.mode})` : ''}.` : `Marked "${video.title}" as not posted on ${getPlatform(platform).name}.`);
   }
   /** Saves a video's post details, and its category's defaults when asked. posted replaces where it is up. */
   function savePost(draft: Video, saveDefaults: boolean, message: string, posted?: Platform[]) {
     const latest = workspace.videos ?? [];
     const nextCategories = saveDefaults ? categories.map((item) => item.id === draft.categoryId ? { ...item, defaults: { caption: draft.caption, hashtags: draft.details?.hashtags ?? [] } } : item) : categories;
-    return save({ videos: latest.map((item) => item.id === draft.id ? { ...draft, posted: posted ?? item.posted } : item), categories: nextCategories }, message);
+    return save({ videos: latest.map((item) => item.id === draft.id ? withPosted({ ...draft, posted: item.posted, testPosts: item.testPosts }, posted ?? item.posted, workspace.setup) : item), categories: nextCategories }, message);
   }
   /** Posts the video as a Reel on the brand's connected Instagram profile, then saves its details and marks it posted there. */
   async function post(draft: Video, saveDefaults: boolean) {
@@ -150,6 +152,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
           </div>
           {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
           {panel === 'add' && <AddVideo key={category.id} brandId={brand.id} category={category} disabled={disabled} onSave={(video) => save({ videos: [...videos, video] }, `Added "${video.title}" to ${category.name}.`)} onClose={() => setPanel(null)}/>}
+          {socials.map((platform) => testModeOf(workspace.setup, platform)).filter((review) => review?.test).map((review) => <p key={review!.provider} className="test-mode-note" role="note"><span className="test-badge">Test</span>{review!.test!.limits} Videos you mark posted there now are kept as test posts and move over in one click once {review!.name} is approved.</p>)}
           {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Profiles.</p>}
           {inCategory.length > 0 && <div className="segmented library-stages" role="group" aria-label="Stage">
             <button type="button" aria-pressed={stage === 'all'} onClick={() => setStage('all')}>All <small>{inCategory.length}</small></button>
@@ -272,7 +275,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       const done = video.posted.includes(platform);
       const live = done && platform === 'instagram' && instagramLink;
       if (live) return <button type="button" key={platform} className="posted-chip done" aria-label="View on Instagram" title="Posted on Instagram. Click to view the post." onClick={openPost}><BrandMark platform={platform} small/><Check size={12}/></button>;
-      return <button type="button" key={platform} className={`posted-chip ${done ? 'done' : ''}`} aria-pressed={done} aria-label={getPlatform(platform).name} title={done ? `Posted on ${getPlatform(platform).name}. Click to unmark.` : `Mark as posted on ${getPlatform(platform).name}`} disabled={disabled} onClick={() => onToggle(platform)}><BrandMark platform={platform} small/>{done && <Check size={12}/>}</button>;
+      return <button type="button" key={platform} className={`posted-chip ${done ? 'done' : ''}`} aria-pressed={done} aria-label={getPlatform(platform).name} title={done ? `Posted on ${getPlatform(platform).name}. Click to unmark.` : `Mark as posted on ${getPlatform(platform).name}`} disabled={disabled} onClick={() => onToggle(platform)}><BrandMark platform={platform} small/>{done && <Check size={12}/>}{done && video.testPosts?.[platform] !== undefined && <span className="test-badge" title="Posted while this social's app was in test mode">Test</span>}</button>;
     })}</div>}
     <div className="library-video-actions">
       {playable && <button type="button" className="ghost-button small-button" aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <><X size={14}/> Close</> : <><Play size={14}/> Watch</>}</button>}
@@ -381,7 +384,7 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
         const name = getPlatform(platform).name;
         const done = video.posted.includes(platform);
         let state: React.ReactNode;
-        if (done) state = <span className="pill active"><span className="dot"/>Posted</span>;
+        if (done) state = video.testPosts?.[platform] !== undefined ? <span className="pill planned"><span className="dot"/>Posted as a test</span> : <span className="pill active"><span className="dot"/>Posted</span>;
         else if (API_SOCIALS.includes(platform)) {
           if (automatic) state = <span className="post-target-note">Posts automatically as @{instagram?.username}</span>;
           else if (instagram?.connected === null) state = <span className="post-target-note">Checking the connection…</span>;

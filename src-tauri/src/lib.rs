@@ -105,6 +105,10 @@ struct Video {
     /// Link to the live post on each social it was published to by the app.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     links: BTreeMap<String, String>,
+    /// Socials it was marked posted on while that social's app still ran in test mode (TikTok
+    /// Sandbox, YouTube before the audit), with when (ms). Moved over once the app is approved.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    test_posts: BTreeMap<String, u64>,
 }
 
 /// An AI generation in progress for a library video.
@@ -423,6 +427,8 @@ pub fn run() {
             setup_pages::open_setup_page,
             dev_apps::save_developer_app,
             dev_apps::remove_developer_app,
+            dev_apps::save_production_app,
+            dev_apps::use_production_app,
             x_integration::post_to_x,
             instagram::connect_instagram,
             instagram_login::instagram_app_ready,
@@ -502,12 +508,13 @@ mod tests {
     fn post_details_prompt_links_and_category_defaults_survive_saving() {
         let json = serde_json::json!({"businessName": "", "accounts": [], "categories": [{"id": "c", "brandId": "b", "name": "Rabbit", "defaults": {"caption": "Hi", "hashtags": ["#bunny"]}}],
             "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "details": {"hashtags": ["#bunny"], "shareToFeed": true, "coverMs": 1500}, "prompt": "a rabbit",
-            "links": {"instagram": "https://www.instagram.com/reel/x/"}}]});
+            "links": {"instagram": "https://www.instagram.com/reel/x/"}, "testPosts": {"tiktok": 1700000000000u64}}]});
         let workspace: Workspace = serde_json::from_value(json).unwrap();
         let saved = serde_json::to_value(&workspace).unwrap();
         assert_eq!(saved["videos"][0]["details"]["coverMs"], 1500);
         assert_eq!(saved["videos"][0]["prompt"], "a rabbit");
         assert_eq!(saved["videos"][0]["links"]["instagram"], "https://www.instagram.com/reel/x/");
+        assert_eq!(saved["videos"][0]["testPosts"]["tiktok"], 1700000000000u64);
         assert_eq!(saved["categories"][0]["defaults"]["hashtags"][0], "#bunny");
     }
 
@@ -593,7 +600,7 @@ mod tests {
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
         let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new() }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default() });
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default() });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());

@@ -44,6 +44,8 @@ fn main() {
         "embed_setup_page",
         "save_developer_app",
         "remove_developer_app",
+        "save_production_app",
+        "use_production_app",
         "post_to_x",
         "connect_instagram",
         "instagram_app_ready",

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getPlatform, type Platform, type Video, type Workspace } from './model';
 import { detailsOf, formatMs, postText } from './postDetails';
+import { withPosted } from './appReviews';
 import { onPostingUpdate, openPostingWindow, type PostRequest } from './postingService';
 
 type Save = (next: Workspace, message: string) => Promise<boolean | undefined>;
@@ -21,7 +22,7 @@ export function postRequest(workspace: Workspace, video: Video, platform: Platfo
 export function markPosted(workspace: Workspace, videoId: string, platform: Platform): Workspace | null {
   const video = workspace.videos?.find((item) => item.id === videoId);
   if (!video || video.posted.includes(platform)) return null;
-  return { ...workspace, videos: (workspace.videos ?? []).map((item) => item.id === videoId ? { ...item, posted: [...item.posted, platform] } : item) };
+  return { ...workspace, videos: (workspace.videos ?? []).map((item) => item.id === videoId ? withPosted(item, [...item.posted, platform], workspace.setup) : item) };
 }
 
 /**
