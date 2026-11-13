@@ -4,12 +4,12 @@ import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
 import TeamSyncSettings from '../TeamSyncSettings';
-import DeveloperAccounts from '../DeveloperAccounts';
+import DeveloperAccounts, { type ReviewProps } from '../DeveloperAccounts';
 import type { TeamSync } from '../useTeamSync';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
 import { PageHeader } from '../ui';
 
-type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null; teamSync?: TeamSync };
+type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null; teamSync?: TeamSync; /** Developer-app review states and the inbox watch. */ reviews?: ReviewProps };
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
@@ -44,7 +44,7 @@ function AssistantSettingsCard() {
   </section>;
 }
 
-export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync }: Props) {
+export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync, reviews }: Props) {
   return <>
     <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
     <div className="settings-layout">
@@ -57,7 +57,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <input id="business" value={businessName} maxLength={120} onChange={(event) => onBusinessNameChange(event.target.value)} placeholder="e.g. Soft Wings LLC"/>
           <button className="primary-button" disabled={busy || !loaded}>Save changes</button>
         </form>
-        <DeveloperAccounts/>
+        <DeveloperAccounts reviews={reviews}/>
         <EmailSettings/>
         <PartnerReviewSettings/>
         {teamSync && <TeamSyncSettings sync={teamSync}/>}

@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Copy, KeyRound, Pencil } from 'lucide-react';
+import { Copy, KeyRound, MailSearch, Pencil } from 'lucide-react';
 import { listDeveloperApps, saveDeveloperApp, type DevProvider } from './devAppsService';
 import { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import { PasswordField } from './SignIns';
 import { BrandMark, errorText } from './ui';
 import type { Platform } from './model';
+import { NO_REVIEW, REVIEW_STATES, reviewOf, reviewStatus, type ReviewState } from './appReviews';
+import type { ReviewWatch } from './useReviewWatch';
 import './brands.css';
 
 /** The developer-site accounts behind each social's API app: one per social, on the main email, not a brand's. */
@@ -18,7 +20,25 @@ export const DEVELOPER_ACCOUNTS: { provider: DevProvider; platform: Platform; na
 /** Where a developer account's password is kept in Credential Manager, beside the profile passwords. */
 export function developerPasswordKey(provider: DevProvider) { return `developer-${provider}`; }
 
-function DeveloperCard({ account, appId, onSaved }: { account: typeof DEVELOPER_ACCOUNTS[number]; appId: string | null; onSaved: () => void }) {
+/** marks: the workspace's setup marks, where review states are kept; onSet saves a state chosen by hand. */
+export type ReviewProps = { marks?: Record<string, number>; onSet: (provider: DevProvider, state: ReviewState) => void; watch?: ReviewWatch; busy?: boolean };
+
+const dayText = (at: number) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+function ReviewRow({ provider, reviews }: { provider: DevProvider; reviews?: ReviewProps }) {
+  if (NO_REVIEW.includes(provider)) return <div><dt>Review</dt><dd><span className="review-pill approved">None needed</span></dd></div>;
+  const review = reviewOf(provider);
+  if (!review || !reviews) return null;
+  const { state, at } = reviewStatus(reviews.marks, provider);
+  return <div className="review-row"><dt>Review</dt><dd>
+    <span className={`review-pill ${state}`} title={review.unlocks}>{review.name}{at ? ` · ${dayText(at)}` : ''}</span>
+    <select aria-label={`${review.name} status`} value={state} disabled={reviews.busy} onChange={(event) => reviews.onSet(provider, event.target.value as ReviewState)}>
+      {REVIEW_STATES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+    </select>
+  </dd></div>;
+}
+
+function DeveloperCard({ account, appId, onSaved, reviews }: { account: typeof DEVELOPER_ACCOUNTS[number]; appId: string | null; onSaved: () => void; reviews?: ReviewProps }) {
   const [editing, setEditing] = useState(false);
   const [id, setId] = useState('');
   const [secret, setSecret] = useState('');
@@ -39,6 +59,7 @@ function DeveloperCard({ account, appId, onSaved }: { account: typeof DEVELOPER_
       <div><dt>Email</dt><dd><span className="copy-text"><span>{DEFAULT_SIGNUP_EMAIL}</span><button type="button" className="icon-button" aria-label={`Copy ${account.name} email`} onClick={() => void navigator.clipboard.writeText(DEFAULT_SIGNUP_EMAIL).catch(() => undefined)}><Copy size={14}/></button></span></dd></div>
       <div><dt>Password</dt><dd><PasswordField id={developerPasswordKey(account.provider)} label={account.name}/></dd></div>
       <div><dt>{idLabel}</dt><dd>{appId ? <span className="copy-text"><span>{appId}</span><button type="button" className="icon-button" aria-label={`Copy ${account.name} ${idLabel}`} onClick={() => void navigator.clipboard.writeText(appId).catch(() => undefined)}><Copy size={14}/></button></span> : <span className="muted">Not saved yet</span>}</dd></div>
+      <ReviewRow provider={account.provider} reviews={reviews}/>
     </dl>
     {editing ? <form className="developer-keys" onSubmit={(event) => void save(event)}>
       <label htmlFor={`dev-id-${account.provider}`}>{idLabel}</label>
@@ -52,7 +73,7 @@ function DeveloperCard({ account, appId, onSaved }: { account: typeof DEVELOPER_
 }
 
 /** Settings section: each social's developer account (email, password) and its app keys, kept apart from brand profiles. */
-export default function DeveloperAccounts() {
+export default function DeveloperAccounts({ reviews }: { reviews?: ReviewProps } = {}) {
   const [apps, setApps] = useState<Partial<Record<DevProvider, string | null>>>({});
   const [error, setError] = useState('');
   const load = () => { listDeveloperApps().then((list) => setApps(Object.fromEntries(list.map((app) => [app.provider, app.id])))).catch((reason) => setError(errorText(reason))); };
@@ -60,7 +81,8 @@ export default function DeveloperAccounts() {
   return <section className="settings-card" id="developer-accounts">
     <h2><KeyRound size={17}/> Developer accounts</h2>
     <p>The accounts that own each social's API app, on the main email and separate from the brand profiles. Passwords and app secrets are kept in Windows Credential Manager.</p>
-    <div className="developer-accounts">{DEVELOPER_ACCOUNTS.map((account) => <DeveloperCard key={account.provider} account={account} appId={apps[account.provider] ?? null} onSaved={load}/>)}</div>
+    {reviews?.watch && <div className="status-line review-watch"><MailSearch size={15}/><span>{reviews.watch.note || `The app reads softwings25@gmail.com every 15 minutes for app review results and tells you when one finishes.${reviews.watch.lastChecked ? ` Last checked ${new Date(reviews.watch.lastChecked).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.` : ''}`}</span><button type="button" className="ghost-button small-button" disabled={reviews.watch.checking} onClick={() => void reviews.watch?.checkNow()}>{reviews.watch.checking ? 'Checking…' : 'Check email now'}</button></div>}
+    <div className="developer-accounts">{DEVELOPER_ACCOUNTS.map((account) => <DeveloperCard key={account.provider} account={account} appId={apps[account.provider] ?? null} onSaved={load} reviews={reviews}/>)}</div>
     {error && <p className="error-message" role="alert">{error}</p>}
   </section>;
 }
