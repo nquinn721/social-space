@@ -1,6 +1,6 @@
 [package]
 name = "social-manager"
-version = "0.20.0"
+version = "0.20.1"
 description = "A desktop workspace for social accounts"
 authors = ["Social Space"]
 edition = "2021"
