@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { AlertCircle, TriangleAlert, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Link2, Loader2, Pencil, Play, Plus, RotateCw, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Link2, Loader2, Pencil, Play, Plus, RotateCw, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Platform, type PlatformAction, type PostDetails, type Video, type VideoCategory, type Workspace } from './model';
 import { chooseVideoFile } from './queueService';
 import { BrandMark, errorText, PageHeader } from './ui';
@@ -14,7 +14,8 @@ import { suggestPost } from './assistant/postSuggest';
 import { useConfirm } from './ConfirmDialog';
 import { openInstagramPost } from './instagramService';
 import PartnerReviewControls from './PartnerReviewControls';
-import { useBrowserPosting, wrongLogin } from './useBrowserPosting';
+import { useBrowserPosting } from './useBrowserPosting';
+import { progressLabel, useBrandStatuses, videoProgress, type SocialStatus, type Tone } from './brandStatus';
 import { API_UPLOADS, postModeNote } from './postingMode';
 import { testModeOf, withPosted } from './appReviews';
 import './library.css';
@@ -32,6 +33,10 @@ type Props = {
   onConnectInstagram?: () => void;
   /** Opens the pre-filled sign-up for the brand's profile on a social it isn't live on yet. */
   onCreateProfile?: (platform: Platform) => void;
+  /** Goes to the brand's Accounts, where logins are saved and fixed. */
+  onShowAccounts?: () => void;
+  /** The brand's Instagram connection when the page already checks it, so it isn't checked twice. */
+  instagram?: BrandInstagram | null;
 };
 type Panel = 'make' | 'add' | null;
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -48,18 +53,31 @@ export function categoryProgress(videos: Video[], socials: Platform[]) {
   return { total: videos.length, everywhere };
 }
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+/** "3 videos · 2 posts to make · 1 posted everywhere": what is left in a category, counted per social. */
+export function categoryLine(videos: Video[], socials: Platform[]) {
+  const parts = [plural(videos.length, 'video')];
+  if (socials.length && videos.length) {
+    const ready = videos.filter((video) => !video.generation);
+    const left = ready.reduce((sum, video) => sum + socials.filter((platform) => !video.posted.includes(platform)).length, 0);
+    const everywhere = categoryProgress(videos, socials).everywhere;
+    parts.push(left ? `${plural(left, 'post')} to make` : 'nothing left to post');
+    if (everywhere) parts.push(`${everywhere} posted everywhere`);
+  }
+  return parts.join(' · ');
+}
 
 /**
  * A brand's videos, grouped into categories, moving from Making to Review to Ready to Posted.
  * Videos can be added from a file or made with an AI video source; each has its own post details.
  */
-export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, onManageSources, brandId: fixedBrand, onConnectInstagram, onCreateProfile }: Props) {
+export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, onManageSources, brandId: fixedBrand, onConnectInstagram, onCreateProfile, onShowAccounts, instagram: givenInstagram }: Props) {
   const brands = workspace.brands;
   const categories = workspace.categories ?? [];
   const videos = workspace.videos ?? [];
   const [brandId, setBrandId] = useState(fixedBrand ?? brands[0]?.id ?? '');
   const brand = brands.find((item) => item.id === (fixedBrand ?? brandId)) ?? (fixedBrand ? undefined : brands[0]);
-  const instagram = useBrandInstagram(workspace, brand?.id);
+  const ownInstagram = useBrandInstagram(workspace, givenInstagram === undefined ? brand?.id : undefined);
+  const instagram = givenInstagram === undefined ? ownInstagram : givenInstagram;
   const brandCategories = categories.filter((category) => category.brandId === brand?.id);
   const [categoryId, setCategoryId] = useState('');
   const category = brandCategories.find((item) => item.id === categoryId) ?? brandCategories[0];
@@ -71,10 +89,14 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   const generations = useVideoGenerations(workspace, onSave);
   const browser = useBrowserPosting(workspace, onSave);
   const socials = brand ? brandSocials(workspace, brand.id) : [];
-  /** Socials where the brand's profile is only planned: nothing to sign in to or post on until it is made. */
-  const notMade = socials.filter((platform) => !workspace.accounts.some((account) => account.brandId === brand?.id && account.platform === platform && account.status === 'active'));
-  /** Socials whose profile is saved with the main Gmail: its windows would sign in as Nate, not the brand. */
-  const mainLogin = socials.filter((platform) => !notMade.includes(platform) && wrongLogin(workspace.developerLogins, workspace.accounts.find((account) => account.brandId === brand?.id && account.platform === platform)));
+  const statuses = useBrandStatuses(workspace, brand?.id, instagram);
+  /** The one step that unblocks a social: make the profile, or fix its login or connection under Accounts. */
+  function fix(status: SocialStatus) {
+    const kind = status.action?.kind;
+    if ((kind === 'create' || kind === 'finish-signup') && onCreateProfile) onCreateProfile(status.platform);
+    else if (kind === 'connect' && onConnectInstagram) onConnectInstagram();
+    else (onShowAccounts ?? onConnectInstagram)?.();
+  }
   const inCategory = videos.filter((video) => video.categoryId === category?.id).sort((a, b) => b.createdAt - a.createdAt);
   const shown = stage === 'all' ? inCategory : inCategory.filter((video) => videoStage(video, socials) === stage);
   const disabled = !loaded || busy;
@@ -125,7 +147,6 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
 
   const header = fixedBrand ? null : <PageHeader title="Video library" description="Each brand's videos, grouped into categories. Add a file or make one with AI, then post it to the brand's socials."/>;
   if (!brand) return <>{header}<section className="card empty-state"><div className="empty-icon"><Film size={22}/></div><strong>No brands yet</strong><p>Create accounts for a brand first. Its categories and videos show up here.</p></section></>;
-  const progress = categoryProgress(inCategory, socials);
   const counts = Object.fromEntries(STAGES.map(({ id }) => [id, inCategory.filter((video) => videoStage(video, socials) === id).length])) as Record<Stage, number>;
 
   return <>
@@ -150,7 +171,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
       <section className="library-main">
         {!category ? <div className="card empty-state"><div className="empty-icon"><Film size={22}/></div><strong>Add a category to start</strong><p>Videos live in a category of {brand.name}, like Rabbit. Each video goes to every social of the brand.</p><button className="primary-button" onClick={() => setAddingCategory(true)}><Plus size={15}/> New category</button></div> : <>
           <div className="library-head">
-            <div><h2>{category.name}</h2><p>{plural(progress.total, 'video')}{socials.length > 0 && ` · ${progress.everywhere} on every social`}</p></div>
+            <div><h2>{category.name}</h2><p>{categoryLine(inCategory, socials)}</p></div>
             <div className="library-actions">
               <button type="button" className={panel === 'make' ? 'outline-button' : 'primary-button'} aria-expanded={panel === 'make'} onClick={() => setPanel(panel === 'make' ? null : 'make')}><Sparkles size={15}/> Make a video</button>
               <button type="button" className="outline-button" aria-expanded={panel === 'add'} onClick={() => setPanel(panel === 'add' ? null : 'add')}><Plus size={15}/> Add a file</button>
@@ -158,7 +179,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
           </div>
           {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
           {panel === 'add' && <AddVideo key={category.id} brandId={brand.id} category={category} disabled={disabled} onSave={(video) => save({ videos: [...videos, video] }, `Added "${video.title}" to ${category.name}.`)} onClose={() => setPanel(null)}/>}
-          {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Profiles.</p>}
+          {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Accounts.</p>}
           {inCategory.length > 0 && <div className="segmented library-stages" role="group" aria-label="Stage">
             <button type="button" aria-pressed={stage === 'all'} onClick={() => setStage('all')}>All <small>{inCategory.length}</small></button>
             {STAGES.map(({ id, label }) => <button type="button" key={id} aria-pressed={stage === id} onClick={() => setStage(id)}>{label} <small>{counts[id]}</small></button>)}
@@ -168,7 +189,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
             {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy} disabled={disabled} progress={generations.progress[video.id]}
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
               category={category} brandName={brand.name} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
-              instagram={instagram} onPost={post} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} notMade={notMade} mainLogin={mainLogin} onCreateProfile={onCreateProfile} onFixLogin={onConnectInstagram}/>)}
+              instagram={instagram} onPost={post} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix}/>)}
           </ul>}
         </>}
         {error && <div className="error-message" role="alert">{error}</div>}
@@ -220,10 +241,13 @@ type BrowserPosting = ReturnType<typeof useBrowserPosting>;
 type RowProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void;
   onSavePost?: (draft: Video, saveDefaults: boolean) => Promise<boolean | undefined>;
   instagram?: BrandInstagram | null; onPost?: (draft: Video, saveDefaults: boolean) => Promise<void>; onConnectInstagram?: () => void;
-  browser?: BrowserPosting; marks?: Record<string, number>; notMade?: Platform[]; mainLogin?: Platform[]; onCreateProfile?: (platform: Platform) => void; onFixLogin?: () => void };
-function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, onConnectInstagram, browser, marks, notMade = [], mainLogin = [], onCreateProfile, onFixLogin }: RowProps) {
+  browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void };
+/**
+ * One video as a post: its picture and text on the left, and a tile for every social of the brand that
+ * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
+ */
+function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, onConnectInstagram, browser, marks, statuses, onFix }: RowProps) {
   const job = video.generation;
-  const stage = videoStage(video, socials);
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
   const [watching, setWatching] = useState(false);
@@ -231,16 +255,17 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
   const automatic = canPostAutomatically(video, socials, instagram, !!onPost);
-  const needsConnect = !job && socials.includes('instagram') && !video.posted.includes('instagram') && instagram?.connected === false && !!onConnectInstagram;
   const tags = detailsOf(video).hashtags;
   const { confirm, dialog } = useConfirm();
   const instagramLink = video.links?.instagram;
+  const done = videoProgress(video, socials);
   const openPost = () => { if (instagramLink) openInstagramPost(instagramLink).catch((reason) => setError(errorText(reason))); };
+  const statusOf = (platform: Platform) => statuses.find((status) => status.platform === platform)!;
   async function unmark(platform: Platform) {
     const name = getPlatform(platform).name;
     if (await confirm({ title: `Mark as not posted on ${name}?`, body: <p>"{video.title}" goes back to waiting for {name}. Nothing is removed from {name}.</p>, confirmLabel: 'Mark as not posted' })) onToggle(platform);
   }
-  /** Approving posts it: straight to every social the app can post to, after one confirmation. */
+  /** Posting to Instagram goes straight out through the API, after one confirmation. */
   async function approve(draft: Video, saveDefaults: boolean) {
     if (!onPost || !instagram || working) return false;
     const problems = detailProblems(draft, socials);
@@ -257,10 +282,6 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     catch (reason) { setError(errorText(reason, 'Instagram did not publish this video.')); return false; }
     finally { setWorking(false); }
   }
-  const waitingOnPage = browser && !job ? socials.filter((platform) => !API_SOCIALS.includes(platform) && !video.posted.includes(platform)) : [];
-  const pagePosts = waitingOnPage.filter((platform) => !notMade.includes(platform) && !mainLogin.includes(platform));
-  const toFix = waitingOnPage.filter((platform) => mainLogin.includes(platform));
-  const toCreate = waitingOnPage.filter((platform) => notMade.includes(platform));
   /** Opens the social's upload page with this post filled in, after saving any edits. */
   async function postOnPage(draft: Video, platform: Platform, saveDefaults = false) {
     if (!browser || !onSavePost) return false;
@@ -274,53 +295,93 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       return true;
     } catch (reason) { setError(errorText(reason, `Could not open the ${getPlatform(platform).name} upload page.`)); return false; }
   }
-  return <li className={`library-video post-card ${job ? `is-${job.status}` : ''}`} aria-label={video.title}>
-    {playable ? <button type="button" className="library-video-icon library-play" aria-label={`${watching ? 'Hide' : 'Play'} ${video.title}`} aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <X size={16}/> : <Play size={16}/>}</button>
-      : <div className="library-video-icon">{job?.status === 'working' ? <Loader2 size={16} className="spin"/> : job?.status === 'failed' ? <AlertCircle size={16}/> : <Film size={16}/>}</div>}
-    <div className="library-video-body">
-      <div className="library-video-titleline">{playable ? <button type="button" className="library-video-title" onClick={() => setWatching(!watching)}>{video.title}</button> : <strong>{video.title}</strong>}<span className={`stage-pill stage-${stage}`}>{STAGES.find((item) => item.id === stage)?.label}</span></div>
-      {job?.status === 'working' && <small>Being made by {job.sourceName} ({PROVIDERS[job.provider]?.name ?? job.provider}){progress ? ` · ${progress}` : ''}. Saves here when ready.</small>}
-      {job?.status === 'failed' && <small className="library-failed">{job.message || `${job.sourceName} could not make this video.`}</small>}
-      {!job && <small title={video.mediaSource}>{fileName || 'No file yet'}{socials.length > 0 && ` · ${video.posted.filter((platform) => socials.includes(platform)).length} of ${socials.length} socials`}</small>}
+
+  function destination(platform: Platform) {
+    const name = getPlatform(platform).name;
+    const status = statusOf(platform);
+    const posted = video.posted.includes(platform);
+    let tone: Tone = status.tone;
+    let line: React.ReactNode = status.label;
+    let action: React.ReactNode = null;
+    if (posted) {
+      tone = 'ok';
+      line = <>Posted{video.testPosts?.[platform] !== undefined && <span className="test-badge" title="Posted while this social's app was in test mode">Test</span>}</>;
+      action = <>{platform === 'instagram' && instagramLink && <button type="button" className="dest-link" aria-label="View on Instagram" onClick={openPost}>View</button>}
+        <button type="button" className="dest-link quiet" disabled={disabled} aria-label={`Mark as not posted on ${name}`} title={`Mark as not posted on ${name}`} onClick={() => void unmark(platform)}>Undo</button></>;
+    } else if (job) {
+      tone = 'muted'; line = job.status === 'failed' ? 'No video to post' : 'Waits for the video';
+    } else if (browser?.isAsking(video.id, platform)) {
+      tone = 'todo'; line = 'Did it go up?';
+      action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
+        <button type="button" className="dest-link quiet" onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button></>;
+    } else if (status.canPost && platform === 'instagram') {
+      if (automatic) { tone = 'ready'; line = `Posts as @${instagram?.username}`; action = <button type="button" className="dest-button primary" aria-label="Post to Instagram" disabled={busy || working} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
+      else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected, can\'t upload' : 'Needs a video file'; }
+    } else if (status.canPost && browser) {
+      const open = browser.isOpen(video.id, platform);
+      tone = 'ready'; line = open ? 'Window open' : status.kind === 'no-password' ? 'Ready · login not saved' : 'Ready';
+      action = <button type="button" className="dest-button primary" aria-label={open ? `Open ${name} again` : `Post on ${name}`} disabled={busy || working} title={`Opens ${name}'s upload page in ${brandName}'s window with everything filled in. You press Post.`} onClick={() => void postOnPage(video, platform)}><AppWindow size={13}/> {open ? 'Open again' : 'Post'}</button>;
+    } else if (status.action) {
+      action = <button type="button" className="dest-button" aria-label={`${status.action.label} (${name})`} disabled={busy} title={status.detail} onClick={() => onFix(status)}>{status.action.short}</button>;
+    }
+    return <div key={platform} className={`dest tone-${tone}`} title={posted ? `Posted on ${name}` : status.detail}>
+      <BrandMark platform={platform} small/>
+      <div className="dest-text"><strong>{name}</strong><small>{line}</small></div>
+      {action && <div className="dest-actions">{action}</div>}
+    </div>;
+  }
+
+  return <li className={`library-video vcard ${job ? `is-${job.status}` : ''}`} aria-label={video.title}>
+    <div className="vcard-main">
+      <VideoThumb video={video} playable={playable} watching={watching} onToggle={() => setWatching(!watching)}/>
+      <div className="vcard-body">
+        <div className="vcard-top">
+          <div className="library-video-titleline">{playable ? <button type="button" className="library-video-title" onClick={() => setWatching(!watching)}>{video.title}</button> : <strong className="library-video-title">{video.title}</strong>}</div>
+          <span className={`progress-pill state-${done.state}`}>{progressLabel(done)}</span>
+          <div className="vcard-tools">
+            {!job && onSavePost && <button type="button" className="ghost-button small-button" aria-expanded={editing} onClick={() => setEditing(!editing)}><Pencil size={14}/> Edit post</button>}
+            {job && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={onRetry}><RotateCw size={14}/> {job.status === 'failed' ? 'Try again' : 'Check now'}</button>}
+            <button type="button" className="icon-button" aria-label={`Remove ${video.title}`} title="Remove from Social Space" disabled={disabled} onClick={onRemove}><Trash2 size={15}/></button>
+          </div>
+        </div>
+        {job?.status === 'working' && <p className="vcard-meta">Being made by {job.sourceName} ({PROVIDERS[job.provider]?.name ?? job.provider}){progress ? ` · ${progress}` : ''}. Saves here when ready.</p>}
+        {job?.status === 'failed' && <p className="vcard-meta library-failed">{job.message || `${job.sourceName} could not make this video.`}</p>}
+        {!job && !editing && <div className="vcard-caption" aria-label="Post">
+          {video.caption.trim() ? <p>{video.caption.trim()}</p> : <p className="post-empty">No description yet. Edit the post or use Suggest with AI.</p>}
+          {tags.length > 0 && <p className="post-tags">{hashtagText(tags)}</p>}
+        </div>}
+        {!job && <p className="vcard-meta" title={video.mediaSource}>{fileName || 'No file yet'}</p>}
+      </div>
     </div>
-    {!job && socials.length > 0 && <div className="library-posted" role="group" aria-label="Posted on">{socials.map((platform) => {
-      const done = video.posted.includes(platform);
-      const live = done && platform === 'instagram' && instagramLink;
-      if (live) return <button type="button" key={platform} className="posted-chip done" aria-label="View on Instagram" title="Posted on Instagram. Click to view the post." onClick={openPost}><BrandMark platform={platform} small/><Check size={12} className="posted-check"/></button>;
-      // Logos only show where it is up. Ticking happens when a post is confirmed; a posted logo can be unmarked.
-      if (!done) return <span key={platform} className="posted-chip" role="img" aria-label={`Not posted on ${getPlatform(platform).name} yet`} title={`Not posted on ${getPlatform(platform).name} yet`}><BrandMark platform={platform} small/></span>;
-      return <button type="button" key={platform} className="posted-chip done" aria-label={`Posted on ${getPlatform(platform).name}`} title={`Posted on ${getPlatform(platform).name}. Click to mark it as not posted.`} disabled={disabled} onClick={() => void unmark(platform)}><BrandMark platform={platform} small/><Check size={12} className="posted-check"/>{video.testPosts?.[platform] !== undefined && <span className="test-badge" title="Posted while this social's app was in test mode">Test</span>}</button>;
-    })}</div>}
-    <div className="library-video-actions">
-      {playable && <button type="button" className="ghost-button small-button" aria-expanded={watching} onClick={() => setWatching(!watching)}>{watching ? <><X size={14}/> Close</> : <><Play size={14}/> Watch</>}</button>}
-      {instagramLink && video.posted.includes('instagram') && <button type="button" className="ghost-button small-button" onClick={openPost}><ExternalLink size={14}/> View on Instagram</button>}
-      {!job && onSavePost && <button type="button" className="ghost-button small-button" aria-expanded={editing} onClick={() => setEditing(!editing)}><Pencil size={14}/> Edit post</button>}
-      {stage === 'review' && automatic && !editing && <button type="button" className="primary-button small-button" disabled={busy || working} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={14} className="spin"/> Posting…</> : <><Send size={14}/> Approve and post</>}</button>}
-      {stage === 'review' && !editing && pagePosts.map((platform) => <button type="button" key={platform} className="outline-button small-button" disabled={busy || working} title={`Opens ${getPlatform(platform).name}'s upload page with everything filled in. You press Post.`} onClick={() => void postOnPage(video, platform)}><BrandMark platform={platform} small/> {browser?.isOpen(video.id, platform) ? 'Open again' : `Post on ${getPlatform(platform).name}`}</button>)}
-      {stage === 'review' && !editing && toCreate.map((platform) => <button type="button" key={platform} className="outline-button small-button" disabled={busy || !onCreateProfile} title={`${brandName} has no ${getPlatform(platform).name} profile yet. Create it first, then post.`} onClick={() => onCreateProfile?.(platform)}><BrandMark platform={platform} small/> Create {getPlatform(platform).name} profile</button>)}
-      {stage === 'review' && !editing && toFix.map((platform) => <button type="button" key={platform} className="outline-button small-button" disabled={!onFixLogin} title={`${brandName}'s ${getPlatform(platform).name} profile is saved with your main Gmail. Give it the brand's own login under Accounts.`} onClick={onFixLogin}><TriangleAlert size={14}/> Set up {brandName}'s own {getPlatform(platform).name} login</button>)}
-      {stage === 'review' && needsConnect && !editing && <button type="button" className="outline-button small-button" onClick={onConnectInstagram}><Link2 size={14}/> Connect Instagram to post</button>}
-      {job && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={onRetry}><RotateCw size={14}/> {job.status === 'failed' ? 'Try again' : 'Check now'}</button>}
-      <button type="button" className="icon-button" aria-label={`Remove ${video.title}`} disabled={disabled} onClick={onRemove}><Trash2 size={15}/></button>
-    </div>
-    {!job && !editing && <div className="post-preview" aria-label="Post">
-      {video.caption.trim() ? <p>{video.caption.trim()}</p> : <p className="post-empty">No description yet. Edit the post or use Suggest with AI.</p>}
-      {tags.length > 0 && <p className="post-tags">{hashtagText(tags)}</p>}
-    </div>}
-    {!editing && stage !== 'making' && <PartnerReviewControls video={video} socials={socials} disabled={disabled || working}/>}
+    {socials.length > 0 && !editing && <div className="dest-grid" role="group" aria-label="Where it goes">{socials.map(destination)}</div>}
+    {!editing && done.state !== 'making' && <PartnerReviewControls video={video} socials={socials} disabled={disabled || working}/>}
     {working && !video.posted.includes('instagram') && <p className="library-hint" role="status">Uploading to Instagram. This can take a few minutes; keep the app open.</p>}
     {dialog}
-    {browser && socials.filter((platform) => browser.isAsking(video.id, platform)).map((platform) => <div key={platform} className="post-ask" role="status">
-      <BrandMark platform={platform} small/><span>Did "{video.title}" go up on {getPlatform(platform).name}?</span>
-      <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={14}/> Yes, mark posted</button>
-      <button type="button" className="ghost-button small-button" onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button>
-    </div>)}
     {error && !editing && <div className="error-message" role="alert">{error}</div>}
     {editing && onSavePost && <PostPanel video={video} category={category} brandName={brandName} socials={socials} busy={busy || working} disabled={disabled} instagram={instagram} onOpen={onOpen}
       error={error} working={working} onSave={onSavePost} onApprove={onPost ? approve : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}
-      notMade={[...notMade, ...mainLogin]} onPostOnPage={browser ? async (draft, platform, defaults) => { if (await postOnPage(draft, platform, defaults)) setEditing(false); } : undefined} marks={marks}/>}
+      statuses={statuses} onFix={onFix} onPostOnPage={browser ? async (draft, platform, defaults) => { if (await postOnPage(draft, platform, defaults)) setEditing(false); } : undefined} marks={marks}/>}
     {playable && watching && <VideoPlayer path={video.mediaSource} title={video.title}/>}
   </li>;
+}
+
+/** The video's first frame (or its cover) as a thumbnail; plays it in the row when clicked. */
+function VideoThumb({ video, playable, watching, onToggle }: { video: Video; playable: boolean; watching: boolean; onToggle: () => void }) {
+  const [src, setSrc] = useState('');
+  const job = video.generation;
+  const cover = detailsOf(video).coverMs;
+  useEffect(() => {
+    if (!playable || !isTauri()) return;
+    let live = true;
+    videoPreviewUrl(video.mediaSource).then((url) => { if (live) setSrc(url); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [video.mediaSource, playable]);
+  const inner = src ? <video src={`${src}#t=${(cover ?? 500) / 1000}`} muted preload="metadata" aria-hidden="true"/>
+    : <span className="vthumb-icon">{job?.status === 'working' ? <Loader2 size={18} className="spin"/> : job?.status === 'failed' ? <AlertCircle size={18}/> : <Film size={18}/>}</span>;
+  if (!playable) return <div className={`vthumb ${job ? `is-${job.status}` : ''}`}>{inner}</div>;
+  return <button type="button" className="vthumb" aria-label={`${watching ? 'Hide' : 'Play'} ${video.title}`} aria-expanded={watching} onClick={onToggle}>
+    {inner}<span className="vthumb-play">{watching ? <X size={16}/> : <Play size={16}/>}</span>
+  </button>;
 }
 
 /** Whether approving posts the video by itself: its Instagram post is still to do and the profile is connected through Meta. */
@@ -331,12 +392,12 @@ function canPostAutomatically(video: Video, socials: Platform[], instagram: Bran
 
 type PanelProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; instagram?: BrandInstagram | null; onOpen: Props['onOpen'];
   error: string; working: boolean; onSave: (draft: Video, saveDefaults: boolean) => Promise<boolean | undefined>; onApprove?: (draft: Video, saveDefaults: boolean) => Promise<boolean>; onConnectInstagram?: () => void; onClose: () => void;
-  onPostOnPage?: (draft: Video, platform: Platform, saveDefaults: boolean) => Promise<void>; marks?: Record<string, number>; notMade?: Platform[] };
+  onPostOnPage?: (draft: Video, platform: Platform, saveDefaults: boolean) => Promise<void>; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void };
 /**
  * Posting in one step: everything that goes out with the video (description, hashtags, cover, YouTube
  * title, labels), starting from the category's saved defaults, then where it goes and Post.
  */
-function PostPanel({ video, category, brandName, socials, busy, disabled, instagram, onOpen, error: postError, working, onSave, onApprove, onConnectInstagram, onClose, onPostOnPage, marks, notMade = [] }: PanelProps) {
+function PostPanel({ video, category, brandName, socials, busy, disabled, instagram, onOpen, error: postError, working, onSave, onApprove, onConnectInstagram, onClose, onPostOnPage, marks, statuses, onFix }: PanelProps) {
   const start = startingPost(video, category);
   const [caption, setCaption] = useState(start.caption);
   const [tags, setTags] = useState(hashtagText(start.details.hashtags));
@@ -402,16 +463,20 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
         let state: React.ReactNode;
         if (done) state = video.testPosts?.[platform] !== undefined ? <span className="pill planned"><span className="dot"/>Posted as a test</span> : <span className="pill active"><span className="dot"/>Posted</span>;
         else if (API_SOCIALS.includes(platform)) {
-          if (automatic) state = <span className="post-target-note">Posts automatically as @{instagram?.username}</span>;
+          const status = statuses.find((item) => item.platform === platform);
+          if (automatic) state = <span className="post-target-note">Posts by itself as @{instagram?.username} when you press Post.</span>;
           else if (instagram?.connected === null) state = <span className="post-target-note">Checking the connection…</span>;
-          else if (instagram?.connected && !instagram.canUploadFiles) state = <span className="post-target-note">Connected with an Instagram login, which can't upload a video from this PC. Disconnect and connect again under Profiles to sign in through Meta.</span>;
-          else state = <>{<span className="post-target-note">Not connected yet</span>}{onConnectInstagram && <button type="button" className="outline-button small-button" onClick={onConnectInstagram}><Link2 size={14}/> Connect</button>}</>;
-        } else if (notMade.includes(platform)) state = <span className="post-target-note">{brandName} has no {name} profile of its own yet. Set it up under Accounts (its own email and password, not your main Gmail), then post here.</span>;
-        else if (onPostOnPage) state = <><span className="post-target-note">{postModeNote(marks, platform)}</span>
-          <button type="button" className="outline-button small-button" disabled={busy || problems.length > 0} onClick={() => void onPostOnPage(draft, platform, saveDefaults)}><AppWindow size={14}/> Post on {name}</button></>;
-        else state = <><span className="post-target-note">Not automatic yet: copy the text, open {name} and post it there, then tick it as posted.</span>
-          <button type="button" className="ghost-button small-button" onClick={() => void copy()}>{copied ? <><Check size={14}/> Copied</> : 'Copy text'}</button>
-          <button type="button" className="ghost-button small-button" disabled={busy} onClick={() => onOpen(platform, 'post')}><AppWindow size={14}/> Open {name}</button></>;
+          else if (instagram?.connected && !instagram.canUploadFiles) state = <span className="post-target-note">Connected with an Instagram login, which can't upload a video from this PC. Connect again through Meta under Accounts.</span>;
+          else state = <><span className="post-target-note">{status?.detail ?? 'Not connected yet.'}</span>{onConnectInstagram && <button type="button" className="outline-button small-button" onClick={onConnectInstagram}><Link2 size={14}/> Connect</button>}</>;
+        } else {
+          const status = statuses.find((item) => item.platform === platform);
+          if (status && !status.canPost) state = <><span className="post-target-note">{status.detail}</span>{status.action && <button type="button" className="outline-button small-button" onClick={() => onFix(status)}>{status.action.label}</button>}</>;
+          else if (onPostOnPage) state = <><span className="post-target-note">{postModeNote(marks, platform)}</span>
+            <button type="button" className="outline-button small-button" disabled={busy || problems.length > 0} onClick={() => void onPostOnPage(draft, platform, saveDefaults)}><AppWindow size={14}/> Post on {name}</button></>;
+          else state = <><span className="post-target-note">Copy the text, open {name} and post it there, then mark it posted.</span>
+            <button type="button" className="ghost-button small-button" onClick={() => void copy()}>{copied ? <><Check size={14}/> Copied</> : 'Copy text'}</button>
+            <button type="button" className="ghost-button small-button" disabled={busy} onClick={() => onOpen(platform, 'post')}><AppWindow size={14}/> Open {name}</button></>;
+        }
         return <div className="post-target" key={platform}><BrandMark platform={platform} small/><strong>{name}</strong>{state}</div>;
       })}
     </div>}
@@ -421,7 +486,7 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
     <div className="library-panel-buttons">
       <button type="button" className="ghost-button" onClick={onClose}>Cancel</button>
       <button className={automatic ? 'outline-button' : 'primary-button'} disabled={disabled || working || problems.length > 0}>Save</button>
-      {automatic && <button type="button" className="primary-button" disabled={disabled || working || problems.length > 0} onClick={() => void approve()}>{working ? <><Loader2 size={15} className="spin"/> Posting…</> : <><Send size={15}/> Approve and post</>}</button>}
+      {automatic && <button type="button" className="primary-button" disabled={disabled || working || problems.length > 0} onClick={() => void approve()}>{working ? <><Loader2 size={15} className="spin"/> Posting…</> : <><Send size={15}/> Post to Instagram</>}</button>}
     </div>
   </form>;
 }
