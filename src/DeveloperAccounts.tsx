@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Copy, KeyRound, MailSearch, Pencil } from 'lucide-react';
-import { listDeveloperApps, saveDeveloperApp, type DevProvider } from './devAppsService';
+import { listDeveloperApps, saveDeveloperApp, saveProductionApp, type DevAppSummary, type DevProvider } from './devAppsService';
 import { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import { PasswordField } from './SignIns';
 import { BrandMark, errorText } from './ui';
 import type { Platform } from './model';
-import { NO_REVIEW, REVIEW_STATES, reviewOf, reviewStatus, type ReviewState } from './appReviews';
+import { NO_REVIEW, REVIEW_STATES, reviewOf, reviewStatus, testModeOf, type ReviewState } from './appReviews';
 import type { ReviewWatch } from './useReviewWatch';
 import './brands.css';
 
@@ -30,15 +30,48 @@ function ReviewRow({ provider, reviews }: { provider: DevProvider; reviews?: Rev
   const review = reviewOf(provider);
   if (!review || !reviews) return null;
   const { state, at } = reviewStatus(reviews.marks, provider);
+  const optional = review.optional && state === 'not-submitted';
   return <div className="review-row"><dt>Review</dt><dd>
-    <span className={`review-pill ${state}`} title={review.unlocks}>{review.name}{at ? ` · ${dayText(at)}` : ''}</span>
+    {optional ? <span className="review-pill approved" title={review.optional}>Not needed for your accounts</span>
+      : <span className={`review-pill ${state}`} title={review.unlocks}>{review.name}{at ? ` · ${dayText(at)}` : ''}</span>}
     <select aria-label={`${review.name} status`} value={state} disabled={reviews.busy} onChange={(event) => reviews.onSet(provider, event.target.value as ReviewState)}>
-      {REVIEW_STATES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+      {REVIEW_STATES.map((item) => <option key={item.id} value={item.id}>{item.id === 'not-submitted' && review.optional ? 'Not submitted (optional)' : item.label}</option>)}
     </select>
+    {optional && <small className="muted">{review.optional}</small>}
   </dd></div>;
 }
 
-function DeveloperCard({ account, appId, onSaved, reviews }: { account: typeof DEVELOPER_ACCOUNTS[number]; appId: string | null; onSaved: () => void; reviews?: ReviewProps }) {
+/** The test-mode notice on a developer account, and its production keys saved ahead (TikTok Sandbox). */
+function TestMode({ provider, platform, productionId, reviews, onSaved }: { provider: DevProvider; platform: Platform; productionId?: string | null; reviews?: ReviewProps; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [id, setId] = useState('');
+  const [secret, setSecret] = useState('');
+  const [note, setNote] = useState('');
+  const review = reviews ? testModeOf(reviews.marks, platform) : null;
+  if (!review?.test) return null;
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    try { await saveProductionApp(provider, id.trim(), secret.trim()); setOpen(false); setId(''); setSecret(''); setNote('Production keys saved. They go into use when you press Switch after approval.'); onSaved(); }
+    catch (reason) { setNote(errorText(reason)); }
+  }
+  return <div className="test-mode-box" role="note">
+    <p><span className="test-badge">Test · {review.test.mode}</span> {review.test.limits}</p>
+    {review.productionKeys && <>
+      <p className="muted">{productionId ? <>Production keys saved ahead ({productionId}). Once {review.name} is approved, one click switches to them.</> : <>Save the production keys now, and one click switches to them once {review.name} is approved.</>}</p>
+      {open ? <form className="developer-keys" onSubmit={(event) => void save(event)}>
+        <label htmlFor={`prod-id-${provider}`}>Production client key</label>
+        <input id={`prod-id-${provider}`} autoComplete="off" value={id} onChange={(event) => setId(event.target.value)}/>
+        <label htmlFor={`prod-secret-${provider}`}>Production client secret</label>
+        <input id={`prod-secret-${provider}`} type="password" autoComplete="off" value={secret} onChange={(event) => setSecret(event.target.value)}/>
+        <div className="row-actions"><button className="primary-button small-button" disabled={!id.trim()}>Save production keys</button><button type="button" className="ghost-button small-button" onClick={() => setOpen(false)}>Cancel</button></div>
+      </form> : <button type="button" className="ghost-button small-button" onClick={() => setOpen(true)}><KeyRound size={14}/> {productionId ? 'Change production keys' : 'Add production keys'}</button>}
+    </>}
+    {note && <small role="status">{note}</small>}
+  </div>;
+}
+
+function DeveloperCard({ account, app, onSaved, reviews }: { account: typeof DEVELOPER_ACCOUNTS[number]; app?: DevAppSummary; onSaved: () => void; reviews?: ReviewProps }) {
+  const appId = app?.id ?? null;
   const [editing, setEditing] = useState(false);
   const [id, setId] = useState('');
   const [secret, setSecret] = useState('');
@@ -54,13 +87,14 @@ function DeveloperCard({ account, appId, onSaved, reviews }: { account: typeof D
     finally { setSaving(false); }
   }
   return <div className="developer-account" aria-label={account.name}>
-    <h3><BrandMark platform={account.platform}/> {account.name}</h3>
+    <h3><BrandMark platform={account.platform}/> {account.name}{reviews && testModeOf(reviews.marks, account.platform) && <span className="test-badge">Test</span>}</h3>
     <dl>
       <div><dt>Email</dt><dd><span className="copy-text"><span>{DEFAULT_SIGNUP_EMAIL}</span><button type="button" className="icon-button" aria-label={`Copy ${account.name} email`} onClick={() => void navigator.clipboard.writeText(DEFAULT_SIGNUP_EMAIL).catch(() => undefined)}><Copy size={14}/></button></span></dd></div>
       <div><dt>Password</dt><dd><PasswordField id={developerPasswordKey(account.provider)} label={account.name}/></dd></div>
       <div><dt>{idLabel}</dt><dd>{appId ? <span className="copy-text"><span>{appId}</span><button type="button" className="icon-button" aria-label={`Copy ${account.name} ${idLabel}`} onClick={() => void navigator.clipboard.writeText(appId).catch(() => undefined)}><Copy size={14}/></button></span> : <span className="muted">Not saved yet</span>}</dd></div>
       <ReviewRow provider={account.provider} reviews={reviews}/>
     </dl>
+    <TestMode provider={account.provider} platform={account.platform} productionId={app?.productionId} reviews={reviews} onSaved={onSaved}/>
     {editing ? <form className="developer-keys" onSubmit={(event) => void save(event)}>
       <label htmlFor={`dev-id-${account.provider}`}>{idLabel}</label>
       <input id={`dev-id-${account.provider}`} autoComplete="off" value={id} onChange={(event) => setId(event.target.value)}/>
@@ -74,15 +108,15 @@ function DeveloperCard({ account, appId, onSaved, reviews }: { account: typeof D
 
 /** Settings section: each social's developer account (email, password) and its app keys, kept apart from brand profiles. */
 export default function DeveloperAccounts({ reviews }: { reviews?: ReviewProps } = {}) {
-  const [apps, setApps] = useState<Partial<Record<DevProvider, string | null>>>({});
+  const [apps, setApps] = useState<Partial<Record<DevProvider, DevAppSummary>>>({});
   const [error, setError] = useState('');
-  const load = () => { listDeveloperApps().then((list) => setApps(Object.fromEntries(list.map((app) => [app.provider, app.id])))).catch((reason) => setError(errorText(reason))); };
+  const load = () => { listDeveloperApps().then((list) => setApps(Object.fromEntries(list.map((app) => [app.provider, app])))).catch((reason) => setError(errorText(reason))); };
   useEffect(load, []);
   return <section className="settings-card" id="developer-accounts">
     <h2><KeyRound size={17}/> Developer accounts</h2>
     <p>The accounts that own each social's API app, on the main email and separate from the brand profiles. Passwords and app secrets are kept in Windows Credential Manager.</p>
     {reviews?.watch && <div className="status-line review-watch"><MailSearch size={15}/><span>{reviews.watch.note || `The app reads softwings25@gmail.com every 15 minutes for app review results and tells you when one finishes.${reviews.watch.lastChecked ? ` Last checked ${new Date(reviews.watch.lastChecked).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}.` : ''}`}</span><button type="button" className="ghost-button small-button" disabled={reviews.watch.checking} onClick={() => void reviews.watch?.checkNow()}>{reviews.watch.checking ? 'Checking…' : 'Check email now'}</button></div>}
-    <div className="developer-accounts">{DEVELOPER_ACCOUNTS.map((account) => <DeveloperCard key={account.provider} account={account} appId={apps[account.provider] ?? null} onSaved={load} reviews={reviews}/>)}</div>
+    <div className="developer-accounts">{DEVELOPER_ACCOUNTS.map((account) => <DeveloperCard key={account.provider} account={account} app={apps[account.provider]} onSaved={load} reviews={reviews}/>)}</div>
     {error && <p className="error-message" role="alert">{error}</p>}
   </section>;
 }

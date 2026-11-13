@@ -729,6 +729,12 @@
           "markdownDescription": "Enables the save_instagram_app command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_production_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-production-app",
+          "markdownDescription": "Enables the save_production_app command without any pre-configured scope."
+        },
+        {
           "description": "Enables the save_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "allow-save-workspace",
@@ -811,6 +817,12 @@
           "type": "string",
           "const": "allow-update-progress",
           "markdownDescription": "Enables the update_progress command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the use_production_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-use-production-app",
+          "markdownDescription": "Enables the use_production_app command without any pre-configured scope."
         },
         {
           "description": "Enables the x_connection command without any pre-configured scope.",
@@ -1377,6 +1389,12 @@
           "markdownDescription": "Denies the save_instagram_app command without any pre-configured scope."
         },
         {
+          "description": "Denies the save_production_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-production-app",
+          "markdownDescription": "Denies the save_production_app command without any pre-configured scope."
+        },
+        {
           "description": "Denies the save_workspace command without any pre-configured scope.",
           "type": "string",
           "const": "deny-save-workspace",
@@ -1459,6 +1477,12 @@
           "type": "string",
           "const": "deny-update-progress",
           "markdownDescription": "Denies the update_progress command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the use_production_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-use-production-app",
+          "markdownDescription": "Denies the use_production_app command without any pre-configured scope."
         },
         {
           "description": "Denies the x_connection command without any pre-configured scope.",

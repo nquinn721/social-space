@@ -1,5 +1,6 @@
 import type { DevProvider } from './devAppsService';
 import type { EmailSummary } from './emailService';
+import type { Platform, Video } from './model';
 
 /**
  * Each social's review of our developer app (TikTok app review, Google's YouTube API audit, Meta App
@@ -27,11 +28,23 @@ export type AppReview = {
   search: string;
   /** Matches the sender or subject of a mail about this review. */
   about: RegExp;
+  /**
+   * Set when posts made before approval are only a test: the social whose posts are limited, the
+   * mode's name, and what it means. Those posts are tracked and moved over once approved.
+   */
+  test?: { platform: Platform; mode: string; limits: string };
+  /** Only needed later: the app already works for the user's own accounts without it. */
+  optional?: string;
+  /** The test mode runs on its own keys (TikTok Sandbox), so production keys replace them on approval. */
+  productionKeys?: boolean;
 };
 export const APP_REVIEWS: AppReview[] = [
-  { provider: 'tiktok', name: 'TikTok app review', unlocks: 'Accounts other than the app\'s testers can connect, and the app leaves Sandbox.', setupStep: 'tiktok:app:review', search: 'TikTok', about: /tiktok/i },
-  { provider: 'google', name: 'YouTube API audit', unlocks: 'Uploads are no longer locked to Private.', setupStep: 'youtube:app:audit', search: 'YouTube API', about: /youtube api|api services|api compliance|yt-api|youtube-api|audit/i },
-  { provider: 'meta', name: 'Meta App Review', unlocks: 'Any Instagram account can connect without a tester role.', setupStep: 'instagram:app:roles', search: 'App Review', about: /app review|facebookmail|meta for developers/i },
+  { provider: 'tiktok', name: 'TikTok app review', unlocks: 'Accounts other than the app\'s testers can connect, and the app leaves Sandbox.', setupStep: 'tiktok:app:review', search: 'TikTok', about: /tiktok/i,
+    test: { platform: 'tiktok', mode: 'Sandbox', limits: 'TikTok runs on the Sandbox app: only its test users can connect and posts are not public.' }, productionKeys: true },
+  { provider: 'google', name: 'YouTube API audit', unlocks: 'Uploads are no longer locked to Private.', setupStep: 'youtube:app:audit', search: 'YouTube API', about: /youtube api|api services|api compliance|yt-api|youtube-api|audit/i,
+    test: { platform: 'youtube', mode: 'Testing', limits: 'The Google app is in Testing until the audit: uploads through the app stay Private.' } },
+  { provider: 'meta', name: 'Meta App Review', unlocks: 'Any Instagram account can connect without a tester role.', setupStep: 'instagram:app:roles', search: 'App Review', about: /app review|facebookmail|meta for developers/i,
+    optional: 'Not needed for your own accounts. In Development mode the app already posts to every Instagram account with a role on it. App Review is only for accounts without a role.' },
 ];
 /** X reviews nothing: an app works as soon as it has keys. */
 export const NO_REVIEW: DevProvider[] = ['x'];
@@ -61,6 +74,12 @@ export function withReviewState(marks: Record<string, number> | undefined, provi
   const step = reviewOf(provider)?.setupStep;
   if (step && state === 'approved') next[step] = next[step] ?? at;
   return next;
+}
+
+/** A review the user still waits on: not approved, and not an optional one left unsubmitted. */
+export function reviewOpen(marks: Record<string, number> | undefined, review: AppReview) {
+  const { state } = reviewStatus(marks, review.provider);
+  return state !== 'approved' && !(review.optional && state === 'not-submitted');
 }
 
 /** Reviews that finished (approved or rejected) since the user last dismissed their notice. */
@@ -111,4 +130,36 @@ export function reviewChangesFrom(marks: Record<string, number> | undefined, mai
     changed.push({ review, state: hit.state });
   }
   return changed.length ? { marks: next, changed } : null;
+}
+
+/** The review that keeps a social in test mode right now, or null once approved (or for socials with none). */
+export function testModeOf(marks: Record<string, number> | undefined, platform: Platform) {
+  const review = APP_REVIEWS.find((item) => item.test?.platform === platform);
+  return review && reviewStatus(marks, review.provider).state !== 'approved' ? review : null;
+}
+
+/** A video with new `posted` socials: those marked while their social is in test mode are remembered as test posts. */
+export function withPosted(video: Video, posted: Platform[], marks: Record<string, number> | undefined, at = Date.now()): Video {
+  const testPosts = { ...(video.testPosts ?? {}) };
+  for (const platform of Object.keys(testPosts) as Platform[]) if (!posted.includes(platform)) delete testPosts[platform];
+  for (const platform of posted) if (!video.posted.includes(platform) && testModeOf(marks, platform)) testPosts[platform] = at;
+  const next: Video = { ...video, posted };
+  if (Object.keys(testPosts).length) next.testPosts = testPosts; else delete next.testPosts;
+  return next;
+}
+
+/** Videos posted to a social while it was in test mode. */
+export function testVideos(videos: Video[] | undefined, platform: Platform) {
+  return (videos ?? []).filter((video) => video.testPosts?.[platform] !== undefined);
+}
+
+/** Moves test posts over: they go back to waiting for that social, to be posted for real. */
+export function moveTestVideos(videos: Video[] | undefined, platform: Platform): Video[] {
+  return (videos ?? []).map((video) => {
+    if (video.testPosts?.[platform] === undefined) return video;
+    const { [platform]: _moved, ...rest } = video.testPosts;
+    const next: Video = { ...video, posted: video.posted.filter((item) => item !== platform) };
+    if (Object.keys(rest).length) next.testPosts = rest; else delete next.testPosts;
+    return next;
+  });
 }

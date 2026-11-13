@@ -50,6 +50,8 @@
     "allow-open-setup-page",
     "allow-save-developer-app",
     "allow-remove-developer-app",
+    "allow-save-production-app",
+    "allow-use-production-app",
     "allow-post-to-x",
     "allow-connect-instagram",
     "allow-instagram-app-ready",

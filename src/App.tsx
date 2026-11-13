@@ -19,7 +19,8 @@ import { useTeamSync } from './useTeamSync';
 import { mergeWorkspaces } from './workspaceSync';
 import ReviewNotice from './ReviewNotice';
 import { useReviewWatch } from './useReviewWatch';
-import { seenKey, stateLabel, reviewOf, withReviewState, type ReviewState } from './appReviews';
+import { moveTestVideos, seenKey, stateLabel, reviewOf, testVideos, withReviewState, type AppReview, type ReviewState } from './appReviews';
+import { listDeveloperApps, switchToProductionApp } from './devAppsService';
 import type { DevProvider } from './devAppsService';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
@@ -87,6 +88,28 @@ function App() {
   function dismissReviews(providers: string[]) {
     const at = Date.now();
     void commit({ ...workspaceRef.current, setup: { ...(workspaceRef.current.setup ?? {}), ...Object.fromEntries(providers.map((provider) => [seenKey(provider as DevProvider), at])) } }).catch(() => showError('Could not save your changes. Please try again.'));
+  }
+  /** One click after approval: production keys replace the test keys, and test posts go back to waiting. */
+  async function leaveTestMode(review: AppReview) {
+    if (busy || !loaded || !review.test) return;
+    const platform = review.test.platform;
+    const name = getPlatform(platform).name;
+    setBusy(true); setMessage('');
+    try {
+      let switched = false;
+      if (review.productionKeys) {
+        const app = (await listDeveloperApps()).find((item) => item.provider === review.provider);
+        if (!app?.productionId) { showError(`Add ${name}'s production keys under Developer accounts first, then press Switch again.`); navigate('settings', 'developer-accounts'); return; }
+        await switchToProductionApp(review.provider);
+        switched = true;
+      }
+      const current = workspaceRef.current;
+      const count = testVideos(current.videos, platform).length;
+      await commit({ ...current, videos: moveTestVideos(current.videos, platform), setup: { ...(current.setup ?? {}), [seenKey(review.provider)]: Date.now() } });
+      const moved = count ? ` ${count} test ${count === 1 ? 'video is' : 'videos are'} back in Waiting to post on ${name}${platform === 'youtube' ? '. Uploads from Testing stay Private on YouTube, so post them again or set them Public in YouTube Studio' : ', ready to post for real'}.` : '';
+      showMessage(`${switched ? `${name} now uses its production keys. Press Reconnect on each ${name} profile, since its connection was made with the Sandbox app.` : `${name} is out of test mode.`}${moved}`);
+    } catch (reason) { showError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
   }
   async function persist(next: Workspace, success: string) {
     if (busy || !loaded) return;
@@ -182,7 +205,7 @@ function App() {
       </header>
       <div className="page-content">
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
-        <ReviewNotice marks={workspace.setup} onOpen={() => navigate('settings', 'developer-accounts')} onDismiss={dismissReviews}/>
+        <ReviewNotice marks={workspace.setup} videos={workspace.videos} busy={busy} onMove={(review) => void leaveTestMode(review)} onOpen={() => navigate('settings', 'developer-accounts')} onDismiss={dismissReviews}/>
         {message && <div role={messageIsError ? 'alert' : 'status'} className={messageIsError ? 'notice notice-error' : 'notice'}>{messageIsError ? <AlertTriangle size={16}/> : <Check size={16}/>}{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id) => { setOpenBrand({ id, tab: 'content' }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
         {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}

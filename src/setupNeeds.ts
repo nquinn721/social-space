@@ -34,7 +34,8 @@ export type Need = {
   /** When a manual step was ticked (ms). */
   markedAt?: number;
 };
-export type NeedGroup = { platform: Platform; needs: Need[]; open: number };
+/** testing: set while the social's developer app runs in a test mode (TikTok Sandbox), shown as a badge. */
+export type NeedGroup = { platform: Platform; needs: Need[]; open: number; testing?: string };
 export type SetupInputs = {
   accounts: Account[];
   brands: Brand[];
@@ -49,6 +50,11 @@ export type SetupInputs = {
 };
 
 export const PROVIDER_FOR: Record<Platform, DevProvider> = { instagram: 'meta', x: 'x', youtube: 'google', tiktok: 'tiktok' };
+/** TikTok Sandbox client keys start with "sb"; production keys do not. */
+export const isTestingApp = (provider: DevProvider, id?: string | null) => provider === 'tiktok' && !!id && id.startsWith('sb');
+/** Developer-side steps that only matter once the app leaves its test mode; shown as later steps while testing. */
+const AFTER_TESTING: Record<string, true> = { 'tiktok:app:review': true, 'tiktok:app:audit': true };
+const TESTING_NOTE = 'Later: the app runs in Sandbox (testing). Only its target users can connect, and their posts stay private. ';
 const APP_NAME: Record<DevProvider, string> = { meta: 'Meta developer app', x: 'X developer app', google: 'Google Cloud app', tiktok: 'TikTok developer app' };
 
 type ManualStep = { key: string; title: string; why: string; page?: Need['page']; optional?: boolean };
@@ -95,12 +101,16 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
   return PLATFORMS.filter((platform) => accounts.some((account) => account.platform === platform.id)).map(({ id: platform, name }) => {
     const provider = PROVIDER_FOR[platform];
     const appId = apps?.[provider];
+    const testing = isTestingApp(provider, appId) ? 'Sandbox (testing)' : undefined;
     const needs: Need[] = [{
-      id: `${platform}:app`, platform, title: `${APP_NAME[provider]} set up in Social Space`, manual: false,
+      id: `${platform}:app`, platform, title: `${APP_NAME[provider]} set up in Social Space${testing ? ` (${testing})` : ''}`, manual: false,
       why: `Every ${name} profile connects through one developer app. Its keys are saved once, in Windows Credential Manager.`,
       status: apps === undefined ? 'checking' : appId ? 'done' : 'todo', action: { kind: 'setup-app', provider },
     }];
-    needs.push(...APP_STEPS[platform].map((step) => manualNeed(`${platform}:app:${step.key}`, platform, step, marks)));
+    needs.push(...APP_STEPS[platform].map((step) => {
+      const id = `${platform}:app:${step.key}`;
+      return testing && AFTER_TESTING[id] ? manualNeed(id, platform, { ...step, why: TESTING_NOTE + step.why, optional: true }, marks) : manualNeed(id, platform, step, marks);
+    }));
     for (const account of accounts.filter((item) => item.platform === platform).sort((a, b) => brandName(a).localeCompare(brandName(b)))) {
       const who = `${brandName(account)}${account.handle ? ` (@${account.handle})` : ''}: `;
       if (account.status !== 'active') {
@@ -120,7 +130,7 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
         status: !check ? 'checking' : check.state === 'ok' ? 'done' : check.state === 'none' ? 'todo' : 'problem',
       });
     }
-    return { platform, needs, open: needs.filter((need) => (need.status === 'todo' || need.status === 'problem') && !need.optional).length };
+    return { platform, needs, open: needs.filter((need) => (need.status === 'todo' || need.status === 'problem') && !need.optional).length, testing };
   });
 }
 

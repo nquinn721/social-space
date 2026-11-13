@@ -96,7 +96,7 @@ export default function OverviewPage({ workspace, loaded, onNavigate, onOpenBran
           <div className="card-title"><div><h2>Before you can post</h2><p>{needed ? `${needed} ${needed === 1 ? 'step' : 'steps'} left across your socials${checking ? ' (still checking)' : ''}.` : checking ? 'Checking…' : 'Every social is ready to post.'}</p></div></div>
           <div className="quick-actions">
             {needs.map((group) => <button key={group.platform} className="quick-action" onClick={() => onNavigate('accounts', 'setup')}>
-              <BrandMark platform={group.platform} small/><div><strong>{platformName(group.platform)}</strong><small>{group.open ? `${group.open} ${group.open === 1 ? 'step' : 'steps'} left` : 'Ready'}</small></div><ChevronRight size={16}/>
+              <BrandMark platform={group.platform} small/><div><strong>{platformName(group.platform)}</strong><small>{group.open ? `${group.open} ${group.open === 1 ? 'step' : 'steps'} left` : 'Ready'}{group.testing ? ` · ${group.testing}` : ''}</small></div><ChevronRight size={16}/>
             </button>)}
             <button className="quick-action" onClick={() => onNavigate('accounts', 'setup')}><ClipboardCheck size={18}/><div><strong>See what's needed</strong><small>Developer apps, reviews, plans, account settings and connections</small></div><ChevronRight size={16}/></button>
           </div>

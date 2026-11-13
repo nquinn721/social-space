@@ -584,3 +584,4 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .code-toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius-lg); border: 1px solid var(--accent-line); background: var(--surface-3); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
 .code-toast span { color: var(--text-2); font-size: 13px; }
 .code-toast strong { font: 600 20px ui-monospace, monospace; letter-spacing: 2px; user-select: all; }
+.pill.testing { background: var(--accent-soft); color: var(--accent-text); margin-left: 6px; }
