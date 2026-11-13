@@ -120,3 +120,13 @@
 .profile-signin .password-edit input { flex: 1; width: auto; min-width: 0; }
 .profile-steps li { padding: 8px 10px; align-items: center; }
 .profile-steps strong { font-size: 13px; }
+
+/* Settings: developer accounts, one card per social */
+.developer-accounts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.developer-account { border: 1px solid var(--border, #e3e3e8); border-radius: 10px; padding: 12px; display: grid; gap: 8px; align-content: start; }
+.developer-account h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+.developer-account dl { display: grid; gap: 6px; margin: 0; }
+.developer-account dl > div { display: grid; grid-template-columns: 80px 1fr; gap: 8px; align-items: center; min-width: 0; }
+.developer-account dt { color: var(--muted, #6b6b76); font-size: 12px; }
+.developer-account dd { margin: 0; min-width: 0; }
+.developer-keys { display: grid; gap: 4px; }

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, Mail, RefreshCw, RotateCw, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import { Bot, Building2, Clapperboard, KeyRound, Mail, RefreshCw, RotateCw, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
 import TeamSyncSettings from '../TeamSyncSettings';
+import DeveloperAccounts from '../DeveloperAccounts';
 import type { TeamSync } from '../useTeamSync';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
 import { PageHeader } from '../ui';
@@ -12,6 +13,7 @@ type Props = { businessName: string; onBusinessNameChange: (value: string) => vo
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
+  { id: 'developer-accounts', label: 'Developer accounts', icon: KeyRound },
   { id: 'email', label: 'Email inbox', icon: Mail },
   { id: 'partner-review', label: 'Partner review', icon: UserCheck },
   { id: 'team-sync', label: 'Shared accounts', icon: Users },
@@ -55,6 +57,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <input id="business" value={businessName} maxLength={120} onChange={(event) => onBusinessNameChange(event.target.value)} placeholder="e.g. Soft Wings LLC"/>
           <button className="primary-button" disabled={busy || !loaded}>Save changes</button>
         </form>
+        <DeveloperAccounts/>
         <EmailSettings/>
         <PartnerReviewSettings/>
         {teamSync && <TeamSyncSettings sync={teamSync}/>}
