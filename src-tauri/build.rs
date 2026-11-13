@@ -3,6 +3,7 @@ fn main() {
         "load_workspace",
         "save_workspace",
         "team_sync_status",
+        "export_accounts_json",
         "team_sync_enable",
         "team_sync_disable",
         "team_sync_fetch",

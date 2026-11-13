@@ -171,3 +171,194 @@ mod tests {
         assert!(check_passphrase("long enough").is_ok());
     }
 }
+
+/// Asks where to save, then writes every sign-in as plain, readable JSON: each brand's profiles with
+/// username, email and password, the developer accounts with their app keys, and the video source API
+/// keys. Unlike the backup it is NOT encrypted; the app warns before saving. Returns the file name, or
+/// None if the dialog was closed.
+#[tauri::command]
+pub async fn export_accounts_json(app: AppHandle, lock: State<'_, StorageLock>, sources: State<'_, crate::video_sources::SourcesLock>) -> Result<Option<String>, String> {
+    let workspace = {
+        let _guard = lock.0.lock().map_err(|_| "Workspace storage is unavailable.")?;
+        crate::read_workspace(&crate::workspace_path(&app)?)?
+    };
+    let keys = crate::video_sources::export_keys(&app, &sources)?;
+    let bytes = serde_json::to_vec_pretty(&accounts_export(&workspace, account_passwords::read, connected, &keys)?).map_err(|_| "Could not write the export.")?;
+    let name = format!("socialspace-accounts-{}.json", now() / 1000);
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = rfd::FileDialog::new().set_title("Export accounts (plain text)").set_file_name(&name).add_filter("JSON", &["json"]).save_file() else { return Ok(None) };
+        std::fs::write(&path, bytes).map_err(|_| "Could not save the export file.".to_string())?;
+        Ok(path.file_name().and_then(|value| value.to_str()).map(str::to_owned))
+    })
+    .await
+    .map_err(|_| "Could not open the save dialog.".to_string())?
+}
+
+/// Whether the profile has a social connection (API sign-in) saved on this PC.
+fn connected(social: &str, account_id: &str) -> bool {
+    #[cfg(windows)]
+    {
+        let service = match social { "instagram" => "social-manager-instagram-page", "x" => "social-manager-x-oauth", "youtube" => "social-manager-youtube", "tiktok" => "social-manager-tiktok", _ => return false };
+        keyring::Entry::new(service, account_id).and_then(|entry| entry.get_secret()).is_ok()
+    }
+    #[cfg(not(windows))]
+    { let _ = (social, account_id); false }
+}
+
+fn profile_url(social: &str, handle: &str) -> Option<String> {
+    let handle = handle.trim().trim_start_matches('@');
+    if handle.is_empty() { return None; }
+    Some(match social {
+        "instagram" => format!("https://www.instagram.com/{handle}/"),
+        "x" => format!("https://x.com/{handle}"),
+        "tiktok" => format!("https://www.tiktok.com/@{handle}"),
+        "youtube" => format!("https://www.youtube.com/@{handle}"),
+        _ => return None,
+    })
+}
+
+fn accounts_export(
+    workspace: &Workspace,
+    password: impl Fn(&str) -> Result<Option<String>, String>,
+    is_connected: impl Fn(&str, &str) -> bool,
+    sources: &[(String, crate::video_sources::VideoProvider, Option<String>)],
+) -> Result<serde_json::Value, String> {
+    use serde_json::json;
+    let social = |account: &crate::Account| serde_json::to_value(account.platform).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();
+    let brand_of = |account: &crate::Account| account.brand_id.as_deref().and_then(|id| workspace.brands.iter().find(|b| b.id == id)).map(|b| b.name.clone()).unwrap_or_else(|| account.label.clone());
+    let channels_of = |account: &crate::Account| -> Vec<serde_json::Value> {
+        workspace.channels.iter().filter(|c| c.account_id.as_deref() == Some(account.id.as_str())).map(|c| json!({ "name": c.name, "handle": c.handle })).collect()
+    };
+    let mut passwords = std::collections::HashMap::new();
+    for account in &workspace.accounts {
+        passwords.insert(account.id.clone(), password(&account.id)?);
+    }
+    let mut brands = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let brand_list: Vec<(Option<&str>, String)> = workspace.brands.iter().map(|b| (Some(b.id.as_str()), b.name.clone()))
+        .chain(std::iter::once((None, "No brand".to_string()))).collect();
+    for (id, name) in brand_list {
+        let mut profiles = Vec::new();
+        for account in workspace.accounts.iter().filter(|a| a.brand_id.as_deref() == id || (id.is_none() && a.brand_id.as_deref().is_none_or(|b| !workspace.brands.iter().any(|x| x.id == b)))) {
+            if !seen.insert(account.id.clone()) { continue; }
+            let kind = social(account);
+            profiles.push(json!({
+                "social": kind,
+                "status": if matches!(account.status, crate::AccountStatus::Active) { "live" } else { "not created yet" },
+                "username": account.handle,
+                "displayName": account.display_name,
+                "profileUrl": profile_url(&kind, &account.handle),
+                "connected": is_connected(&kind, &account.id),
+                "channels": channels_of(account),
+                "email": account.signup_email,
+                "password": passwords.get(&account.id).cloned().flatten(),
+                "birthday": account.birthday,
+            }));
+        }
+        if !profiles.is_empty() || id.is_some() {
+            brands.push(json!({ "brand": name, "profiles": profiles }));
+        }
+    }
+    // Each sign-in (social + email) and every profile it controls, e.g. one Google account holding
+    // several YouTube channels, or up to five Instagram profiles on one login.
+    let mut logins: std::collections::BTreeMap<(String, String), Vec<&crate::Account>> = Default::default();
+    for account in &workspace.accounts {
+        let email = account.signup_email.trim().to_lowercase();
+        let key = if email.is_empty() { format!("(no email) {}", account.handle) } else { email };
+        logins.entry((social(account), key)).or_default().push(account);
+    }
+    let logins: Vec<_> = logins.into_iter().map(|((kind, _), accounts)| {
+        let password = accounts.iter().find_map(|a| passwords.get(&a.id).cloned().flatten());
+        let controls: Vec<_> = accounts.iter().map(|a| json!({
+            "brand": brand_of(a), "username": a.handle, "profileUrl": profile_url(&kind, &a.handle),
+            "connected": is_connected(&kind, &a.id), "channels": channels_of(a),
+        })).collect();
+        json!({ "social": kind, "email": accounts[0].signup_email, "password": password, "controls": controls })
+    }).collect();
+    let mut developers = Vec::new();
+    for provider in crate::dev_apps::Provider::ALL {
+        let key = provider.key();
+        let login = workspace.developer_logins.get(key);
+        let app = crate::dev_apps::get(provider)?;
+        let production = crate::dev_apps::get_production(provider)?;
+        let password = password(&format!("developer-{key}"))?;
+        if login.is_none() && app.is_none() && production.is_none() && password.is_none() { continue; }
+        developers.push(json!({
+            "provider": key,
+            "email": login.map(|l| l.email.clone()),
+            "password": password,
+            "appId": app.as_ref().map(|a| a.id.clone()),
+            "appSecret": app.as_ref().map(|a| a.secret.clone()).filter(|s| !s.is_empty()),
+            "productionAppId": production.as_ref().map(|a| a.id.clone()),
+            "productionAppSecret": production.as_ref().map(|a| a.secret.clone()).filter(|s| !s.is_empty()),
+        }));
+    }
+    let api_keys: Vec<_> = sources.iter().map(|(name, provider, key)| json!({ "name": name, "provider": provider, "apiKey": key })).collect();
+    Ok(json!({
+        "warning": "Plain-text passwords and keys. Keep this file private and delete it when you are done.",
+        "exportedAt": now(),
+        "business": workspace.business_name,
+        "brands": brands,
+        "logins": logins,
+        "developerAccounts": developers,
+        "apiKeys": api_keys,
+    }))
+}
+
+#[cfg(test)]
+mod export_tests {
+    use super::*;
+
+    fn workspace() -> Workspace {
+        serde_json::from_value(serde_json::json!({
+            "businessName": "Soft Wings",
+            "brands": [{ "id": "b1", "name": "Cooking" }, { "id": "b2", "name": "Animals" }],
+            "accounts": [
+                { "id": "y1", "platform": "youtube", "label": "Cooking", "handle": "cooking", "status": "active", "notes": "", "signupEmail": "Main@gmail.com", "brandId": "b1" },
+                { "id": "y2", "platform": "youtube", "label": "Animals", "handle": "@animals", "status": "planned", "notes": "", "signupEmail": "main@gmail.com", "brandId": "b2" },
+                { "id": "x1", "platform": "x", "label": "Cooking", "handle": "cook_x", "status": "active", "notes": "", "signupEmail": "main+cooking@gmail.com", "brandId": "b1" }
+            ],
+            "channels": [{ "id": "c1", "platform": "youtube", "name": "Cooking Shorts", "handle": "cooking", "accountId": "y1", "notes": "" }],
+            "developerLogins": { "google": { "email": "dev@gmail.com" } }
+        })).unwrap()
+    }
+
+    #[test]
+    fn export_lists_brands_logins_and_what_each_login_controls() {
+        let pw = |id: &str| Ok(match id { "y1" => Some("google-pass".to_string()), "x1" => Some("x-pass".into()), "developer-google" => Some("dev-pass".into()), _ => None });
+        let out = accounts_export(&workspace(), pw, |social, id| social == "youtube" && id == "y1", &[]).unwrap();
+        let cooking = &out["brands"][0];
+        assert_eq!(cooking["brand"], "Cooking");
+        assert_eq!(cooking["profiles"][0]["password"], "google-pass");
+        assert_eq!(cooking["profiles"][0]["profileUrl"], "https://www.youtube.com/@cooking");
+        assert_eq!(cooking["profiles"][0]["connected"], true);
+        assert_eq!(cooking["profiles"][0]["channels"][0]["name"], "Cooking Shorts");
+        let google = out["logins"].as_array().unwrap().iter().find(|l| l["social"] == "youtube").unwrap();
+        assert_eq!(google["password"], "google-pass");
+        let brands: Vec<_> = google["controls"].as_array().unwrap().iter().map(|c| c["brand"].as_str().unwrap()).collect();
+        assert_eq!(brands, ["Cooking", "Animals"], "one Google login holds both YouTube channels");
+        assert_eq!(out["logins"].as_array().unwrap().len(), 2);
+        let dev = out["developerAccounts"].as_array().unwrap().iter().find(|d| d["provider"] == "google").unwrap();
+        assert_eq!(dev["email"], "dev@gmail.com");
+        assert_eq!(dev["password"], "dev-pass");
+    }
+}
+
+#[cfg(all(test, windows))]
+mod export_live {
+    /// Runs the export over the installed app's real workspace and Credential Manager, printing only
+    /// counts (no secrets): `cargo test export_real_workspace -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn export_real_workspace() {
+        let path = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("com.socialmanager.desktop").join("workspace.json");
+        let workspace = crate::read_workspace(&path).unwrap();
+        let out = super::accounts_export(&workspace, crate::account_passwords::read, super::connected, &[]).unwrap();
+        let count = |key: &str| out[key].as_array().map(Vec::len).unwrap_or(0);
+        let profiles: usize = out["brands"].as_array().unwrap().iter().map(|b| b["profiles"].as_array().unwrap().len()).sum();
+        let with_pw: usize = out["brands"].as_array().unwrap().iter().flat_map(|b| b["profiles"].as_array().unwrap()).filter(|p| p["password"].is_string()).count();
+        let largest = out["logins"].as_array().unwrap().iter().map(|l| l["controls"].as_array().unwrap().len()).max().unwrap_or(0);
+        println!("brands={} profiles={} with_password={} logins={} largest_login_controls={} developer_accounts={}", count("brands"), profiles, with_pw, count("logins"), largest, count("developerAccounts"));
+        assert_eq!(profiles, workspace.accounts.len());
+    }
+}

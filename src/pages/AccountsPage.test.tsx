@@ -7,7 +7,7 @@ import { ensureSharedPassword } from '../profileService';
 import { migrateWorkspace } from '../brands';
 import type { Account, Workspace } from '../model';
 
-vi.mock('../profileService', () => ({ ensureSharedPassword: vi.fn(async () => undefined), onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), importSignIns: vi.fn() }));
+vi.mock('../profileService', () => ({ ensureSharedPassword: vi.fn(async () => undefined), onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => false), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn(), exportSignIns: vi.fn(), exportAccountsJson: vi.fn(), importSignIns: vi.fn() }));
 afterEach(cleanup);
 const account = (id: string, platform: Account['platform'], label: string, status: Account['status'] = 'planned'): Account => ({ id, platform, label, handle: 'softwings', status, notes: '', bio: 'Wings.', signupEmail: 'softwings25@gmail.com' });
 const accounts = [account('1', 'x', 'Soft Wings'), account('2', 'instagram', 'soft wings ', 'active'), { ...account('3', 'youtube', 'Clip Lab'), handle: 'cliplab' }, { ...account('4', 'instagram', 'Clip Lab'), handle: 'cliplab' }];
