@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, KeyRound, Mail, RefreshCw, RotateCw, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import { Bot, Building2, Clapperboard, KeyRound, Mail, RefreshCw, RotateCw, Send, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import PostingSettings from '../PostingSettings';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
@@ -13,6 +14,7 @@ type Props = { businessName: string; onBusinessNameChange: (value: string) => vo
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
+  { id: 'posting', label: 'Posting', icon: Send },
   { id: 'developer-accounts', label: 'Developer accounts', icon: KeyRound },
   { id: 'email', label: 'Email inbox', icon: Mail },
   { id: 'partner-review', label: 'Partner review', icon: UserCheck },
@@ -57,6 +59,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <input id="business" value={businessName} maxLength={120} onChange={(event) => onBusinessNameChange(event.target.value)} placeholder="e.g. Soft Wings LLC"/>
           <button className="primary-button" disabled={busy || !loaded}>Save changes</button>
         </form>
+        <PostingSettings marks={reviews?.marks}/>
         <DeveloperAccounts reviews={reviews}/>
         <EmailSettings/>
         <PartnerReviewSettings/>

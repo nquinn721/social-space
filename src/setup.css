@@ -43,3 +43,6 @@
 .dev-guide-login strong { font-size: 12.5px; overflow-wrap: anywhere; }
 .dev-guide-login small { color: var(--text-3); line-height: 1.4; }
 .dev-guide-login button { justify-self: start; }
+.posting-modes { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.posting-modes li { display: flex; gap: 10px; align-items: flex-start; }
+.posting-modes .footnote { margin: 2px 0 0; }

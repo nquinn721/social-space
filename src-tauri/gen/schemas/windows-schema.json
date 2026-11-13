@@ -573,6 +573,12 @@
           "markdownDescription": "Enables the open_platform_action command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_posting_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-posting-window",
+          "markdownDescription": "Enables the open_posting_window command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_review_site command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-review-site",
@@ -1231,6 +1237,12 @@
           "type": "string",
           "const": "deny-open-platform-action",
           "markdownDescription": "Denies the open_platform_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_posting_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-posting-window",
+          "markdownDescription": "Denies the open_posting_window command without any pre-configured scope."
         },
         {
           "description": "Denies the open_review_site command without any pre-configured scope.",

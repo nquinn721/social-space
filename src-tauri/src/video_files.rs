@@ -7,7 +7,7 @@ use tauri::{AppHandle, Manager};
 const VIDEO_EXTENSIONS: [&str; 4] = ["mp4", "mov", "m4v", "webm"];
 
 /// Accepts only an existing, absolute path to a video file, so these commands can't open anything else.
-fn video_file(path: &str) -> Result<PathBuf, String> {
+pub(crate) fn video_file(path: &str) -> Result<PathBuf, String> {
     let path = Path::new(path.trim());
     let is_video = path
         .extension()
