@@ -51,7 +51,7 @@
 .posted-chip { position: relative; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--border); opacity: 0.45; filter: grayscale(1); transition: opacity 0.15s, filter 0.15s; }
 .posted-chip:hover:not(:disabled) { opacity: 0.8; filter: none; }
 .posted-chip.done { opacity: 1; filter: none; border-color: var(--success); }
-.posted-chip.done svg { position: absolute; right: -3px; bottom: -3px; padding: 1px; border-radius: 999px; background: var(--success); color: #fff; }
+.posted-chip.done > .posted-check { position: absolute; right: -3px; bottom: -3px; padding: 1px; border-radius: 999px; background: var(--success); color: #fff; }
 .library-video-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .library-video-actions .icon-button { opacity: 0; }
 .library-video:hover .library-video-actions .icon-button, .library-video-actions .icon-button:focus-visible { opacity: 1; }

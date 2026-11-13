@@ -1,5 +1,7 @@
 import { testModeOf } from './appReviews';
-import { Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { AppWindow, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { openProfilePage } from './postingService';
+import { brandLogin, usesMainLogin } from './useBrowserPosting';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
 import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
@@ -84,8 +86,15 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
     </li>;
   }
 
+  /** The profile's public page, in a Social Space window signed in as the brand or in the default browser. */
+  async function viewProfile(account: Account, inBrowser: boolean) {
+    try { await openProfilePage({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: account.handle, inBrowser }); }
+    catch (reason) { setPageNote(errorText(reason, `Could not open the ${getPlatform(account.platform).name} profile.`)); }
+  }
+
   return <section className="brand-accounts" aria-label={`${brand.name} profiles`}>
     {flow.panels}
+    {[...new Set(accounts.filter((account) => account.status === 'active').map((account) => account.platform))].map((platform) => testModeOf(marks, platform)).filter((review) => review?.test).map((review) => <p key={review!.provider} className="test-mode-note" role="note"><span className="test-badge">Test</span>{review!.test!.limits} Posting with the Post on {review!.provider === 'google' ? 'YouTube' : 'TikTok'} button goes through its own page, so those posts are real and public.</p>)}
     {pageNote && <div className="notice conn-notice" role="status"><span>{pageNote}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setPageNote('')}>×</button></div>}
     <div className="profile-cards">{accounts.map((account) => {
       const platformName = getPlatform(account.platform).name;
@@ -116,7 +125,11 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
             {!live && onRemoveAccount && <button type="button" className="icon-button" aria-label={`Delete ${platformName} profile`} title="Delete this profile from the app" disabled={disabled} onClick={() => onRemoveAccount(account)}><Trash2 size={15}/></button>}
           </span>
         </header>
+        {usesMainLogin(developerLogins, account) && <p className="row-warning"><TriangleAlert size={12}/> Saved with your main Gmail, so posting and profile windows won't sign in with it. Give {brand.name} its own {platformName} email and password under Edit details.</p>}
         {warnings?.(account).map((text) => <p key={text} className="row-warning"><TriangleAlert size={12}/> {text}</p>)}
+        {live && account.handle && <p className="profile-card-note profile-view">See the live videos:
+          <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> Open in Social Space</button>
+          <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button></p>}
         {!live && onAlreadyCreated && <p className="profile-card-note">Made it on {platformName} yourself? <button type="button" className="text-button" disabled={disabled} onClick={() => onAlreadyCreated(account)}>Mark it live</button></p>}
         <dl className="profile-signin" aria-label={`${platformName} sign-in`}>
           <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${platformName} email`}/></dd></div>

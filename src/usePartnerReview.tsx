@@ -76,7 +76,7 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
       const video = (latest.current.videos ?? []).find((item) => item.id === post.videoId);
       const events = [...(post.events ?? [])];
       // The video file lives on the PC that sent it, so another PC sharing this team leaves it alone.
-      if (!video) continue;
+      if (!video?.mediaSource) continue;
       // Both PCs watch the site: only the one that claims the post first publishes it.
       if (!await claimReviewPost(post.videoId)) continue;
       const toPost = approvedVideo(video, post);

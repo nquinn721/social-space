@@ -47,7 +47,8 @@ const SHARED_SERVICES: &[(&str, &[&str], bool)] = &[
     ("social-manager-x-oauth", &["primary"], true),
     ("social-manager-youtube", &[], true),
     ("social-manager-tiktok", &[], true),
-    ("social-manager-developer-app", &["meta", "x", "tiktok", "google"], false),
+    // App keys in use, and production keys saved ahead while an app still runs on test keys.
+    ("social-manager-developer-app", &["meta", "x", "tiktok", "google", "meta-production", "x-production", "tiktok-production", "google-production"], false),
     ("social-manager-meta-login-config", &["meta"], false),
     ("social-manager-email", &["primary"], false),
     // API keys of the video sources (Kling, Grok), one per source id listed in video-sources.json.
@@ -132,20 +133,16 @@ pub struct Pushed {
 
 // ---- Local state and key ------------------------------------------------------------------------------
 
-fn state_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    app.path().app_data_dir().map(|dir| dir.join(STATE_FILE)).map_err(|e| format!("Could not locate the app data folder: {e}"))
-}
-
-fn read_state(app: &tauri::AppHandle) -> Result<State, String> {
-    match std::fs::read(state_path(app)?) {
+fn read_state(dir: &std::path::Path) -> Result<State, String> {
+    match std::fs::read(dir.join(STATE_FILE)) {
         Ok(bytes) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(State::default()),
         Err(e) => Err(format!("Could not read the sync state: {e}")),
     }
 }
 
-fn write_state(app: &tauri::AppHandle, state: &State) -> Result<(), String> {
-    let path = state_path(app)?;
+fn write_state(dir: &std::path::Path, state: &State) -> Result<(), String> {
+    let path = dir.join(STATE_FILE);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Could not create the app data folder: {e}"))?;
     }
@@ -223,7 +220,10 @@ fn candidate_slots(account_ids: &BTreeSet<String>, source_ids: &BTreeSet<String>
 
 /// Account ids found in a shared workspace value.
 fn accounts_in(workspace: Option<&Value>) -> impl Iterator<Item = String> + '_ {
-    workspace.and_then(|w| w["accounts"].as_array()).into_iter().flatten().filter_map(|a| a["id"].as_str().map(String::from))
+    let accounts = workspace.and_then(|w| w["accounts"].as_array()).into_iter().flatten().filter_map(|a| a["id"].as_str().map(String::from));
+    // Every developer-site sign-in owns a `developer-<provider>` password too.
+    let developers = workspace.and_then(|w| w["developerLogins"].as_object()).into_iter().flatten().map(|(provider, _)| format!("developer-{provider}"));
+    accounts.chain(developers)
 }
 
 /// Video source ids listed in a video-sources.json.
@@ -391,7 +391,7 @@ pub fn team_sync_status(app: tauri::AppHandle) -> Result<TeamStatus, String> {
     Ok(TeamStatus {
         review_connected: review::require_key().is_ok(),
         enabled: load_team_key()?.is_some(),
-        last_synced_at: read_state(&app)?.last_synced_at,
+        last_synced_at: read_state(&data_dir(&app)?)?.last_synced_at,
     })
 }
 
@@ -431,7 +431,7 @@ pub async fn team_sync_enable(app: tauri::AppHandle, passphrase: String) -> Resu
     };
     key_entry()?.set_secret(&key).map_err(|_| "Couldn't save the team key in Windows Credential Manager.")?;
     // A fresh start: the first sync merges this PC's accounts with what is already shared.
-    write_state(&app, &State::default())?;
+    write_state(&data_dir(&app)?, &State::default())?;
     *SEEN.lock().map_err(|_| "Sync state is unavailable.")? = None;
     Ok(created)
 }
@@ -444,7 +444,7 @@ pub fn team_sync_disable(app: tauri::AppHandle) -> Result<(), String> {
         Err(_) => return Err("Couldn't remove the team key from Windows Credential Manager.".into()),
     }
     *SEEN.lock().map_err(|_| "Sync state is unavailable.")? = None;
-    match std::fs::remove_file(state_path(&app)?) {
+    match std::fs::remove_file(data_dir(&app)?.join(STATE_FILE)) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(format!("Couldn't clear the sync state: {e}")),
@@ -458,8 +458,23 @@ pub async fn team_sync_fetch(app: tauri::AppHandle, sources: tauri::State<'_, cr
     let key = require_team_key()?;
     let account = review::require_key()?;
     let _running = RUNNING.lock().await;
-    let state = read_state(&app)?;
-    let marker = get_doc(&account, "marker").await?;
+    let pc = Pc { dir: data_dir(&app)?, store: &CredentialManager, seen: &SEEN, files_lock: &sources.0 };
+    fetch(&pc, &key, &account, account_ids).await
+}
+
+/// This PC as the sync sees it: its data folder, its secret store, what the last fetch saw, and the
+/// lock that guards the shared files. Tests run two of these side by side.
+struct Pc<'a, S: SecretStore> {
+    dir: PathBuf,
+    store: &'a S,
+    seen: &'a Mutex<Option<Seen>>,
+    files_lock: &'a Mutex<()>,
+}
+
+async fn fetch<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &ServiceAccount, account_ids: Vec<String>) -> Result<Fetched, String> {
+    let (key, account) = (*key, account);
+    let state = read_state(&pc.dir)?;
+    let marker = get_doc(account, "marker").await?;
     let remote_rev = marker.as_ref().and_then(|(fields, _)| fields.get("rev").and_then(Value::as_u64)).unwrap_or(0);
     let marker_time = marker.map(|(_, time)| time);
     let mut seen = Seen { rev: remote_rev, marker_time, remote_workspace: state.base.clone(), remote_hashes: None, remote_file_hashes: None };
@@ -469,7 +484,7 @@ pub async fn team_sync_fetch(app: tauri::AppHandle, sources: tauri::State<'_, cr
         seen.remote_hashes = Some(BTreeMap::new());
         seen.remote_file_hashes = Some(BTreeMap::new());
     } else if remote_rev != state.rev {
-        let (data, _) = get_doc(&account, "data").await?.ok_or("The shared data is missing from the cloud.")?;
+        let (data, _) = get_doc(account, "data").await?.ok_or("The shared data is missing from the cloud.")?;
         let plain = open(&key, data.get("nonce").and_then(Value::as_str).unwrap_or_default(), data.get("data").and_then(Value::as_str).unwrap_or_default())?;
         let payload: Payload = serde_json::from_slice(&plain).map_err(|_| "The shared data is damaged.")?;
         let remote: BTreeMap<String, Vec<u8>> = payload.secrets.iter()
@@ -480,9 +495,9 @@ pub async fn team_sync_fetch(app: tauri::AppHandle, sources: tauri::State<'_, cr
             .filter(|(name, _)| SHARED_FILES.contains(&name.as_str()))
             .filter_map(|(name, value)| STANDARD.decode(value).ok().map(|bytes| (name.clone(), bytes)))
             .collect();
-        let dir = data_dir(&app)?;
+        let dir = pc.dir.clone();
         received += {
-            let _guard = sources.0.lock().map_err(|_| "Video sources are unavailable.")?;
+            let _guard = pc.files_lock.lock().map_err(|_| "Video sources are unavailable.")?;
             apply_remote_files(&dir, &state.file_hashes, &remote_files)?
         };
         let local_files = read_files(&dir);
@@ -491,13 +506,13 @@ pub async fn team_sync_fetch(app: tauri::AppHandle, sources: tauri::State<'_, cr
         let mut slots = candidate_slots(&ids, &source_list);
         slots.extend(remote.keys().cloned());
         slots.extend(state.secret_hashes.keys().cloned());
-        received += apply_remote(&CredentialManager, &slots, &state.secret_hashes, &remote)?;
+        received += apply_remote(pc.store, &slots, &state.secret_hashes, &remote)?;
         seen.remote_hashes = Some(hashes(&remote));
         seen.remote_file_hashes = Some(hashes(&remote_files));
         seen.remote_workspace = Some(payload.workspace);
     }
     let fetched = Fetched { rev: remote_rev, remote: seen.remote_workspace.clone(), base: state.base.clone(), secrets_received: received };
-    *SEEN.lock().map_err(|_| "Sync state is unavailable.")? = Some(seen);
+    *pc.seen.lock().map_err(|_| "Sync state is unavailable.")? = Some(seen);
     Ok(fetched)
 }
 
@@ -511,16 +526,23 @@ pub async fn team_sync_push(app: tauri::AppHandle, workspace: Value, account_ids
         return Err("The shared workspace isn't valid.".into());
     }
     let _running = RUNNING.lock().await;
-    let Some(seen) = SEEN.lock().map_err(|_| "Sync state is unavailable.")?.take() else {
+    let lock = Mutex::new(());
+    let pc = Pc { dir: data_dir(&app)?, store: &CredentialManager, seen: &SEEN, files_lock: &lock };
+    push(&pc, &key, &account, workspace, account_ids).await
+}
+
+async fn push<S: SecretStore>(pc: &Pc<'_, S>, key: &[u8; 32], account: &ServiceAccount, workspace: Value, account_ids: Vec<String>) -> Result<Pushed, String> {
+    let (key, account) = (*key, account);
+    let Some(seen) = pc.seen.lock().map_err(|_| "Sync state is unavailable.")?.take() else {
         return Ok(Pushed { rev: 0, pushed: false, conflict: true });
     };
-    let mut state = read_state(&app)?;
+    let mut state = read_state(&pc.dir)?;
     let ids: BTreeSet<String> = account_ids.into_iter().chain(accounts_in(Some(&workspace))).collect();
     // Remote changes were applied during the fetch, so this PC now holds the merged secrets and files.
     // Slots of accounts and sources that no longer exist are left out of the upload.
-    let files = read_files(&data_dir(&app)?);
+    let files = read_files(&pc.dir);
     let file_hashes = hashes(&files);
-    let local = read_local(&CredentialManager, &candidate_slots(&ids, &source_ids(files.get(SHARED_FILES[0]).map(Vec::as_slice))))?;
+    let local = read_local(pc.store, &candidate_slots(&ids, &source_ids(files.get(SHARED_FILES[0]).map(Vec::as_slice))))?;
     let local_hashes = hashes(&local);
     let remote_hashes = seen.remote_hashes.clone().unwrap_or_else(|| state.secret_hashes.clone());
     let remote_file_hashes = seen.remote_file_hashes.clone().unwrap_or_else(|| state.file_hashes.clone());
@@ -531,7 +553,7 @@ pub async fn team_sync_push(app: tauri::AppHandle, workspace: Value, account_ids
         state.secret_hashes = local_hashes;
         state.file_hashes = file_hashes;
         state.last_synced_at = review::now_ms();
-        write_state(&app, &state)?;
+        write_state(&pc.dir, &state)?;
         return Ok(Pushed { rev: seen.rev, pushed: false, conflict: false });
     }
     let payload = Payload {
@@ -546,13 +568,13 @@ pub async fn team_sync_push(app: tauri::AppHandle, workspace: Value, account_ids
     let (nonce, data) = seal(&key, &plain)?;
     let rev = seen.rev + 1;
     let now = review::now_ms();
-    let mut marker = update(&account, "marker", json!({ "rev": rev, "updatedAt": now, "updatedBy": machine() }));
+    let mut marker = update(account, "marker", json!({ "rev": rev, "updatedAt": now, "updatedBy": machine() }));
     marker["currentDocument"] = match &seen.marker_time {
         Some(time) => json!({ "updateTime": time }),
         None => json!({ "exists": false }),
     };
-    let writes = vec![update(&account, "data", json!({ "rev": rev, "nonce": nonce, "data": data })), marker];
-    if !commit(&account, writes).await? {
+    let writes = vec![update(account, "data", json!({ "rev": rev, "nonce": nonce, "data": data })), marker];
+    if !commit(account, writes).await? {
         return Ok(Pushed { rev: seen.rev, pushed: false, conflict: true });
     }
     state.rev = rev;
@@ -560,7 +582,7 @@ pub async fn team_sync_push(app: tauri::AppHandle, workspace: Value, account_ids
     state.secret_hashes = local_hashes;
     state.file_hashes = file_hashes;
     state.last_synced_at = now;
-    write_state(&app, &state)?;
+    write_state(&pc.dir, &state)?;
     Ok(Pushed { rev, pushed: true, conflict: false })
 }
 
@@ -589,6 +611,8 @@ mod tests {
         assert!(slots.contains("social-manager-instagram-page|primary"));
         assert!(slots.contains("social-manager-instagram-page|acc1"));
         assert!(slots.contains("social-manager-developer-app|meta"));
+        assert!(slots.contains("social-manager-developer-app|tiktok-production"));
+        assert!(slots.contains("social-manager-account-password|developer-tiktok"));
         assert!(!slots.contains("social-manager-developer-app|acc1"));
         assert!(!slots.iter().any(|s| s.starts_with("social-manager-partner-review") || s.starts_with(KEY_SERVICE)));
     }
@@ -627,6 +651,13 @@ mod tests {
         apply_remote(&store, &slots, &BTreeMap::new(), &remote).unwrap();
         assert_eq!(store.get(PW, "local").unwrap().as_deref(), Some(b"a".as_slice()));
         assert_eq!(store.get(PW, "remote").unwrap().as_deref(), Some(b"b".as_slice()));
+    }
+
+    #[test]
+    fn developer_sign_ins_own_password_slots() {
+        let workspace = json!({ "accounts": [{ "id": "a1" }], "developerLogins": { "tiktok": { "email": "x@y.z" } } });
+        let ids: Vec<String> = accounts_in(Some(&workspace)).collect();
+        assert_eq!(ids, ["a1", "developer-tiktok"]);
     }
 
     #[test]
@@ -673,6 +704,65 @@ mod tests {
         assert!(!commit(&account, vec![next]).await.unwrap(), "a write based on an old marker must fail");
         assert!(commit(&account, vec![delete("marker"), delete("data")]).await.unwrap());
         assert!(get_doc(&account, "marker").await.unwrap().is_none());
+    }
+
+    /// Two PCs sharing through the real Firebase project (`team-test` collection, the review key from
+    /// this PC's Credential Manager): a brand with its profile password, a developer sign-in and the
+    /// Grok key made on one PC show up on the other; edits flow back; a stale write is refused.
+    /// `cargo test two_pcs -- --ignored`
+    #[tokio::test]
+    #[ignore]
+    async fn two_pcs_share_everything_through_the_cloud() {
+        let account = review::require_key().expect("Partner review is connected on this PC");
+        let wipe = || commit(&account, vec![json!({ "delete": doc_name(&account, "marker") }), json!({ "delete": doc_name(&account, "data") })]);
+        assert!(wipe().await.unwrap());
+        let key = crate::backup::key("two pc test passphrase", b"fedcba9876543210", 1000);
+        let (dir_a, dir_b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        let (store_a, store_b) = (Memory::default(), Memory::default());
+        let (seen_a, seen_b, lock) = (Mutex::new(None), Mutex::new(None), Mutex::new(()));
+        let a = Pc { dir: dir_a.path().to_path_buf(), store: &store_a, seen: &seen_a, files_lock: &lock };
+        let b = Pc { dir: dir_b.path().to_path_buf(), store: &store_b, seen: &seen_b, files_lock: &lock };
+
+        // PC A makes a brand with a profile, a developer sign-in and a Grok video source.
+        store_a.set(PW, "acc1", b"profile-pass").unwrap();
+        store_a.set(PW, "developer-tiktok", b"dev-pass").unwrap();
+        store_a.set("social-manager-developer-app", "tiktok-production", br#"{"id":"prod"}"#).unwrap();
+        store_a.set(VIDEO_SOURCE_SERVICE, "ab12", b"xai-key").unwrap();
+        std::fs::write(dir_a.path().join(SHARED_FILES[0]), br#"{"active":"ab12","sources":[{"id":"ab12","name":"Grok","provider":"grok"}]}"#).unwrap();
+        let workspace = json!({ "businessName": "Soft Wings", "brands": [{ "id": "b1", "name": "Cooking" }], "accounts": [{ "id": "acc1", "brandId": "b1" }], "developerLogins": { "tiktok": { "email": "dev@x.com" } } });
+        assert!(fetch(&a, &key, &account, vec!["acc1".into()]).await.unwrap().remote.is_none());
+        assert!(push(&a, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed);
+
+        // PC B, empty, joins and gets all of it.
+        let got = fetch(&b, &key, &account, vec![]).await.unwrap();
+        assert_eq!(got.remote.as_ref(), Some(&workspace));
+        assert_eq!(store_b.get(PW, "acc1").unwrap().as_deref(), Some(b"profile-pass".as_slice()));
+        assert_eq!(store_b.get(PW, "developer-tiktok").unwrap().as_deref(), Some(b"dev-pass".as_slice()));
+        assert_eq!(store_b.get("social-manager-developer-app", "tiktok-production").unwrap().as_deref(), Some(br#"{"id":"prod"}"#.as_slice()));
+        assert_eq!(store_b.get(VIDEO_SOURCE_SERVICE, "ab12").unwrap().as_deref(), Some(b"xai-key".as_slice()));
+        assert!(std::fs::read(dir_b.path().join(SHARED_FILES[0])).unwrap().starts_with(br#"{"active":"ab12""#));
+        assert!(!push(&b, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed, "nothing new to upload");
+
+        // PC B changes the password; PC A picks it up.
+        store_b.set(PW, "acc1", b"changed-on-b").unwrap();
+        fetch(&b, &key, &account, vec!["acc1".into()]).await.unwrap();
+        assert!(push(&b, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed);
+        fetch(&a, &key, &account, vec!["acc1".into()]).await.unwrap();
+        assert_eq!(store_a.get(PW, "acc1").unwrap().as_deref(), Some(b"changed-on-b".as_slice()));
+        assert!(!push(&a, &key, &account, workspace.clone(), vec!["acc1".into()]).await.unwrap().pushed);
+
+        // Both fetch, B writes first, A's write is refused as a conflict.
+        fetch(&a, &key, &account, vec![]).await.unwrap();
+        fetch(&b, &key, &account, vec![]).await.unwrap();
+        let mut renamed = workspace.clone();
+        renamed["businessName"] = json!("Renamed on B");
+        assert!(push(&b, &key, &account, renamed, vec![]).await.unwrap().pushed);
+        let mut other = workspace.clone();
+        other["businessName"] = json!("Renamed on A");
+        assert!(push(&a, &key, &account, other, vec![]).await.unwrap().conflict);
+        assert_eq!(fetch(&a, &key, &account, vec![]).await.unwrap().remote.unwrap()["businessName"], "Renamed on B");
+
+        assert!(wipe().await.unwrap());
     }
 
     #[test]

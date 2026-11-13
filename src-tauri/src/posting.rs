@@ -111,6 +111,7 @@ pub(crate) fn is_sign_in(url: &url::Url) -> bool {
         "accounts.google.com" => true,
         "tiktok.com" => path.starts_with("/login"),
         "x.com" | "twitter.com" => path.starts_with("/i/flow/login") || path == "/login",
+        "instagram.com" => path.starts_with("/accounts/login"),
         _ => false,
     }
 }
@@ -119,7 +120,7 @@ pub(crate) fn is_sign_in(url: &url::Url) -> bool {
 fn on_social(url: &url::Url) -> bool {
     url.scheme() == "https"
         && url.host_str().is_some_and(|host| {
-            ["tiktok.com", "youtube.com", "x.com", "twitter.com", "accounts.google.com"]
+            ["tiktok.com", "youtube.com", "x.com", "twitter.com", "instagram.com", "accounts.google.com"]
                 .iter()
                 .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
         })
@@ -214,7 +215,8 @@ async fn send_file(window: tauri::Webview, path: PathBuf) {
 
 struct Posting {
     request: PostRequest,
-    config_script: String,
+    /// None for a profile window, which only signs in and shows the page.
+    config_script: Option<String>,
     sign_in_script: Option<String>,
     file: Option<PathBuf>,
 }
@@ -229,7 +231,9 @@ fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
             let _ = webview.eval(script);
         }
     }
-    let _ = webview.eval(&posting.config_script);
+    if let Some(script) = &posting.config_script {
+        let _ = webview.eval(script);
+    }
     if let (Some(path), true) = (&posting.file, is_upload_page(posting.request.platform, &url)) {
         tauri::async_runtime::spawn(send_file(webview.clone(), path.clone()));
     }
@@ -254,7 +258,8 @@ fn build_window(
         Platform::Instagram => "Instagram",
     };
     let handle = &posting.request.handle;
-    let title = if handle.is_empty() { format!("Socialspace · Post on {name}") } else { format!("Socialspace · Post on {name} as @{handle}") };
+    let verb = if posting.config_script.is_some() { "Post on" } else { "Profile on" };
+    let title = if handle.is_empty() { format!("Socialspace · {verb} {name}") } else { format!("Socialspace · {verb} {name} as @{handle}") };
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title(title)
         .inner_size(1200.0, 860.0)
@@ -345,14 +350,96 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
         Some(id) => crate::account_passwords::read(id).ok().flatten(),
         None => None,
     };
-    let login = if request.platform == Platform::Youtube { request.email.as_str() } else { request.handle.as_str() };
-    let sign_in_script = crate::autofill::sign_in_script(login, &request.email, password)?;
-    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script, sign_in_script, file });
+    let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
+    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, file });
     let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
     let window = build_window(&app, url, dir, posting, None)?;
     let label = window.label().to_owned();
     watch(app, window, request);
     Ok(label)
+}
+
+/// The sign-in fill for a brand profile's window. Only a profile the app sends (its own login, never
+/// the main Gmail) is filled; without one the sign-in page is left for Nate.
+fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, email: &str, password: Option<String>) -> Result<Option<String>, String> {
+    if account_id.as_deref().map_or(true, str::is_empty) {
+        return Ok(None);
+    }
+    let login = if platform == Platform::Youtube { email } else { handle.trim().trim_start_matches('@') };
+    crate::autofill::sign_in_script(login, email, password)
+}
+
+/// A profile's public page, where its live videos are.
+pub(crate) fn profile_url(platform: Platform, handle: &str) -> Option<String> {
+    let handle = handle.trim().trim_start_matches('@');
+    let valid = !handle.is_empty() && handle.len() <= 100 && handle.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'));
+    if !valid {
+        return None;
+    }
+    Some(match platform {
+        Platform::Tiktok => format!("https://www.tiktok.com/@{handle}"),
+        Platform::Youtube => format!("https://www.youtube.com/@{handle}/videos"),
+        Platform::X => format!("https://x.com/{handle}"),
+        Platform::Instagram => format!("https://www.instagram.com/{handle}/"),
+    })
+}
+
+/// What a profile window needs: the brand (for its sign-in folder) and the profile.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileRequest {
+    platform: Platform,
+    brand_id: String,
+    #[serde(default)]
+    account_id: Option<String>,
+    handle: String,
+    #[serde(default)]
+    email: String,
+    /// true: the default browser on this PC. false: a Social Space window signed in as the brand.
+    #[serde(default)]
+    in_browser: bool,
+}
+
+/// Opens a brand profile's public page, to see the videos that are live: in a Social Space window
+/// that shares the brand's posting sign-in, or in the default browser.
+#[tauri::command]
+pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Result<(), String> {
+    let address = profile_url(request.platform, &request.handle).ok_or("This profile has no valid username yet. Add it under Edit details.")?;
+    if request.email.len() > 320 {
+        return Err("The account details are not valid.".into());
+    }
+    if request.in_browser {
+        return std::process::Command::new("explorer.exe")
+            .arg(&address)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "Could not open your browser.".to_string());
+    }
+    let dir = profile_dir(&app, &request.brand_id)?;
+    std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
+    let password = match request.account_id.as_deref().filter(|id| !id.is_empty()) {
+        Some(id) => crate::account_passwords::read(id).ok().flatten(),
+        None => None,
+    };
+    let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
+    let post = PostRequest {
+        platform: request.platform,
+        brand_id: request.brand_id.clone(),
+        video_id: String::new(),
+        account_id: request.account_id.clone(),
+        handle: request.handle.trim().trim_start_matches('@').to_owned(),
+        email: request.email.clone(),
+        video_path: String::new(),
+        title: String::new(),
+        text: String::new(),
+        made_with_ai: false,
+        made_for_kids: false,
+        cover: String::new(),
+        cover_ms: None,
+    };
+    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, file: None });
+    let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
+    build_window(&app, url, dir, posting, None).map(|_| ())
 }
 
 /// Runs in the upload page. Shows a panel with the post (and Copy buttons as a fallback), attaches the
@@ -625,6 +712,7 @@ mod tests {
         assert!(is_sign_in(&url("https://www.tiktok.com/login/phone-or-email/email")));
         assert!(is_sign_in(&url("https://x.com/i/flow/login")));
         assert!(!is_sign_in(&url("https://x.com/compose/post")));
+        assert!(is_sign_in(&url("https://www.instagram.com/accounts/login/")));
         assert!(!is_sign_in(&url("https://www.tiktok.com/tiktokstudio/upload")));
     }
 
@@ -642,6 +730,28 @@ mod tests {
         assert!(attachable("").is_err());
         assert!(attachable("C:\\Windows\\win.ini").is_err());
         assert!(attachable("relative.mp4").is_err());
+    }
+
+    #[test]
+    fn profile_pages_are_built_from_safe_usernames() {
+        assert_eq!(profile_url(Platform::Tiktok, "@animals.daily").as_deref(), Some("https://www.tiktok.com/@animals.daily"));
+        assert_eq!(profile_url(Platform::Youtube, "Animals").as_deref(), Some("https://www.youtube.com/@Animals/videos"));
+        assert_eq!(profile_url(Platform::X, "animals_x").as_deref(), Some("https://x.com/animals_x"));
+        assert_eq!(profile_url(Platform::Instagram, "animals").as_deref(), Some("https://www.instagram.com/animals/"));
+        assert!(profile_url(Platform::X, "").is_none());
+        assert!(profile_url(Platform::X, "a/../b").is_none());
+        assert!(profile_url(Platform::X, "a b").is_none());
+        for platform in [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram] {
+            let page: url::Url = profile_url(platform, "animals").unwrap().parse().unwrap();
+            assert!(crate::browser::allowed_navigation(&page, false));
+        }
+    }
+
+    #[test]
+    fn no_profile_means_no_sign_in_fill() {
+        assert!(brand_sign_in(&None, Platform::Tiktok, "animals", "a@b.c", Some("pw".into())).unwrap().is_none());
+        assert!(brand_sign_in(&Some(String::new()), Platform::X, "animals", "", None).unwrap().is_none());
+        assert!(brand_sign_in(&Some("a1".into()), Platform::Tiktok, "animals", "x+animals@example.com", None).unwrap().is_some());
     }
 
     #[test]
