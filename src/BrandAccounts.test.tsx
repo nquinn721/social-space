@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import BrandAccounts from './BrandAccounts';
+import BrandAccounts, { signInLine } from './BrandAccounts';
 import type { Account, Brand } from './model';
 
 const status = vi.hoisted(() => ({
@@ -19,7 +19,8 @@ vi.mock('./profileConnections', () => ({
   useProfileConnections: () => ({ connected: {}, loading: false, refresh: vi.fn(async () => undefined) }),
 }));
 vi.mock('./profileService', () => ({ onPasswordSaved: () => () => undefined, hasAccountPassword: vi.fn(async () => true), revealAccountPassword: vi.fn(), setAccountPassword: vi.fn() }));
-vi.mock('./postingService', () => ({ openProfilePage: vi.fn(async () => undefined) }));
+const signIns = vi.hoisted(() => ({ value: {} as Record<string, Record<string, { signedIn: boolean; handle?: string; checkedAt: number }>> }));
+vi.mock('./postingService', () => ({ openProfilePage: vi.fn(async () => undefined), postingSignIns: vi.fn(async () => signIns.value), onSignInChange: vi.fn(async () => () => undefined) }));
 import { openProfilePage } from './postingService';
 afterEach(cleanup);
 
@@ -63,5 +64,22 @@ describe('brand accounts', () => {
     await user.click(screen.getByRole('button', { name: /Add YouTube/ }));
     expect(onAddSocial).toHaveBeenCalledWith('youtube');
     expect(screen.queryByRole('button', { name: /Add Instagram/ })).not.toBeInTheDocument();
+  });
+
+  it('says whether the brand window is signed in, and as whom', async () => {
+    status.connections = {};
+    signIns.value = { b1: { tiktok: { signedIn: false, checkedAt: 0 }, x: { signedIn: true, handle: 'softwings25', checkedAt: 0 } } };
+    render(<BrandAccounts brand={brand} accounts={[profile('tt', 'tiktok'), profile('x', 'x'), profile('yt', 'youtube')]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
+    expect(await screen.findByLabelText('TikTok window sign-in')).toHaveTextContent(/Not signed in to TikTok/);
+    expect(screen.getByLabelText('X window sign-in')).toHaveTextContent(/Signed in as @softwings25, not @softwings/);
+    expect(screen.getByLabelText('YouTube window sign-in')).toHaveTextContent(/not checked yet/);
+    signIns.value = {};
+  });
+
+  it('words each sign-in state', () => {
+    expect(signInLine('TikTok', 'animals', { signedIn: true, handle: 'Animals', checkedAt: 0 }).tone).toBe('ok');
+    expect(signInLine('YouTube', 'animals', { signedIn: true, checkedAt: 0 }).text).toMatch(/^Signed in to YouTube/);
+    expect(signInLine('X', '@animals', { signedIn: true, handle: 'other', checkedAt: 0 }).tone).toBe('warning');
+    expect(signInLine('X', 'animals', undefined).tone).toBe('unknown');
   });
 });

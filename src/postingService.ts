@@ -23,3 +23,15 @@ export async function onPostingUpdate(handler: (update: PostingUpdate) => void):
 export async function openProfilePage(request: { platform: Platform; brandId: string; accountId?: string; handle: string; email: string; inBrowser: boolean }): Promise<void> {
   desktopOnly(); return invoke('open_profile_page', { request });
 }
+
+/** Whether a brand's window folder is signed in to a social on this PC, and as whom (when the page showed it). */
+export type BrandSignIn = { signedIn: boolean; handle?: string; checkedAt: number };
+/** Brand id → social → its last checked sign-in. */
+export type SignIns = Record<string, Partial<Record<Platform, BrandSignIn>>>;
+export async function postingSignIns(): Promise<SignIns> { if (!isTauri()) return {}; return invoke('posting_sign_ins'); }
+/** Hears when a brand window's sign-in changes; returns the function that stops listening. */
+export async function onSignInChange(handler: () => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  try { return await listen<string>('posting-sign-in', () => handler()); }
+  catch { return () => {}; }
+}

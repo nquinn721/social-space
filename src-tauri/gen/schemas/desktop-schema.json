@@ -651,6 +651,12 @@
           "markdownDescription": "Enables the post_to_x command without any pre-configured scope."
         },
         {
+          "description": "Enables the posting_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-posting-sign-ins",
+          "markdownDescription": "Enables the posting_sign_ins command without any pre-configured scope."
+        },
+        {
           "description": "Enables the prepare_update command without any pre-configured scope.",
           "type": "string",
           "const": "allow-prepare-update",
@@ -1369,6 +1375,12 @@
           "type": "string",
           "const": "deny-post-to-x",
           "markdownDescription": "Denies the post_to_x command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the posting_sign_ins command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-posting-sign-ins",
+          "markdownDescription": "Denies the posting_sign_ins command without any pre-configured scope."
         },
         {
           "description": "Denies the prepare_update command without any pre-configured scope.",

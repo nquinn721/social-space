@@ -380,6 +380,8 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
 
 /// How often an open brand window's sign-in is saved for the other PC.
 const SESSION_SAVE_EVERY: Duration = Duration::from_secs(20);
+/// When a new brand window's sign-in is first checked, once its page had time to load.
+const SIGN_IN_FIRST_CHECK: Duration = Duration::from_secs(8);
 
 /// Opens a brand window: first on a blank page, so the other PC's newer sign-in (if any) is put into
 /// the brand's folder before the social loads, then on `url`. While the window is open its sign-in is
@@ -387,6 +389,7 @@ const SESSION_SAVE_EVERY: Duration = Duration::from_secs(20);
 fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sync::Arc<Posting>) -> Result<WebviewWindow, String> {
     let blank: url::Url = "about:blank".parse().expect("valid blank URL");
     let brand = posting.request.brand_id.clone();
+    let platform = posting.request.platform;
     let window = build_window(app, blank, dir, posting.clone(), None)?;
     let (task_app, task_window) = (app.clone(), window.clone());
     tauri::async_runtime::spawn(async move {
@@ -397,6 +400,16 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
         if task_window.navigate(url).is_err() {
             return;
         }
+        // The brand card shows whether this folder is signed in, and as whom: checked soon after the
+        // page loads, then with every save.
+        let check = |app: AppHandle, window: WebviewWindow, brand: String| async move {
+            let _ = tauri::async_runtime::spawn_blocking(move || crate::sign_in_state::check(&app, &window, &brand, platform)).await;
+        };
+        tokio::time::sleep(SIGN_IN_FIRST_CHECK).await;
+        if task_window.url().is_err() {
+            return;
+        }
+        check(task_app.clone(), task_window.clone(), brand.clone()).await;
         loop {
             tokio::time::sleep(SESSION_SAVE_EVERY).await;
             if task_window.url().is_err() {
@@ -404,6 +417,7 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
             }
             let (save_app, save_window, save_brand) = (task_app.clone(), task_window.clone(), brand.clone());
             let _ = tauri::async_runtime::spawn_blocking(move || crate::browser_sessions::capture(&save_app, &save_window, &save_brand)).await;
+            check(task_app.clone(), task_window.clone(), brand.clone()).await;
         }
     });
     Ok(window)

@@ -1,5 +1,6 @@
 import { AppWindow, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
-import { openProfilePage } from './postingService';
+import { openProfilePage, type BrandSignIn } from './postingService';
+import { useSignIns } from './useSignIns';
 import { brandLogin, wrongLogin } from './useBrowserPosting';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
@@ -41,6 +42,17 @@ type Props = {
 /** What a profile shows at a glance: one word, and the one thing to do next. */
 type Readiness = { tone: 'active' | 'planned' | 'warning'; text: string };
 
+/** What the brand's window folder is signed in as on this social, for the card. */
+export function signInLine(platformName: string, handle: string, state: BrandSignIn | undefined): { tone: 'ok' | 'warning' | 'unknown'; text: string } {
+  if (!state) return { tone: 'unknown', text: `Sign-in not checked yet. Open ${platformName} in Social Space once to check it.` };
+  const at = new Date(state.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (!state.signedIn) return { tone: 'warning', text: `Not signed in to ${platformName} (checked ${at}). Open it in Social Space and sign in once; it stays signed in.` };
+  const own = normalizeHandle(handle).toLowerCase();
+  if (state.handle && own && state.handle.toLowerCase() !== own) return { tone: 'warning', text: `Signed in as @${state.handle}, not @${normalizeHandle(handle)} (checked ${at}). Sign out in the window and sign in as @${normalizeHandle(handle)}.` };
+  if (state.handle) return { tone: 'ok', text: `Signed in as @${state.handle} (checked ${at})` };
+  return { tone: 'ok', text: `Signed in to ${platformName} (checked ${at})` };
+}
+
 function CopyValue({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   if (!value) return <span className="muted">Not set</span>;
@@ -55,6 +67,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
   const flow = useConnectFlow(accounts, [brand], { logins: developerLogins, onLogin: onDeveloperLogin });
   const { status, working, connect, disconnect } = flow;
   const [pageNote, setPageNote] = useState('');
+  const signIns = useSignIns()[brand.id] ?? {};
   const groups = setupNeeds({ accounts, brands: [brand], apps: status.apps, connections: status.connections, passwords: status.passwords, marks, developerLogins });
   const needsOf = (account: Account) => groups.flatMap((group) => group.needs).filter((need) => need.accountId === account.id);
   // Steps on the social's developer side are shared by every brand, so they're only counted here.
@@ -130,6 +143,10 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
         </header>
         {wrongLogin(developerLogins, account) && <p className="row-warning"><TriangleAlert size={12}/> Saved with your main Gmail, so posting and profile windows won't sign in with it. Give {brand.name} its own {platformName} email and password under Edit details.</p>}
         {warnings?.(account).map((text) => <p key={text} className="row-warning"><TriangleAlert size={12}/> {text}</p>)}
+        {live && postMode(account.platform) === 'browser' && (() => {
+          const line = signInLine(platformName, account.handle, signIns[account.platform]);
+          return <p className={`profile-card-note sign-in-state ${line.tone}`} aria-label={`${platformName} window sign-in`}>{line.tone === 'warning' ? <TriangleAlert size={12}/> : line.tone === 'ok' ? <Check size={12}/> : null} {line.text}</p>;
+        })()}
         {live && account.handle && <p className="profile-card-note profile-view">See the live videos:
           <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> Open in Social Space</button>
           <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button></p>}
