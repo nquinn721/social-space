@@ -267,6 +267,7 @@ fn build_window(
         .title(title)
         .inner_size(1200.0, 860.0)
         .data_directory(dir)
+        .initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
         .on_navigation(|url| crate::browser::allowed_navigation(url, false))
         .on_page_load(move |window, payload| {
             if payload.event() == PageLoadEvent::Finished {

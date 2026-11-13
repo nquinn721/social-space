@@ -141,6 +141,7 @@ fn embed_address(app: &AppHandle, address: &str, bounds: Bounds, dark: bool) -> 
         builder = builder.initialization_script(DARK_SCRIPT);
     }
     let builder = builder
+        .initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
         .on_navigation(|url| crate::browser::allowed_navigation(url, false))
         .on_page_load(|webview, payload| {
             if payload.event() == PageLoadEvent::Finished && !crate::browser::to_email_login(&webview) {

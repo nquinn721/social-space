@@ -48,6 +48,26 @@ pub(crate) fn email_login_page(url: &url::Url) -> Option<url::Url> {
     Some(next)
 }
 
+/// TikTok switches between its sign-in screens inside the page (QR code, "Back", "Use phone"), which
+/// never fires a page load, so this init script applies the same rule as `email_login_page` on every
+/// in-page route change too, and before the choice screen first paints.
+pub(crate) const EMAIL_LOGIN_SCRIPT: &str = r#"(() => {
+  if (window.top !== window || !/(^|\.)tiktok\.com$/.test(location.hostname)) return;
+  const EMAIL = '/login/phone-or-email/email';
+  const check = () => {
+    const path = location.pathname.replace(/\/+$/, '');
+    if ((path === '/login' || path.startsWith('/login/')) && !path.startsWith(EMAIL)) {
+      location.replace(EMAIL + location.search + location.hash);
+    }
+  };
+  for (const name of ['pushState', 'replaceState']) {
+    const original = history[name];
+    history[name] = function (...args) { const result = original.apply(this, args); check(); return result; };
+  }
+  window.addEventListener('popstate', check);
+  check();
+})();"#;
+
 /// Sends a page that loaded on a sign-in choice screen to the email form instead.
 pub(crate) fn to_email_login(webview: &tauri::Webview) -> bool {
     match webview.url().ok().as_ref().and_then(email_login_page) {
@@ -67,6 +87,7 @@ pub(crate) fn make_window(
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title("Socialspace · Website")
         .inner_size(1100.0, 800.0)
+        .initialization_script(EMAIL_LOGIN_SCRIPT)
         .on_navigation(move |url| allowed_navigation(url, oauth_callback))
         .on_page_load(|window, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished && !to_email_login(window.as_ref()) {
@@ -127,6 +148,14 @@ mod tests {
         assert!(next("https://www.tiktok.com/loginx").is_none());
         assert!(next("https://www.tiktok.com/tiktokstudio/upload").is_none());
         assert!(next("https://x.com/login").is_none());
+    }
+
+    #[test]
+    fn in_page_tiktok_route_changes_use_the_same_email_form() {
+        // The init script covers in-page screen switches; it must aim at the same form as the Rust rule.
+        assert!(EMAIL_LOGIN_SCRIPT.contains("'/login/phone-or-email/email'"));
+        assert!(EMAIL_LOGIN_SCRIPT.contains("pushState") && EMAIL_LOGIN_SCRIPT.contains("popstate"));
+        assert!(EMAIL_LOGIN_SCRIPT.contains("location.search"));
     }
 
     #[test]
