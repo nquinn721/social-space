@@ -1,0 +1,11 @@
+.brand-profiles { margin-bottom: 16px; display: flex; flex-direction: column; gap: 14px; }
+.brand-profiles-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.brand-profiles-head > div:first-child { flex: 1; min-width: 240px; }
+.brand-profiles-head h3 { margin: 0 0 4px; }
+.brand-profiles-head p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.brand-profile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.brand-profile { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.brand-profile-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.brand-profile-top small { color: var(--text-3); }
+.brand-profile-action { margin-left: auto; }
+.brand-profile .bio-count.over { color: var(--danger, #ef4444); }

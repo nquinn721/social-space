@@ -28,6 +28,17 @@ export function parsePostSuggestion(text: string): PostSuggestion | null {
   } catch { return null; }
 }
 
+/** One suggestion per video while the app runs, shown as ghost text whenever its post panel opens with empty fields. */
+const cache = new Map<string, Promise<PostSuggestion>>();
+export function cachedPostSuggestion(videoId: string, idea: PostIdea): Promise<PostSuggestion> {
+  const known = cache.get(videoId);
+  if (known) return known;
+  const request = suggestPost(idea);
+  cache.set(videoId, request);
+  request.catch(() => { if (cache.get(videoId) === request) cache.delete(videoId); });
+  return request;
+}
+
 /** Asks Grok for a description and hashtags for one video. */
 export async function suggestPost(idea: PostIdea): Promise<PostSuggestion> {
   const lines = [`Brand: ${idea.brand}`, `Category: ${idea.category}`, `Video title: ${idea.title}`];

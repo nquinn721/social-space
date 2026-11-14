@@ -57,10 +57,13 @@ pub struct FormFields {
     /// Developer sites: the redirect or callback address of the app.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     redirect_uri: Option<String>,
+    /// Comma-separated channel keywords or tags (YouTube's channel keywords).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    keywords: Option<String>,
 }
 
 impl FormFields {
-    fn values(&self) -> [&Option<String>; 13] {
+    fn values(&self) -> [&Option<String>; 14] {
         [
             &self.email,
             &self.phone,
@@ -75,6 +78,7 @@ impl FormFields {
             &self.birthday,
             &self.app_name,
             &self.redirect_uri,
+            &self.keywords,
         ]
     }
 }
@@ -99,6 +103,9 @@ struct FillPayload<'a> {
     /// what was filled, so no account is ever made by mistake.
     #[serde(rename = "signInOnly", skip_serializing_if = "std::ops::Not::not")]
     sign_in_only: bool,
+    /// What the banner says before anything is filled, e.g. which button opens the profile editor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
 }
 
 /// Fill scripts to re-run when a window loads its next page during sign-up.
@@ -215,6 +222,7 @@ fn fill_script(payload: &FillPayload) -> Result<String, String> {
 /// with a Copy button.
 const FILL_SCRIPT: &str = r#"function (data) {
   const rules = [
+    ['keywords', { words: /keyword|tags?/ }],
     ['email', { types: ['email'], auto: ['email'], words: /e-?mail/ }],
     ['phone', { types: ['tel'], auto: ['tel'], words: /phone|mobile/ }],
     ['username', { auto: ['username'], words: /user ?name|handle/ }],
@@ -228,6 +236,8 @@ const FILL_SCRIPT: &str = r#"function (data) {
     ['website', { types: ['url'], auto: ['url'], words: /website|\burl\b|link/ }],
     ['verificationCode', { auto: ['one-time-code'], words: /code|otp|verif/ }],
   ];
+  // A brand window runs both its sign-in fill and its profile fill (X signs in over any page), so each keeps its own watcher.
+  const watcher = data.signInOnly ? '__socialspaceSignInObserver' : '__socialspaceObserver';
   const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
@@ -242,7 +252,23 @@ const FILL_SCRIPT: &str = r#"function (data) {
     el.dispatchEvent(new Event('change', { bubbles: true }));
     el.style.outline = '2px solid #8b5cf6';
   };
+  // Keyword boxes that turn each entry into a chip (YouTube) take one keyword at a time and Enter, like
+  // typing them; a plain text box gets them all, comma-separated.
+  const typeKeywords = (el, value) => {
+    const words = value.split(',').map((word) => word.trim()).filter(Boolean);
+    for (const word of words) {
+      setValue(el, word);
+      for (const type of ['keydown', 'keypress', 'keyup']) {
+        el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+      }
+    }
+    if (el.value === words[words.length - 1]) setValue(el, words.join(', '));
+  };
   // Fields filled once are left alone afterwards, so later page changes never undo the user's edits.
+  const ours = (node) => {
+    const el = node && node.nodeType === 1 ? node : node && node.parentElement;
+    return !!(el && el.closest && el.closest('#socialspace-fill-banner, #socialspace-code'));
+  };
   const done = window.__socialspaceDone || (window.__socialspaceDone = new WeakSet());
   const fill = () => {
     const filled = [];
@@ -260,8 +286,22 @@ const FILL_SCRIPT: &str = r#"function (data) {
         || match((el) => rule.words.test(describe(el)));
       if (!el) continue;
       used.add(el);
-      setValue(el, value);
+      if (key === 'keywords') typeKeywords(el, value); else setValue(el, value);
       filled.push(key);
+    }
+    // YouTube Studio's channel description is an editable box, not a text field.
+    if (data.fields.bio && !filled.includes('bio')) {
+      const box = Array.from(document.querySelectorAll('[contenteditable=true], [contenteditable=""]')).find((el) =>
+        visible(el) && !done.has(el) && !ours(el) && /bio|description|about/.test(describe(el) + ' ' + (el.getAttribute('aria-placeholder') || '').toLowerCase())
+        && (data.replace || !(el.textContent || '').trim()));
+      if (box) {
+        box.focus();
+        document.execCommand('selectAll', false);
+        document.execCommand('insertText', false, data.fields.bio);
+        done.add(box);
+        box.style.outline = '2px solid #8b5cf6';
+        filled.push('bio');
+      }
     }
     if (data.fields.birthday) {
       const [year, month, day] = data.fields.birthday.split('-').map(Number);
@@ -298,8 +338,17 @@ const FILL_SCRIPT: &str = r#"function (data) {
       if (boxes.length) filled.push('password');
     }
     if (data.image && !window.__socialspaceImageSet) {
-      const input = Array.from(document.querySelectorAll('input[type=file]'))
-        .find((el) => !el.accept || /image/.test(el.accept));
+      // The profile picture, never the banner or header next to it (X and YouTube have both).
+      const around = (el) => {
+        const parts = [];
+        for (let node = el, depth = 0; node && depth < 4; node = node.parentElement, depth += 1) {
+          parts.push(node.getAttribute && (node.getAttribute('aria-label') || ''), node.id || '', node.name || '');
+        }
+        return parts.join(' ').toLowerCase();
+      };
+      const images = Array.from(document.querySelectorAll('input[type=file]'))
+        .filter((el) => (!el.accept || /image/.test(el.accept)) && !/banner|header|cover/.test(around(el)));
+      const input = images.find((el) => /avatar|profile (photo|picture|image)|photo/.test(around(el))) || images[0];
       if (input) {
         const bytes = Uint8Array.from(atob(data.image.data), (c) => c.charCodeAt(0));
         const transfer = new DataTransfer();
@@ -427,7 +476,7 @@ const FILL_SCRIPT: &str = r#"function (data) {
     const next = hint();
     if (next && next !== window.__socialspaceHint) banner(next);
     else if (filled.length) banner('Socialspace filled: ' + filled.join(', ') + '. Check it, then press the button yourself.');
-    else if (always) banner('Socialspace is ready. Fields will fill as each step appears.');
+    else if (always) banner(data.note || 'Socialspace is ready. Fields will fill as each step appears.');
     window.__socialspaceHint = next;
     if (filled.length) console.info('[Socialspace] filled', filled);
   };
@@ -443,7 +492,7 @@ const FILL_SCRIPT: &str = r#"function (data) {
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.style.outline = '';
       });
-      if (window.__socialspaceObserver) window.__socialspaceObserver.disconnect();
+      if (window[watcher]) window[watcher].disconnect();
       window.__socialspaceSignUpBlocked = true;
       banner('This login has no account here, so the site is offering to create one. Socialspace filled nothing; go back and sign in with the login that owns this profile.');
       return;
@@ -452,14 +501,10 @@ const FILL_SCRIPT: &str = r#"function (data) {
     const menus = await pickMenus();
     report(filled.includes('birthday') ? filled : filled.concat(menus), always);
   };
-  const ours = (node) => {
-    const el = node && node.nodeType === 1 ? node : node && node.parentElement;
-    return !!(el && el.closest && el.closest('#socialspace-fill-banner, #socialspace-code'));
-  };
   if (data.fields.verificationCode) showCode(data.fields.verificationCode);
   window.__socialspaceHint = '';
   step(true);
-  if (window.__socialspaceObserver) window.__socialspaceObserver.disconnect();
+  if (window[watcher]) window[watcher].disconnect();
   if (data.watch) {
     let timer;
     const observer = new MutationObserver((changes) => {
@@ -469,7 +514,7 @@ const FILL_SCRIPT: &str = r#"function (data) {
       timer = setTimeout(() => step(false), 400);
     });
     observer.observe(document.body, { childList: true, subtree: true });
-    window.__socialspaceObserver = observer;
+    window[watcher] = observer;
     setTimeout(() => observer.disconnect(), 10 * 60 * 1000);
   }
 }"#;
@@ -490,7 +535,27 @@ pub(crate) fn sign_in_script(login: &str, email: &str, password: Option<String>)
         return Ok(None);
     }
     validate(&fields)?;
-    fill_script(&FillPayload { fields: &fields, image: None, password, watch: true, replace: false, sign_in_only: true }).map(Some)
+    fill_script(&FillPayload { fields: &fields, image: None, password, watch: true, replace: false, sign_in_only: true, note: None }).map(Some)
+}
+
+const MAX_NOTE_CHARS: usize = 300;
+
+/// The fill for a brand's profile-edit window: name, bio, website, keywords and picture, replacing what
+/// the page shows (each field once), on every step of the editor. It never presses Save.
+pub(crate) fn profile_edit_script(fields: &FormFields, image_path: Option<&str>, note: &str) -> Result<String, String> {
+    validate(fields)?;
+    if note.chars().count() > MAX_NOTE_CHARS {
+        return Err("A form value is too long.".into());
+    }
+    let image = match image_path.filter(|path| !path.is_empty()) {
+        Some(path) => {
+            let (name, mime, bytes) = read_image(path)?;
+            Some(ImagePayload { name, mime, data: STANDARD.encode(bytes) })
+        }
+        None => None,
+    };
+    let note = (!note.is_empty()).then(|| note.to_owned());
+    fill_script(&FillPayload { fields, image, password: None, watch: true, replace: true, sign_in_only: false, note })
 }
 
 #[tauri::command]
@@ -532,7 +597,7 @@ pub fn fill_site_form(
     };
     let watch = keep_filling.unwrap_or(false);
     let replace = replace.unwrap_or(false);
-    let script = fill_script(&FillPayload { fields: &fields, image, password, watch, replace, sign_in_only: false })?;
+    let script = fill_script(&FillPayload { fields: &fields, image, password, watch, replace, sign_in_only: false, note: None })?;
     if still_loading {
         remember(&window_label, Some(script));
         return Ok(());
@@ -585,7 +650,7 @@ mod tests {
             bio: Some("Quote \" and </script> stay data".into()),
             ..Default::default()
         };
-        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: true, sign_in_only: false }).unwrap();
+        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: true, sign_in_only: false, note: None }).unwrap();
         assert!(script.contains(r#""replace":true"#));
         assert!(script.contains(r#""bio":"Quote \" and </script> stay data""#));
         assert!(!script.contains("\"email\""));
@@ -615,7 +680,7 @@ mod tests {
     fn developer_app_details_are_accepted() {
         let fields: FormFields = serde_json::from_value(serde_json::json!({ "appName": "SocialSpace", "redirectUri": "https://localhost/socialspace/tiktok" })).unwrap();
         assert!(validate(&fields).is_ok());
-        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: false, sign_in_only: false }).unwrap();
+        let script = fill_script(&FillPayload { fields: &fields, image: None, password: None, watch: false, replace: false, sign_in_only: false, note: None }).unwrap();
         assert!(script.contains("\"redirectUri\":\"https://localhost/socialspace/tiktok\""));
         assert!(platform_host(&"https://developers.facebook.com/apps/".parse().unwrap()));
         assert!(platform_host(&"https://console.cloud.google.com/apis/credentials".parse().unwrap()));

@@ -10,7 +10,8 @@ import { useVideoGenerations } from './useVideoGenerations';
 import { publishVideoToInstagram, useBrandInstagram, type BrandInstagram } from './useBrandInstagram';
 import { isLocalVideo, openVideoFile, showVideoInFolder, videoPreviewUrl } from './videoFileService';
 import { detailProblems, detailsOf, formatMs, newPost, hashtagText, LIMITS, parseHashtags, postText, startingPost, STAGES, videoStage, YOUTUBE_TITLE_LIMIT, type Stage } from './postDetails';
-import { suggestPost } from './assistant/postSuggest';
+import { cachedPostSuggestion, suggestPost, type PostSuggestion } from './assistant/postSuggest';
+import { GhostInput, GhostTextarea } from './GhostText';
 import { useConfirm } from './ConfirmDialog';
 import { openInstagramPost } from './instagramService';
 import PartnerReviewControls from './PartnerReviewControls';
@@ -415,6 +416,7 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
   const [details, setDetails] = useState<PostDetails>(start.details);
   const [saveDefaults, setSaveDefaults] = useState(!category.defaults);
   const [suggesting, setSuggesting] = useState(false);
+  const [ghost, setGhost] = useState<PostSuggestion | null>(null);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const set = (change: Partial<PostDetails>) => setDetails((current) => ({ ...current, ...change }));
@@ -426,6 +428,15 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
   const automatic = waiting.includes('instagram') && canPostAutomatically(video, socials, instagram, !!onApprove);
   const limit = Math.min(...(socials.length ? socials : ['instagram' as Platform]).map((platform) => LIMITS[platform].text));
 
+  // An empty description or hashtags box shows Grok's suggestion in grey (Tab takes it), fetched once per video.
+  const needsGhost = !caption.trim() || !tags.trim();
+  useEffect(() => {
+    if (!needsGhost) return;
+    let live = true;
+    cachedPostSuggestion(video.id, { brand: brandName, category: category.name, title: video.title, prompt: video.prompt, socials: socials.map((platform) => getPlatform(platform).name), currentHashtags: parseHashtags(tags), limit })
+      .then((idea) => { if (live) setGhost(idea); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [video.id]);
   async function suggest() {
     if (suggesting) return;
     setSuggesting(true); setError('');
@@ -453,9 +464,9 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
   return <form className="card library-panel post-panel" aria-label={`Post ${video.title}`} onSubmit={(event) => void save(event)}>
     <div className="post-panel-head"><label htmlFor={id('caption')}>Description</label>
       <button type="button" className="ghost-button small-button" disabled={suggesting} onClick={() => void suggest()}>{suggesting ? <><Loader2 size={14} className="spin"/> Writing…</> : <><Sparkles size={14}/> Suggest with AI</>}</button></div>
-    <textarea id={id('caption')} rows={3} maxLength={5000} value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="What the video is about. It goes out as the caption, and as the description on YouTube."/>
+    <GhostTextarea id={id('caption')} rows={3} maxLength={5000} value={caption} suggestion={ghost?.description} onAccept={setCaption} onChange={(event) => setCaption(event.target.value)} placeholder="What the video is about. It goes out as the caption, and as the description on YouTube."/>
     <label htmlFor={id('tags')}>Hashtags</label>
-    <input id={id('tags')} value={tags} onChange={(event) => setTags(event.target.value)} onBlur={() => setTags(hashtagText(parseHashtags(tags)))} placeholder="#bunny #cute #snow"/>
+    <GhostInput id={id('tags')} value={tags} suggestion={ghost?.hashtags.length ? hashtagText(ghost.hashtags) : undefined} onAccept={setTags} onChange={(event) => setTags(event.target.value)} onBlur={() => setTags(hashtagText(parseHashtags(tags)))} placeholder="#bunny #cute #snow"/>
     <p className="library-hint">{parseHashtags(tags).length} hashtags · {text.length} characters{socials.length ? ` (limits: ${socials.map((platform) => `${getPlatform(platform).name} ${LIMITS[platform].text.toLocaleString()}`).join(', ')})` : ''}. Hashtags go after the description.</p>
     <label className="check-row"><input type="checkbox" checked={saveDefaults} onChange={(event) => setSaveDefaults(event.target.checked)}/> Start new {category.name} videos with this description and these hashtags</label>
     {socials.includes('youtube') && <><label htmlFor={id('yt-title')}>YouTube title</label><input id={id('yt-title')} maxLength={YOUTUBE_TITLE_LIMIT} value={details.youtubeTitle} onChange={(event) => set({ youtubeTitle: event.target.value })}/></>}

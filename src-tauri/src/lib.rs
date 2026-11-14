@@ -207,6 +207,9 @@ struct Account {
     /// The account's own ID on the social (e.g. the Instagram account ID), when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     platform_id: Option<String>,
+    /// Channel keywords or tags for the profile (YouTube's channel keywords).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    keywords: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -538,6 +541,7 @@ pub fn run() {
             autofill::fill_site_form,
             posting::open_posting_window,
             posting::open_profile_page,
+            posting::open_profile_editor,
             sign_in_state::posting_sign_ins,
             autofill::choose_image_file,
             autofill::load_image_preview,
@@ -617,6 +621,7 @@ mod tests {
             birthday: String::new(),
             brand_id: None,
             platform_id: None,
+            keywords: vec![],
         }
     }
 
@@ -670,6 +675,18 @@ mod tests {
         assert!(validate_workspace(&workspace).is_ok());
         workspace.channels[0].platform = Platform::Youtube;
         assert!(validate_workspace(&workspace).is_err());
+    }
+
+    #[test]
+    fn profile_keywords_are_optional_and_kept() {
+        let mut old = account("one");
+        let json = serde_json::to_string(&old).unwrap();
+        assert!(!json.contains("keywords"));
+        assert_eq!(serde_json::from_str::<Account>(&json).unwrap(), old);
+        old.keywords = vec!["massage".into(), "relaxation".into()];
+        let json = serde_json::to_string(&old).unwrap();
+        assert!(json.contains(r#""keywords":["massage","relaxation"]"#));
+        assert_eq!(serde_json::from_str::<Account>(&json).unwrap(), old);
     }
 
     #[test]

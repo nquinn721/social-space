@@ -1,6 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { Platform } from './model';
+import type { FormFields } from './profileService';
 
 /** One video going up on one social through its own upload page, in an app window. */
 export type PostRequest = {
@@ -22,6 +23,13 @@ export async function onPostingUpdate(handler: (update: PostingUpdate) => void):
 /** Opens a brand profile's public page (its live videos): in a Social Space window signed in as the brand, or the default browser. */
 export async function openProfilePage(request: { platform: Platform; brandId: string; accountId?: string; handle: string; email: string; inBrowser: boolean }): Promise<void> {
   desktopOnly(); return invoke('open_profile_page', { request });
+}
+
+/** What a brand profile's editor gets filled with: the profile's own name, bio, website and keywords, and its picture. */
+export type ProfileEditRequest = { platform: Platform; brandId: string; accountId?: string; handle: string; email: string; fields: FormFields; imagePath?: string };
+/** Opens the profile's editor (picture, name, bio) in a Social Space window signed in as the brand, filled for Nate to check and save. */
+export async function openProfileEditor(request: ProfileEditRequest): Promise<string> {
+  desktopOnly(); return invoke('open_profile_editor', { request });
 }
 
 /** Whether a brand's window folder is signed in to a social on this PC, and as whom (when the page showed it). */

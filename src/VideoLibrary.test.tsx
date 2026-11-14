@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import VideoLibrary, { categoryProgress } from './VideoLibrary';
@@ -28,7 +28,7 @@ vi.mock('./videoSourcesService', () => ({
 }));
 vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(async () => null), publishInstagramReelFile: vi.fn(), openInstagramPost: vi.fn(async () => {}) }));
 import * as instagram from './instagramService';
-vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }) }));
+vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }), cachedPostSuggestion: vi.fn(async () => { throw new Error('offline'); }) }));
 import * as ai from './assistant/postSuggest';
 const mocked = vi.mocked(sources);
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -293,6 +293,23 @@ describe('post details', () => {
     expect(ai.suggestPost).toHaveBeenCalledWith(expect.objectContaining({ brand: 'Massage With Mia', category: 'Rabbit', title: 'Bunny hop' }));
     expect(within(row).getByLabelText('Description')).toHaveValue('Snow day for this bunny');
     expect(within(row).getByLabelText('Hashtags')).toHaveValue('#bunny #snow');
+  });
+
+  it('shows the Grok suggestion in grey in an empty description, and Tab takes it', async () => {
+    vi.mocked(ai.cachedPostSuggestion).mockResolvedValueOnce({ description: 'Snow day for this bunny', hashtags: ['bunny', 'snow'] });
+    const { user } = setup({ ...base, videos: [{ ...bunny, caption: '' }] });
+    const row = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(row).getByRole('button', { name: /Edit post/ }));
+    const description = within(row).getByLabelText('Description');
+    await waitFor(() => expect(description).toHaveAttribute('placeholder', 'Snow day for this bunny'));
+    expect(description).toHaveValue('');
+    description.focus();
+    await user.keyboard('{Tab}');
+    expect(description).toHaveValue('Snow day for this bunny');
+    const hashtags = within(row).getByLabelText('Hashtags');
+    expect(hashtags).toHaveAttribute('placeholder', '#bunny #snow');
+    await user.type(hashtags, '#mine');
+    expect(hashtags).toHaveValue('#mine');
   });
 
   it('fills in a new post with AI by itself', async () => {

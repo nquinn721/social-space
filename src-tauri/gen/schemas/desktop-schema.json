@@ -603,6 +603,12 @@
           "markdownDescription": "Enables the open_posting_window command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_profile_editor command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-profile-editor",
+          "markdownDescription": "Enables the open_profile_editor command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_profile_page command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-profile-page",
@@ -1327,6 +1333,12 @@
           "type": "string",
           "const": "deny-open-posting-window",
           "markdownDescription": "Denies the open_posting_window command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the open_profile_editor command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-profile-editor",
+          "markdownDescription": "Denies the open_profile_editor command without any pre-configured scope."
         },
         {
           "description": "Denies the open_profile_page command without any pre-configured scope.",
