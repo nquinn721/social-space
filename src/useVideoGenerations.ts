@@ -9,7 +9,8 @@ export const POLL_MS = 15_000;
 const FAILED = /fail|expire|error|cancel|reject/i;
 const MAX_TITLE = 60;
 
-export type MakeRequest = { category: VideoCategory; brandName: string; prompt: string; title: string; sourceId: string; aspectRatio: string; duration: number };
+/** references: character pictures for the source. post: fields the new video starts with, e.g. its series and caption. */
+export type MakeRequest = { category: VideoCategory; brandName: string; prompt: string; title: string; sourceId: string; aspectRatio: string; duration: number; references?: string[]; post?: Partial<Pick<Video, 'caption' | 'seriesId' | 'episode'>> };
 type Save = (next: Workspace, message: string) => Promise<boolean | undefined>;
 
 /** A short title from the first words of a prompt. */
@@ -73,10 +74,10 @@ export function useVideoGenerations(workspace: Workspace, onSave: Save) {
 
   /** Sends the prompt to the source and adds the video to the category right away, marked as being made. */
   async function make(request: MakeRequest) {
-    const started = await generateVideo(request.sourceId, request.prompt, request.aspectRatio, request.duration);
+    const started = await generateVideo(request.sourceId || null, request.prompt, request.aspectRatio, request.duration, request.references);
     const title = request.title.trim() || titleFromPrompt(request.prompt);
     const video: Video = {
-      id: crypto.randomUUID(), brandId: request.category.brandId, categoryId: request.category.id, title, mediaSource: '', posted: [], createdAt: Date.now(), ...newPost(request.category, true),
+      id: crypto.randomUUID(), brandId: request.category.brandId, categoryId: request.category.id, title, mediaSource: '', posted: [], createdAt: Date.now(), ...newPost(request.category, true), ...request.post,
       generation: { sourceId: started.sourceId, sourceName: started.sourceName, provider: started.provider, taskId: started.id, prompt: request.prompt, status: 'working' },
     };
     const current = latest.current;

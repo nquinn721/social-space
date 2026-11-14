@@ -15,9 +15,10 @@ import { isLocalVideo } from './videoFileService';
 export type SharedWorkspace = Pick<Workspace, 'businessName' | 'brands' | 'accounts' | 'channels'> & {
   categories: NonNullable<Workspace['categories']>; setup: Record<string, number>;
   videos: NonNullable<Workspace['videos']>; developerLogins: NonNullable<Workspace['developerLogins']>;
+  series: NonNullable<Workspace['series']>;
 };
 
-const LISTS = ['brands', 'accounts', 'channels', 'categories', 'videos'] as const;
+const LISTS = ['brands', 'accounts', 'channels', 'categories', 'videos', 'series'] as const;
 type ListKey = typeof LISTS[number];
 type Item = { id: string };
 
@@ -26,7 +27,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function sharedOf(workspace: Workspace): SharedWorkspace {
   return {
     businessName: workspace.businessName, brands: workspace.brands, accounts: workspace.accounts, channels: workspace.channels,
-    categories: workspace.categories ?? [], setup: workspace.setup ?? {}, developerLogins: workspace.developerLogins ?? {},
+    categories: workspace.categories ?? [], setup: workspace.setup ?? {}, developerLogins: workspace.developerLogins ?? {}, series: workspace.series ?? [],
     // A file on this PC means nothing on the other; a web link does.
     videos: (workspace.videos ?? []).map((video) => (isLocalVideo(video.mediaSource) ? { ...video, mediaSource: '' } : video)),
   };
@@ -65,6 +66,7 @@ export function mergeWorkspaces(base: Workspace, local: Workspace, remote: Works
   for (const key of LISTS) {
     (merged as Record<ListKey, Item[]>)[key] = mergeList<Item>(base[key] ?? [], local[key] ?? [], remote[key] ?? []);
   }
+  if (!merged.series?.length) delete merged.series;
   const setup = mergeRecord(base.setup ?? {}, local.setup ?? {}, remote.setup ?? {});
   if (Object.keys(setup).length) merged.setup = setup; else delete merged.setup;
   const logins = mergeRecord(base.developerLogins ?? {}, local.developerLogins ?? {}, remote.developerLogins ?? {});
@@ -104,6 +106,7 @@ export function adoptRemoteIds(local: Workspace, remote: SharedWorkspace): Works
     channels: local.channels.map((channel) => channel.accountId && !accountIds.has(channel.accountId) ? { ...channel, accountId: null } : channel),
     categories,
     videos: (local.videos ?? []).map((video) => ({ ...video, brandId: brand(video.brandId)!, categoryId: categoryIds.get(video.categoryId) ?? video.categoryId })),
+    ...(local.series ? { series: local.series.map((series) => ({ ...series, brandId: brand(series.brandId)!, categoryId: categoryIds.get(series.categoryId) ?? series.categoryId })) } : {}),
   };
 }
 
@@ -121,6 +124,20 @@ export function withShared(local: Workspace, shared: SharedWorkspace): Workspace
   });
   const brands = [...shared.brands];
   const categories = [...shared.categories];
+  // A series this PC's episodes still use comes back, like their category.
+  const series = [...(shared.series ?? [])];
+  for (const video of videos) {
+    if (video.seriesId && !series.some((item) => item.id === video.seriesId)) {
+      const old = (local.series ?? []).find((item) => item.id === video.seriesId);
+      if (old) series.push(old);
+    }
+  }
+  for (const item of series) {
+    if (!categories.some((category) => category.id === item.categoryId)) {
+      const old = (local.categories ?? []).find((category) => category.id === item.categoryId);
+      if (old) categories.push(old);
+    }
+  }
   const restoreBrand = (id: string | undefined) => {
     if (!id || brands.some((brand) => brand.id === id)) return;
     const old = local.brands.find((brand) => brand.id === id);
@@ -133,12 +150,14 @@ export function withShared(local: Workspace, shared: SharedWorkspace): Workspace
     }
   }
   for (const category of categories) restoreBrand(category.brandId);
+  for (const item of series) restoreBrand(item.brandId);
   for (const account of shared.accounts) restoreBrand(account.brandId);
   const accountIds = new Set(shared.accounts.map((account) => account.id));
   const channels = shared.channels.map((channel) => channel.accountId && !accountIds.has(channel.accountId) ? { ...channel, accountId: null } : channel);
   const next: Workspace = { ...local, businessName: shared.businessName, brands, accounts: shared.accounts, channels, categories, videos };
   if (Object.keys(shared.setup).length) next.setup = shared.setup; else delete next.setup;
   if (Object.keys(shared.developerLogins ?? {}).length) next.developerLogins = shared.developerLogins; else delete next.developerLogins;
+  if (series.length) next.series = series; else delete next.series;
   return next;
 }
 
@@ -147,8 +166,10 @@ export function mergeShared(base: SharedWorkspace | null, local: Workspace, remo
   if (!remote) return local;
   const mine = base ? local : adoptRemoteIds(local, remote);
   // On the first sync the shared business name is kept, unless nothing has been shared yet.
-  // Payloads from before 0.16 have no videos or developer logins; those count as empty.
-  const from = base ?? { businessName: mine.businessName, brands: [], accounts: [], channels: [], categories: [], setup: {}, videos: [], developerLogins: {} };
-  const merged = mergeWorkspaces(from, sharedOf(mine), { ...remote, businessName: remote.businessName || mine.businessName });
+  // Payloads from before 0.16 have no videos or developer logins (and before 0.25 no series); those count as empty.
+  const from = base ?? { businessName: mine.businessName, brands: [], accounts: [], channels: [], categories: [], setup: {}, videos: [], developerLogins: {}, series: [] };
+  // An app from before series sends none: its side counts as unchanged, so this PC's series are kept.
+  const theirs = { ...remote, businessName: remote.businessName || mine.businessName, series: remote.series ?? from.series ?? [] };
+  const merged = mergeWorkspaces(from, sharedOf(mine), theirs);
   return withShared(mine, sharedOf(merged));
 }

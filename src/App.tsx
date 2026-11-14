@@ -29,7 +29,7 @@ type NavItem = { id: View; label: string; icon: typeof Home };
 const NAV_ITEMS: NavItem[] = [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }];
 const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', inbox: 'Inbox', updates: 'Updates', settings: 'Settings' };
 /** Which brand page is open, and on which tab. */
-export type OpenBrand = { id: string; tab: 'content' | 'accounts' } | null;
+export type OpenBrand = { id: string; tab: 'content' | 'series' | 'accounts' } | null;
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
@@ -154,7 +154,7 @@ function App() {
     const warning = live.length ? ` Its ${live.length} live ${live.length === 1 ? 'profile stays' : 'profiles stay'} on the socials, but the saved username and password here are deleted too.` : '';
     if (!window.confirm(`Delete ${brand.name} and its ${profiles.length} ${profiles.length === 1 ? 'profile' : 'profiles'} from the app?${warning}`)) return;
     const ids = new Set(profiles.map((account) => account.id));
-    if (await persist({ ...workspace, brands: workspace.brands.filter((item) => item.id !== brand.id), accounts: workspace.accounts.filter((account) => !ids.has(account.id)), categories: (workspace.categories ?? []).filter((category) => category.brandId !== brand.id), videos: (workspace.videos ?? []).filter((video) => video.brandId !== brand.id), channels: workspace.channels.map((channel) => channel.accountId && ids.has(channel.accountId) ? { ...channel, accountId: null } : channel) }, `Deleted ${brand.name}.`)) {
+    if (await persist({ ...workspace, brands: workspace.brands.filter((item) => item.id !== brand.id), accounts: workspace.accounts.filter((account) => !ids.has(account.id)), categories: (workspace.categories ?? []).filter((category) => category.brandId !== brand.id), videos: (workspace.videos ?? []).filter((video) => video.brandId !== brand.id), series: (workspace.series ?? []).filter((series) => series.brandId !== brand.id), channels: workspace.channels.map((channel) => channel.accountId && ids.has(channel.accountId) ? { ...channel, accountId: null } : channel) }, `Deleted ${brand.name}.`)) {
       for (const id of ids) void deleteAccountPassword(id).catch(() => undefined);
     }
   }

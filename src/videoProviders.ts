@@ -7,12 +7,14 @@ export type ProviderInfo = {
   /** Model and resolution used for text-to-video, shown under the prompt. */
   model: string;
   durations: number[]; defaultDuration: number;
+  /** Takes character pictures with a clip, so a series' characters look the same in every part. */
+  references: boolean;
 };
 
 /** Branding and copy for each video provider. Colors live in videoSources.css under `.provider-<id>`. */
 export const PROVIDERS: Record<VideoProvider, ProviderInfo> = {
-  kling: { id: 'kling', name: 'Kling AI', tagline: 'Text and image to video', logo: klingLogo, model: 'Kling 3.0 Turbo at 720p', durations: [5, 10], defaultDuration: 5, keyHelp: 'Create a key in the Kling AI developer console. It is shown only once, so paste it here right away.' },
-  grok: { id: 'grok', name: 'Grok Imagine', tagline: 'Video from xAI', logo: grokLogo, model: 'Grok Imagine video at 720p', durations: [5, 8, 10, 15], defaultDuration: 8, keyHelp: 'Create a key in the xAI console with access to the video models.' },
+  kling: { id: 'kling', name: 'Kling AI', tagline: 'Text and image to video', logo: klingLogo, model: 'Kling 3.0 Turbo at 720p', durations: [5, 10], defaultDuration: 5, references: false, keyHelp: 'Create a key in the Kling AI developer console. It is shown only once, so paste it here right away.' },
+  grok: { id: 'grok', name: 'Grok Imagine', tagline: 'Video from xAI', logo: grokLogo, model: 'Grok Imagine video at 720p', durations: [5, 8, 10, 15], defaultDuration: 8, references: true, keyHelp: 'Create a key in the xAI console with access to the video models.' },
 };
 export const PROVIDER_LIST = Object.values(PROVIDERS);
 export const MAX_SOURCE_NAME = 60;

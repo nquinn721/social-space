@@ -463,6 +463,7 @@ mod tests {
             videos: vec![],
             setup: Default::default(),
             developer_logins: Default::default(),
+            series: vec![],
             channels: vec![crate::Channel {
                 id: "channel-1".into(),
                 platform: crate::Platform::Instagram,

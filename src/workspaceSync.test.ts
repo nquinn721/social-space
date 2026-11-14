@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Account, Workspace } from './model';
+import type { Account, Series, Workspace } from './model';
 import { mergeList, mergeShared, mergeWorkspaces, sharedOf, type SharedWorkspace } from './workspaceSync';
 
 const account = (id: string, extra: Partial<Account> = {}): Account => ({ id, platform: 'instagram', label: 'Animals', handle: id, status: 'active', notes: '', brandId: 'b1', ...extra });
@@ -83,6 +83,26 @@ describe('mergeShared', () => {
     expect(mergeShared(shared(base), base, remote).categories?.map((item) => item.id)).toEqual(['c1']);
   });
 
+  const story: Series = { id: 's1', brandId: 'b1', categoryId: 'c1', title: 'Lost Key', premise: 'p', bible: 'b', characters: [{ id: 'k', name: 'Pip', description: 'rabbit', imageFile: 'a.jpg' }], episodes: [{ id: 'e1', number: 1, title: 'One', summary: 's' }], aspectRatio: '9:16', duration: 10, createdAt: 1 };
+  const withStory: Workspace = { ...base, series: [story], videos: [{ ...base.videos![0], seriesId: 's1', episode: 1 }] };
+
+  it('shares series and merges a script written on the other PC', () => {
+    const remote = shared({ ...withStory, series: [{ ...story, episodes: [{ ...story.episodes[0], script: 'from partner' }] }] });
+    const merged = mergeShared(shared(withStory), withStory, remote);
+    expect(merged.series?.[0].episodes[0].script).toBe('from partner');
+    expect(merged.series?.[0].characters[0].imageFile).toBe('a.jpg');
+  });
+
+  it('keeps a series this PC\'s episodes use when the other PC deleted it', () => {
+    const remote = shared({ ...withStory, series: [] });
+    expect(mergeShared(shared(withStory), withStory, remote).series?.map((item) => item.id)).toEqual(['s1']);
+  });
+
+  it('keeps this PC\'s series when the other PC runs an app from before series', () => {
+    const { series: _s, ...old } = shared(withStory);
+    expect(mergeShared(shared(withStory), withStory, old as SharedWorkspace).series?.map((item) => item.id)).toEqual(['s1']);
+  });
+
   it('unlinks a channel whose account was deleted on the other PC', () => {
     const local = { ...base, channels: [{ id: 'ch1', platform: 'instagram' as const, name: 'Main', handle: 'a2', accountId: 'a2', notes: '' }] };
     const remote = shared({ ...local, accounts: [account('a1')] });
@@ -110,7 +130,7 @@ describe('mergeShared', () => {
 
 describe('sharedOf', () => {
   it('shares every part of the workspace (a new field fails to compile here until it is shared)', () => {
-    const full: Required<Workspace> = { ...base, categories: base.categories!, videos: base.videos!, setup: { 'x:app:plan': 1 }, developerLogins: { x: { email: 'a@b.c' } } };
+    const full: Required<Workspace> = { ...base, categories: base.categories!, videos: base.videos!, setup: { 'x:app:plan': 1 }, developerLogins: { x: { email: 'a@b.c' } }, series: [] };
     expect(Object.keys(sharedOf(full)).sort()).toEqual(Object.keys(full).sort());
   });
 });

@@ -17,7 +17,20 @@ struct CreateVideo<'a> {
     aspect_ratio: &'a str,
     duration: u8,
     resolution: &'static str,
+    /// Pictures of the characters (data URLs), named in the prompt as <IMAGE_0>, <IMAGE_1>, ...
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    reference_images: Vec<ImageUrl>,
 }
+
+#[derive(Serialize)]
+struct ImageUrl {
+    url: String,
+}
+
+/// Most reference pictures grok-imagine-video takes in one request.
+pub(crate) const MAX_REFERENCES: usize = 7;
+/// Longest clip grok-imagine-video makes when it is given reference pictures.
+pub(crate) const MAX_REFERENCE_SECONDS: u8 = 10;
 
 #[derive(Deserialize)]
 struct Created {
@@ -94,9 +107,21 @@ async fn decode<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> 
     response.json().await.map_err(|_| "xAI returned an unexpected response.".into())
 }
 
-/// Starts a Grok Imagine video. The caller has already validated the prompt.
-pub async fn create(key: &str, prompt: &str, aspect_ratio: &str, duration: u8) -> Result<VideoTask, String> {
-    let body = CreateVideo { model: MODEL, prompt: prompt.trim(), aspect_ratio, duration, resolution: "720p" };
+fn request<'a>(prompt: &'a str, aspect_ratio: &'a str, duration: u8, references: Vec<String>) -> Result<CreateVideo<'a>, String> {
+    if references.len() > MAX_REFERENCES {
+        return Err(format!("Grok takes at most {MAX_REFERENCES} character pictures in one clip."));
+    }
+    if !references.is_empty() && duration > MAX_REFERENCE_SECONDS {
+        return Err(format!("Clips with character pictures can be at most {MAX_REFERENCE_SECONDS} seconds on Grok."));
+    }
+    let reference_images = references.into_iter().map(|url| ImageUrl { url }).collect();
+    Ok(CreateVideo { model: MODEL, prompt: prompt.trim(), aspect_ratio, duration, resolution: "720p", reference_images })
+}
+
+/// Starts a Grok Imagine video, guided by character pictures (data URLs) when given.
+/// The caller has already validated the prompt.
+pub async fn create(key: &str, prompt: &str, aspect_ratio: &str, duration: u8, references: Vec<String>) -> Result<VideoTask, String> {
+    let body = request(prompt, aspect_ratio, duration, references)?;
     let response = api_client()?
         .post(format!("{API_BASE}/videos/generations"))
         .bearer_auth(key)
@@ -127,11 +152,15 @@ mod tests {
 
     #[test]
     fn request_matches_the_documented_shape() {
-        let body = CreateVideo { model: MODEL, prompt: "A lake", aspect_ratio: "9:16", duration: 8, resolution: "720p" };
+        let body = request("A lake", "9:16", 8, vec![]).unwrap();
         assert_eq!(
             serde_json::to_value(body).unwrap(),
             serde_json::json!({"model": "grok-imagine-video", "prompt": "A lake", "aspect_ratio": "9:16", "duration": 8, "resolution": "720p"})
         );
+        let with_cast = request("<IMAGE_0> walks in", "9:16", 10, vec!["data:image/jpeg;base64,AA".into()]).unwrap();
+        assert_eq!(serde_json::to_value(with_cast).unwrap()["reference_images"], serde_json::json!([{"url": "data:image/jpeg;base64,AA"}]));
+        assert!(request("x", "9:16", 15, vec!["a".into()]).is_err(), "references cap the clip at 10 s");
+        assert!(request("x", "9:16", 8, vec!["a".into(); MAX_REFERENCES + 1]).is_err());
     }
 
     #[test]

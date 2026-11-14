@@ -140,7 +140,7 @@ describe('video library', () => {
     await user.type(await screen.findByLabelText('Describe the video'), 'A white rabbit hops through a sunny garden');
     expect(screen.getByLabelText('Made with')).toHaveValue('k1');
     await user.click(screen.getByRole('button', { name: 'Make video' }));
-    expect(mocked.generateVideo).toHaveBeenCalledWith('k1', 'A white rabbit hops through a sunny garden', '9:16', 5);
+    expect(mocked.generateVideo).toHaveBeenCalledWith('k1', 'A white rabbit hops through a sunny garden', '9:16', 5, undefined);
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [bunny, expect.objectContaining({ title: 'A white rabbit hops through a sunny garden', categoryId: 'rabbit', generation: expect.objectContaining({ taskId: 'task-1', sourceId: 'k1', status: 'working' }) })] }), expect.stringContaining('Main Kling is making'));
   });
 
@@ -336,5 +336,17 @@ describe('content stages', () => {
     expect(screen.queryByRole('listitem', { name: 'Bunny hop' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Posted 1' }));
     expect(screen.getByRole('listitem', { name: 'Bunny hop' })).toBeInTheDocument();
+  });
+
+  it('labels series parts and holds a part back on a social until the part before it is up', () => {
+    const story = { id: 's', brandId: 'mia', categoryId: 'rabbit', title: 'Knots', premise: '', bible: '', characters: [], episodes: [1, 2].map((number) => ({ id: `e${number}`, number, title: '', summary: '' })), aspectRatio: '9:16', duration: 10, createdAt: 1 };
+    const one: Video = { ...bunny, id: 'p1', title: 'Knots: Part 1 of 2', posted: ['instagram'], seriesId: 's', episode: 1 };
+    const two: Video = { ...bunny, id: 'p2', title: 'Knots: Part 2 of 2', posted: [], seriesId: 's', episode: 2, createdAt: 2 };
+    setup({ ...base, accounts: [profile('1', 'instagram'), profile('2', 'tiktok')], videos: [one, two], series: [story] });
+    const second = screen.getByRole('listitem', { name: 'Knots: Part 2 of 2' });
+    expect(within(second).getByText('Part 2 of 2')).toBeInTheDocument();
+    const tiles = within(second).getByRole('group', { name: 'Where it goes' });
+    expect(within(tiles).getByText('After Part 1')).toBeInTheDocument();
+    expect(within(tiles).queryByRole('button', { name: 'Post on TikTok' })).not.toBeInTheDocument();
   });
 });

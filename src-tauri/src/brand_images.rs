@@ -22,11 +22,12 @@ pub fn valid_name(name: &str) -> bool {
     stem.len() == 64 && stem.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) && matches!(extension, "jpg" | "png")
 }
 
-/// Every picture name a shared workspace refers to.
+/// Every picture name a shared workspace refers to: brand and profile pictures, and series characters' reference pictures.
 pub fn refs_in(workspace: &Value) -> BTreeSet<String> {
     let brands = workspace["brands"].as_array().into_iter().flatten().flat_map(|brand| [&brand["image"]["file"], &brand["image"]["banner"]]);
     let accounts = workspace["accounts"].as_array().into_iter().flatten().map(|account| &account["imageFile"]);
-    brands.chain(accounts).filter_map(Value::as_str).filter(|name| valid_name(name)).map(String::from).collect()
+    let characters = workspace["series"].as_array().into_iter().flatten().flat_map(|series| series["characters"].as_array().into_iter().flatten()).map(|character| &character["imageFile"]);
+    brands.chain(accounts).chain(characters).filter_map(Value::as_str).filter(|name| valid_name(name)).map(String::from).collect()
 }
 
 pub fn folder(data_dir: &Path) -> PathBuf {
@@ -138,8 +139,10 @@ mod tests {
         let a = name_of(JPG).unwrap();
         let b = name_of(&[0xFF, 0xD8, 0xFF, 9]).unwrap();
         let c = name_of(b"\x89PNG..").unwrap();
-        let workspace = json!({ "brands": [{ "id": "b1", "image": { "file": a, "banner": b } }, { "id": "b2" }], "accounts": [{ "id": "a1", "imageFile": c }, { "id": "a2", "imageFile": "C:\\nope.jpg" }] });
-        assert_eq!(refs_in(&workspace), [a, b, c].into_iter().collect());
+        let d = name_of(&[0xFF, 0xD8, 0xFF, 7]).unwrap();
+        let workspace = json!({ "brands": [{ "id": "b1", "image": { "file": a, "banner": b } }, { "id": "b2" }], "accounts": [{ "id": "a1", "imageFile": c }, { "id": "a2", "imageFile": "C:\\nope.jpg" }],
+            "series": [{ "id": "s", "characters": [{ "id": "k", "imageFile": d }, { "id": "k2" }] }] });
+        assert_eq!(refs_in(&workspace), [a, b, c, d].into_iter().collect());
         assert!(refs_in(&json!({})).is_empty());
     }
 

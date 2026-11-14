@@ -18,7 +18,9 @@ import { useBrowserPosting } from './useBrowserPosting';
 import { progressLabel, useBrandStatuses, videoProgress, type SocialStatus, type Tone } from './brandStatus';
 import { API_UPLOADS, postModeNote } from './postingMode';
 import { testModeOf, withPosted } from './appReviews';
+import { earlierPartMissing, videoPartLabel, waitingOnEarlierPart } from './series';
 import './library.css';
+import './series.css';
 
 type Props = {
   workspace: Workspace;
@@ -189,7 +191,8 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
             {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy} disabled={disabled} progress={generations.progress[video.id]}
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
               category={category} brandName={brand.name} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
-              instagram={instagram} onPost={post} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix}/>)}
+              instagram={instagram} onPost={post} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix}
+              part={videoPartLabel(workspace, video)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
           </ul>}
         </>}
         {error && <div className="error-message" role="alert">{error}</div>}
@@ -241,12 +244,14 @@ type BrowserPosting = ReturnType<typeof useBrowserPosting>;
 type RowProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void;
   onSavePost?: (draft: Video, saveDefaults: boolean) => Promise<boolean | undefined>;
   instagram?: BrandInstagram | null; onPost?: (draft: Video, saveDefaults: boolean) => Promise<void>; onConnectInstagram?: () => void;
-  browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void };
+  browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void;
+  /** For a series episode: "Part 2 of 5", and why it can't go up on a social before an earlier part. */
+  part?: string | null; waitingOn?: (platform: Platform) => string | null; earlierPart?: (platform: Platform) => number | null };
 /**
  * One video as a post: its picture and text on the left, and a tile for every social of the brand that
  * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
  */
-function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, onConnectInstagram, browser, marks, statuses, onFix }: RowProps) {
+function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart }: RowProps) {
   const job = video.generation;
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
@@ -268,6 +273,8 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   /** Posting to Instagram goes straight out through the API, after one confirmation. */
   async function approve(draft: Video, saveDefaults: boolean) {
     if (!onPost || !instagram || working) return false;
+    const order = waitingOn?.('instagram');
+    if (order) { setError(order); return false; }
     const problems = detailProblems(draft, socials);
     if (problems.length) { setEditing(true); setError(problems[0]); return false; }
     const caption = postText(draft);
@@ -285,6 +292,8 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   /** Opens the social's upload page with this post filled in, after saving any edits. */
   async function postOnPage(draft: Video, platform: Platform, saveDefaults = false) {
     if (!browser || !onSavePost) return false;
+    const order = waitingOn?.(platform);
+    if (order) { setError(order); return false; }
     const problems = detailProblems(draft, socials);
     if (problems.length) { setEditing(true); setError(problems[0]); return false; }
     setError('');
@@ -310,6 +319,8 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
         <button type="button" className="dest-link quiet" disabled={disabled} aria-label={`Mark as not posted on ${name}`} title={`Mark as not posted on ${name}`} onClick={() => void unmark(platform)}>Undo</button></>;
     } else if (job) {
       tone = 'muted'; line = job.status === 'failed' ? 'No video to post' : 'Waits for the video';
+    } else if (earlierPart?.(platform)) {
+      tone = 'muted'; line = `After Part ${earlierPart(platform)}`;
     } else if (browser?.isAsking(video.id, platform)) {
       tone = 'todo'; line = 'Did it go up?';
       action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
@@ -336,7 +347,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       <VideoThumb video={video} playable={playable} watching={watching} onToggle={() => setWatching(!watching)}/>
       <div className="vcard-body">
         <div className="vcard-top">
-          <div className="library-video-titleline">{playable ? <button type="button" className="library-video-title" onClick={() => setWatching(!watching)}>{video.title}</button> : <strong className="library-video-title">{video.title}</strong>}</div>
+          <div className="library-video-titleline">{part && <span className="series-badge">{part}</span>}{playable ? <button type="button" className="library-video-title" onClick={() => setWatching(!watching)}>{video.title}</button> : <strong className="library-video-title">{video.title}</strong>}</div>
           <span className={`progress-pill state-${done.state}`}>{progressLabel(done)}</span>
           <div className="vcard-tools">
             {!job && onSavePost && <button type="button" className="ghost-button small-button" aria-expanded={editing} onClick={() => setEditing(!editing)}><Pencil size={14}/> Edit post</button>}
