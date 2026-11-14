@@ -173,7 +173,19 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     });
   }
   // A new code shows bottom right even if the page is busy, so it can always be copied.
-  const refill = (code?: string) => { if (code) setCode({ value: code, copied: false }); return run(async () => {
+  // An emailed code is typed into the page and copied straight away, even while the wizard is busy with
+  // something else, so it is never dropped. The toast bottom right still shows it.
+  const enterCode = async (value: string) => {
+    let copied = false;
+    try { await navigator.clipboard.writeText(value); copied = true; } catch { /* clipboard blocked: the toast still has Copy */ }
+    setCode({ value, copied });
+    if (!account || !windowId) return;
+    try {
+      await fillSiteForm(windowId, formFieldsFor(account, value), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
+      setNote(`Entered code ${value}${copied ? ' and copied it' : ''}. Check it, then press the button on the page.`);
+    } catch (reason) { setError(errorText(reason)); }
+  };
+  const refill = (code?: string) => { if (code) return enterCode(code); return run(async () => {
     if (!account || !windowId) return;
     await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: code ? 'ifSaved' : true, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
