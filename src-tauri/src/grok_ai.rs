@@ -315,7 +315,31 @@ mod tests {
         std::fs::write(out.join("grok-live-refined.img"), &refined).unwrap();
     }
 
-    const LIVE_PROMPT: &str = "minimal modern logo mark, a pastel butterfly, flat vector style, centered on a plain background, no text";
+    /// Makes a character picture, then a 5-second Grok clip that uses it as a reference (a series part).
+    /// Costs well under a dollar: `cargo test --lib grok_ai::tests::live_series -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn live_series_clip_uses_a_character_reference_picture() {
+        let key = crate::video_sources::installed_app_xai_key().expect("a Grok video source in the installed app");
+        let picture = make_image(&key, "Character reference sheet of a fictional character named Pip: small white rabbit with a red scarf, soft pastel 3D animation, full figure, plain light background, no text", None).await.unwrap();
+        let (_, mime) = image_kind(&picture).unwrap();
+        let reference = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&picture));
+        let task = crate::grok::create(&key, "Characters: Pip is the character from <IMAGE_0>. Pip hops across a sunny meadow looking for a lost key.", "9:16", 5, vec![reference]).await.unwrap();
+        println!("started {}", task.id);
+        for _ in 0..60 {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let now = crate::grok::fetch(&key, &task.id).await.unwrap();
+            println!("{} {:?}", now.status, now.message);
+            if let Some(url) = now.video_url {
+                println!("video: {url}");
+                return;
+            }
+            assert!(now.status == "pending", "clip failed: {:?}", now.message);
+        }
+        panic!("the clip took more than 10 minutes");
+    }
+
+    const LIVE_PROMPT: &str ="minimal modern logo mark, a pastel butterfly, flat vector style, centered on a plain background, no text";
 
     #[test]
     fn refining_only_accepts_generated_pictures() {

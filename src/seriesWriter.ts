@@ -85,13 +85,27 @@ export function episodeMessages(series: Series, episode: SeriesEpisode): ChatMes
   ];
 }
 
+/** Wait before the one retry when xAI rate limits a burst of calls (e.g. writing every script in a row). */
+export const RATE_LIMIT_RETRY_MS = 30_000;
+const RATE_LIMITED = /rate limiting/i;
+
+/** One Grok call, tried once more after a pause when xAI says it is rate limiting. */
+export async function ask(messages: ChatMessage[], wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))): Promise<ChatMessage> {
+  try { return await chat(loadSettings(), messages, []); }
+  catch (reason) {
+    if (!RATE_LIMITED.test(reason instanceof Error ? reason.message : String(reason))) throw reason;
+    await wait(RATE_LIMIT_RETRY_MS);
+    return chat(loadSettings(), messages, []);
+  }
+}
+
 export async function planSeries(request: PlanRequest): Promise<SeriesPlan> {
-  const reply = await chat(loadSettings(), planMessages(request), []);
+  const reply = await ask(planMessages(request));
   return readPlan(parseJson(reply.content), Math.max(MIN_EPISODES, Math.min(MAX_EPISODES, request.episodes)));
 }
 
 export async function writeEpisode(series: Series, episode: SeriesEpisode): Promise<EpisodeDraft> {
-  const reply = await chat(loadSettings(), episodeMessages(series, episode), []);
+  const reply = await ask(episodeMessages(series, episode));
   return readEpisode(parseJson(reply.content));
 }
 

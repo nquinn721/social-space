@@ -16,5 +16,15 @@
    "src/CreateAccountWizard.tsx": "34fb3741030b",
    "src/signupFlows.ts#SIGNUP_FLOWS": "cf4a4624838c"
   }
+ },
+ {
+  "a": "Each SeriesCharacter has an imageFile (brand-images name, synced). episodeRequest in src/series.ts ties pictured characters to <IMAGE_n>; generate_video takes references (file names), video_gen.rs reads them as data URLs and grok.rs sends reference_images (max 7, clip max 10 s). Kling can't take references, so characters are described in words.",
+  "at": "2026-11-14",
+  "q": "How do series keep characters consistent across clips?",
+  "refs": {
+   "src-tauri/src/grok.rs#request": "a8511ccf0ec8",
+   "src-tauri/src/video_gen.rs#reference_pictures": "eae2d52b29b5",
+   "src/series.ts#episodeRequest": "873f52362241"
+  }
  }
 ]
