@@ -1,0 +1,10 @@
+/* A field with a suggestion: the suggestion shows as grey ghost text until something is typed. */
+.ghost-field { position: relative; display: block; width: 100%; min-width: 0; }
+.ghost-field.has-ghost > input, .ghost-field.has-ghost > textarea { padding-right: 52px; }
+.ghost-field.has-ghost > input::placeholder, .ghost-field.has-ghost > textarea::placeholder { color: var(--text-3); opacity: 0.85; font-style: italic; }
+.ghost-hint {
+  position: absolute; top: 8px; right: 8px; pointer-events: none;
+  font: 600 10.5px/1 ui-monospace, monospace; letter-spacing: 0.3px;
+  color: var(--text-3); background: var(--surface-3); border: 1px solid var(--border-strong);
+  border-radius: 5px; padding: 3px 6px;
+}

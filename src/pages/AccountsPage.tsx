@@ -15,6 +15,7 @@ import BrandCard from '../BrandCard';
 import { useSetupStatus } from '../setupService';
 const NO_ACCOUNTS: Account[] = [];
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
+import BrandProfiles, { type ProfileDraft } from '../BrandProfiles';
 import { BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
@@ -110,6 +111,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     if (!onSave) return false;
     return onSave({ ...workspace, accounts: workspace.accounts.map((item) => item.id === account.id ? { ...item, imageFile } : item) }, message);
   }
+  async function saveProfiles(drafts: ProfileDraft[], message: string) {
+    if (!onSave) return false;
+    const byId = new Map(drafts.map((draft) => [draft.id, draft]));
+    return onSave({ ...workspace, accounts: workspace.accounts.map((item) => { const draft = byId.get(item.id); return draft ? { ...item, bio: draft.bio, keywords: draft.keywords } : item; }) }, message);
+  }
   const [adding, setAdding] = useState(false);
   /** The new profile shares the brand's password, so every social signs in the same way. */
   async function startSignUp(account: Account, siblings: Account[]) {
@@ -187,6 +193,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
         instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
       {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
+      {onSave && <BrandProfiles key={brand.id} brand={brand} accounts={accounts} busy={busy || !loaded} developerLogins={developerLogins} onSave={saveProfiles}/>}
       <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
         onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}

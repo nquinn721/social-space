@@ -26,5 +26,17 @@
    "src-tauri/src/video_gen.rs#reference_pictures": "eae2d52b29b5",
    "src/series.ts#episodeRequest": "873f52362241"
   }
+ },
+ {
+  "a": "BrandProfiles.tsx (brand Accounts tab) saves bios/keywords, then openProfileEditor -> posting.rs open_profile_editor opens the edit page in the brand's signed-in window (open_signed_in, profile_dir) with Posting.profile_script = autofill::profile_edit_script (replace once, watch 10 min, never presses Save). URLs in profile_edit_url: IG accounts/edit, X settings/profile, TikTok @handle (Edit profile), YouTube Studio. Sign-in and profile fills keep separate observers (signInOnly). Grok copy from assistant/profileWriter.ts; ghost text in GhostText.tsx.",
+  "at": "2026-11-14",
+  "q": "How does the app fill a brand's profile editor (picture, bio, keywords) on each social?",
+  "refs": {
+   "src-tauri/src/autofill.rs#profile_edit_script": "60176a7d8469",
+   "src-tauri/src/posting.rs#open_profile_editor": "8e9e7b612a90",
+   "src/BrandProfiles.tsx": "a9706a0bc93b",
+   "src/GhostText.tsx": "227eae99adde",
+   "src/assistant/profileWriter.ts": "baa65c58d1be"
+  }
  }
 ]

@@ -90,6 +90,7 @@ fn main() {
         "fill_site_form",
         "open_posting_window",
         "open_profile_page",
+        "open_profile_editor",
         "posting_sign_ins",
         "choose_image_file",
         "load_image_preview",

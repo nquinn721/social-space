@@ -6,6 +6,8 @@ import { BIO_LIMITS, createAccount, normalizeHandle, getPlatform, PLATFORMS, typ
 import { chooseImageFile, fillSiteForm, formFieldsFor, openPlatformWindow } from './profileService';
 import { BrandMark, errorText, useImagePreview } from './ui';
 import { profilePicturePath } from './brandImageService';
+import { GhostInput, GhostTextarea } from './GhostText';
+import { cachedProfileCopy } from './assistant/profileWriter';
 
 type Props = { account: Account | null; busy: boolean; onClose: () => void; onSave: (account: Account) => Promise<void>; onRemove: (account: Account) => Promise<void>; onSignUp?: (account: Account) => void; loginNote?: string; /** The brand picture this profile uses (its own or the brand's), filled in unless a file is chosen here. */ pictureFile?: string };
 
@@ -26,6 +28,15 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const preview = useImagePreview(imagePath);
+  // An empty bio shows Grok's suggestion for this social in grey; Tab takes it.
+  const [bioGhost, setBioGhost] = useState('');
+  useEffect(() => {
+    if (!account || account.bio?.trim()) return;
+    let live = true;
+    cachedProfileCopy(account.brandId ?? account.id, { brand: account.label, website: account.website, platforms: [account.platform] })
+      .then((copy) => { if (live) setBioGhost(copy.bios[account.platform] ?? ''); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [account?.id]);
   const bioLimit = BIO_LIMITS[platform];
   const disabled = busy || working;
   useEffect(() => {
@@ -112,8 +123,8 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
             <label>Profile image <span>optional</span></label>
             <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{imagePath ? imagePath.split(/[\\/]/).pop() : 'No image chosen'}</span>{imagePath && <button type="button" className="ghost-button small-button" onClick={() => setImagePath('')}>Clear</button>}<button type="button" className="outline-button small-button generate-button" disabled={disabled} aria-expanded={studio} onClick={() => setStudio((open) => !open)}><Wand2 size={13}/> Generate</button><button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void pickImage()}>Choose</button></div>
             {studio && <ProfileImageStudio disabled={disabled} onClose={() => setStudio(false)} onUse={(path) => { setImagePath(path); setStudio(false); }}/>}
-            <label htmlFor="display-name">Display name <span>optional</span></label><input id="display-name" value={displayName} maxLength={120} onChange={(event) => setDisplayName(event.target.value)}/>
-            <label htmlFor="bio">Profile description <span className={`bio-count ${bio.trim().length > bioLimit ? 'over' : ''}`}>{bio.trim().length}/{bioLimit}</span></label><textarea id="bio" value={bio} maxLength={1000} rows={3} onChange={(event) => setBio(event.target.value)}/>
+            <label htmlFor="display-name">Display name <span>optional</span></label><GhostInput id="display-name" value={displayName} suggestion={label.trim()} onAccept={setDisplayName} maxLength={120} onChange={(event) => setDisplayName(event.target.value)}/>
+            <label htmlFor="bio">Profile description <span className={`bio-count ${bio.trim().length > bioLimit ? 'over' : ''}`}>{bio.trim().length}/{bioLimit}</span></label><GhostTextarea id="bio" value={bio} suggestion={platform === account?.platform ? bioGhost : undefined} onAccept={setBio} maxLength={1000} rows={3} onChange={(event) => setBio(event.target.value)}/>
             <label htmlFor="website">Website <span>optional</span></label><input id="website" value={website} maxLength={300} onChange={(event) => setWebsite(event.target.value)}/>
           </div>
           <div className="drawer-section">

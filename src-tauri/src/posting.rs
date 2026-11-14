@@ -226,6 +226,8 @@ struct Posting {
     /// None for a profile window, which only signs in and shows the page.
     config_script: Option<String>,
     sign_in_script: Option<String>,
+    /// A profile-edit window: fills the brand's picture, name, bio and keywords (never on a sign-in page).
+    profile_script: Option<String>,
     file: Option<PathBuf>,
     /// Set once the other PC's sign-in was put into this window's folder.
     shared_session: std::sync::atomic::AtomicBool,
@@ -249,6 +251,9 @@ fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
         }
     }
     if let Some(script) = &posting.config_script {
+        let _ = webview.eval(script);
+    }
+    if let (Some(script), false) = (&posting.profile_script, is_sign_in(&url)) {
         let _ = webview.eval(script);
     }
     if let (Some(path), true) = (&posting.file, is_upload_page(posting.request.platform, &url)) {
@@ -370,7 +375,7 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
         None => None,
     };
     let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
-    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, file, shared_session: Default::default() });
+    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, profile_script: None, file, shared_session: Default::default() });
     let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
     let window = open_signed_in(&app, url, dir, posting)?;
     let label = window.label().to_owned();
@@ -505,7 +510,7 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
         cover: String::new(),
         cover_ms: None,
     };
-    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, file: None, shared_session: Default::default() });
+    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script: None, file: None, shared_session: Default::default() });
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
     open_signed_in(&app, url, dir, posting).map(|_| ())
 }
@@ -873,5 +878,108 @@ mod tests {
         assert!(check(&request).is_err());
         let fine: PostRequest = serde_json::from_value(serde_json::json!({ "platform": "x", "brandId": "b1", "videoId": "v1", "text": "hi" })).unwrap();
         assert!(check(&fine).is_ok());
+    }
+}
+
+/// Where each social edits a profile's picture, name and bio. TikTok edits it on the profile page itself
+/// (Edit profile), so it needs the handle.
+pub(crate) fn profile_edit_url(platform: Platform, handle: &str) -> Option<String> {
+    match platform {
+        Platform::Instagram => Some("https://www.instagram.com/accounts/edit/".into()),
+        Platform::X => Some("https://x.com/settings/profile".into()),
+        Platform::Youtube => Some("https://studio.youtube.com/".into()),
+        Platform::Tiktok => profile_url(Platform::Tiktok, handle),
+    }
+}
+
+/// What the page banner says until the editor shows up, since some socials need a click to open it.
+fn profile_edit_note(platform: Platform) -> &'static str {
+    match platform {
+        Platform::Instagram => "Socialspace fills the picture, name, bio and website here. Check them, then press Submit yourself.",
+        Platform::X => "Socialspace fills the picture, name, bio and website in Edit profile. Check them, then press Save yourself.",
+        Platform::Tiktok => "Press Edit profile: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
+        Platform::Youtube => "Open Customization, then Profile: the picture, name and description fill in. Keywords are under Settings, Channel. Press Publish or Save yourself.",
+    }
+}
+
+/// A brand profile's edit page, filled for Nate to check and save.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProfileEditRequest {
+    platform: Platform,
+    brand_id: String,
+    #[serde(default)]
+    account_id: Option<String>,
+    handle: String,
+    #[serde(default)]
+    email: String,
+    fields: crate::autofill::FormFields,
+    /// The brand picture at this social's size.
+    #[serde(default)]
+    image_path: Option<String>,
+}
+
+/// Opens the profile editor of a brand profile in the brand's own window (its sign-in), and fills the
+/// picture, name, bio, website and keywords. It never presses Save, Submit or Publish: Nate does.
+#[tauri::command]
+pub async fn open_profile_editor(app: AppHandle, request: ProfileEditRequest) -> Result<String, String> {
+    let address = profile_edit_url(request.platform, &request.handle).ok_or("This profile has no valid username yet. Add it under Edit details.")?;
+    if request.email.len() > 320 {
+        return Err("The account details are not valid.".into());
+    }
+    let profile_script = crate::autofill::profile_edit_script(&request.fields, request.image_path.as_deref(), profile_edit_note(request.platform))?;
+    let dir = profile_dir(&app, &request.brand_id)?;
+    std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
+    let password = match request.account_id.as_deref().filter(|id| !id.is_empty()) {
+        Some(id) => crate::account_passwords::read(id).ok().flatten(),
+        None => None,
+    };
+    let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
+    let post = PostRequest {
+        platform: request.platform,
+        brand_id: request.brand_id.clone(),
+        video_id: String::new(),
+        account_id: request.account_id.clone(),
+        handle: request.handle.trim().trim_start_matches('@').to_owned(),
+        email: request.email.clone(),
+        video_path: String::new(),
+        title: String::new(),
+        text: String::new(),
+        made_with_ai: false,
+        made_for_kids: false,
+        cover: String::new(),
+        cover_ms: None,
+    };
+    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script: Some(profile_script), file: None, shared_session: Default::default() });
+    let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
+    open_signed_in(&app, url, dir, posting).map(|window| window.label().to_owned())
+}
+
+#[cfg(test)]
+mod profile_edit_tests {
+    use super::*;
+
+    #[test]
+    fn each_social_opens_its_profile_editor() {
+        assert_eq!(profile_edit_url(Platform::Instagram, "").as_deref(), Some("https://www.instagram.com/accounts/edit/"));
+        assert_eq!(profile_edit_url(Platform::X, "mia").as_deref(), Some("https://x.com/settings/profile"));
+        assert_eq!(profile_edit_url(Platform::Tiktok, "@massage.with.mia").as_deref(), Some("https://www.tiktok.com/@massage.with.mia"));
+        assert!(profile_edit_url(Platform::Tiktok, "").is_none());
+        assert!(profile_edit_url(Platform::Tiktok, "bad/handle").is_none());
+        for platform in [Platform::Instagram, Platform::X, Platform::Tiktok, Platform::Youtube] {
+            assert!(profile_edit_note(platform).contains("yourself"));
+            assert!(profile_edit_url(platform, "mia").unwrap().starts_with("https://"));
+        }
+    }
+
+    #[test]
+    fn the_editor_fill_replaces_once_keeps_watching_and_never_submits() {
+        let fields: crate::autofill::FormFields = serde_json::from_value(serde_json::json!({ "bio": "Calm hands", "keywords": "massage, relaxation" })).unwrap();
+        let script = crate::autofill::profile_edit_script(&fields, None, profile_edit_note(Platform::Youtube)).unwrap();
+        assert!(script.contains(r#""replace":true"#) && script.contains(r#""watch":true"#));
+        assert!(script.contains(r#""keywords":"massage, relaxation""#));
+        assert!(script.contains("Customization"));
+        assert!(!script.contains("requestSubmit") && !script.contains(".submit("));
+        assert!(crate::autofill::profile_edit_script(&fields, None, &"x".repeat(400)).is_err());
     }
 }
