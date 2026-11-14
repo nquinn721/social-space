@@ -179,6 +179,17 @@ export function mergeRestored(current: Workspace, backup: Partial<Workspace>): {
  * Otherwise it uses its brand's password, taken only from the brand's own logins: never from a login
  * shared with other brands, so one brand's sign-in never leaks into another's.
  */
+/**
+ * Whether this profile is added to a login another brand already uses (a second Instagram profile, a
+ * second YouTube channel). Those are not sign-ups: the social's sign-up page just shows the signed-in
+ * account, so the wizard opens the "add a profile" page instead.
+ */
+export function addsToLogin(all: Account[], account: Account): boolean {
+  const key = emailKey(account.signupEmail);
+  return sharesLogins(account.platform) && Boolean(key)
+    && all.some((other) => other.id !== account.id && other.platform === account.platform && other.brandId !== account.brandId && emailKey(other.signupEmail) === key);
+}
+
 export function passwordGroup(all: Account[], account: Account): string[] {
   const key = emailKey(account.signupEmail);
   if (sharesLogins(account.platform) && key) {
