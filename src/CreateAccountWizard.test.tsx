@@ -143,7 +143,7 @@ describe('verification code detection', () => {
     await user.click(await screen.findByRole('button', { name: 'Fill code 482913 on page' }));
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' }));
   });
-  it('shows the code bottom right to copy, and lists the real sign-up steps', async () => {
+  it('copies the code, shows it bottom right, and lists the real sign-up steps', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
@@ -154,9 +154,10 @@ describe('verification code detection', () => {
     expect(steps).toHaveTextContent('Finish in the TikTok app');
     await user.click(await screen.findByRole('button', { name: 'Fill code 482913 on page' }));
     await waitFor(() => expect(document.querySelector('.code-toast')).toHaveTextContent('482913'));
-    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    // The code is copied as soon as it arrives, and typed into the page.
     expect(writeText).toHaveBeenCalledWith('482913');
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' }));
   });
   it('adds Instagram to the shared login and gives TikTok its own email when the base one is taken', async () => {
     const saved: Account[] = [];
