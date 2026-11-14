@@ -1,0 +1,29 @@
+/* Series: a brand's stories told across several videos. */
+.series-cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.series-card { position: relative; width: 100%; display: grid; gap: 6px; text-align: left; padding: 16px 36px 16px 16px; color: var(--text); }
+.series-card:hover { border-color: var(--border-strong); }
+.series-card strong { font-size: 15px; }
+.series-card span { font-size: 13px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.series-card small { font-size: 12px; color: var(--text-3); }
+.series-card-go { position: absolute; right: 12px; top: 18px; color: var(--text-3); }
+.flip { transform: rotate(180deg); }
+
+.series-detail > .library-more { margin: 0 0 12px; }
+.series-next { font-size: 13px; color: var(--accent-text); margin: 0 0 6px; }
+.series-section { margin-bottom: 12px; }
+.series-section textarea { width: 100%; margin-top: 10px; }
+.series-section-head { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--text); background: none; padding: 0; }
+.series-characters { list-style: none; padding: 0; margin: 12px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.series-characters li { display: flex; gap: 12px; align-items: flex-start; }
+.series-characters p { font-size: 12.5px; color: var(--text-2); line-height: 1.5; margin: 3px 0 8px; }
+.series-character-picture { width: 76px; height: 76px; flex: none; border-radius: var(--radius); object-fit: cover; background: var(--surface-2); border: 1px solid var(--border); }
+.series-character-picture.empty { display: grid; place-items: center; color: var(--text-3); }
+
+.series-episodes { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.series-episode p { font-size: 13px; color: var(--text-2); line-height: 1.55; margin: 6px 0 0; }
+.series-episode details { margin-top: 8px; font-size: 13px; }
+.series-episode summary { cursor: pointer; color: var(--accent-text); }
+.series-episode-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.series-part { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-text); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; }
+.series-script { white-space: pre-wrap; }
+.series-badge { font-size: 11.5px; font-weight: 600; color: var(--accent-text); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }

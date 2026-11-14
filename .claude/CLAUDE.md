@@ -57,6 +57,7 @@ part of it working. Every Tauri command must also be listed in `src-tauri/build.
 | Guided developer-app setup | `DevAppSetupGuide.tsx` (site embedded via `embed_setup_page`), step text in `devAppGuides.ts`, pages in `setup_pages.rs` |
 | Email and verification codes | `InboxList.tsx`, `email.rs`, `gmail_session.rs` |
 | Assistant and profile pictures (Grok) | `src/assistant/grokClient.ts`, `ProfileImageStudio.tsx`, `imageAiService.ts`, `grok_ai.rs` |
+| Series (stories across several videos) | `SeriesPanel.tsx` (brand's Series tab), `series.ts`, `seriesWriter.ts` (Grok writes), character pictures via `generate_video` `references` in `video_gen.rs` / `grok.rs` |
 | Partner review site | `partnerReview.ts`, `usePartnerReview.tsx`, `review.rs`, `website/` |
 | Updates | `AppUpdates.tsx`, `updateService.ts`, `updater.rs`, `hub.rs` |
 

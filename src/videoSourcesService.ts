@@ -19,8 +19,11 @@ export async function removeVideoSource(id: string): Promise<void> { desktopOnly
 export async function openProviderKeys(provider: VideoProvider): Promise<void> { desktopOnly(); return invoke('open_video_provider_keys', { provider }); }
 export async function openProviderSite(provider: VideoProvider): Promise<void> { desktopOnly(); return invoke('open_video_provider_site', { provider }); }
 
-/** Starts a video with the given source, or the active one when `sourceId` is null. */
-export async function generateVideo(sourceId: string | null, prompt: string, aspectRatio: string, duration: number): Promise<StartedVideo> { desktopOnly(); return invoke('generate_video', { sourceId, prompt, aspectRatio, duration }); }
+/**
+ * Starts a video with the given source, or the active one when `sourceId` is null. `references` are
+ * brand picture file names of characters, named in the prompt as <IMAGE_0>, <IMAGE_1>, ... (Grok only).
+ */
+export async function generateVideo(sourceId: string | null, prompt: string, aspectRatio: string, duration: number, references: string[] = []): Promise<StartedVideo> { desktopOnly(); return invoke('generate_video', { sourceId, prompt, aspectRatio, duration, references: references.length ? references : null }); }
 export async function getVideo(sourceId: string, taskId: string): Promise<VideoTask> { desktopOnly(); return invoke('get_video', { sourceId, taskId }); }
 export async function openVideo(sourceId: string, taskId: string): Promise<void> { desktopOnly(); return invoke('open_video', { sourceId, taskId }); }
 /** Downloads a finished video into Videos\SocialSpace\<brand>\<category> and returns the saved file's path. */

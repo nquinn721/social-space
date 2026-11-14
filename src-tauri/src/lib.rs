@@ -38,6 +38,9 @@ const MAX_FIELD_LENGTH: usize = 1_000;
 const MAX_VIDEOS: usize = 20_000;
 const MAX_CAPTION_LENGTH: usize = 4_000;
 const MAX_SETUP_MARKS: usize = 2_000;
+const MAX_SERIES: usize = 500;
+/// A series holds its story bible and every episode's script, so it gets more room than one field.
+const MAX_SERIES_BYTES: usize = 400_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +63,10 @@ struct Workspace {
     /// provider. Its password is kept with the account passwords under `developer-<provider>`.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     developer_logins: BTreeMap<String, DeveloperLogin>,
+    /// Stories told across several videos (story bible, characters with reference pictures,
+    /// episodes), as the interface edits them. Only their id and brand are checked here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    series: Vec<serde_json::Value>,
 }
 
 /// A developer-site sign-in tracked by the app: it uses the main email, not a brand's.
@@ -113,6 +120,11 @@ struct Video {
     /// Sandbox, YouTube before the audit), with when (ms). Moved over once the app is approved.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     test_posts: BTreeMap<String, u64>,
+    /// The series this video is an episode of, and which episode (1 is the first).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    series_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    episode: Option<u32>,
 }
 
 /// An AI generation in progress for a library video.
@@ -216,6 +228,31 @@ enum AccountStatus {
 #[derive(Default)]
 struct StorageLock(Mutex<()>);
 
+/// Each series has a unique id, belongs to a brand, and stays a reasonable size; episode videos
+/// point at a series that exists.
+fn validate_series(workspace: &Workspace, brand_ids: &HashSet<&String>) -> Result<(), String> {
+    if workspace.series.len() > MAX_SERIES {
+        return Err("The workspace has too many series to save.".into());
+    }
+    let mut series_ids = HashSet::new();
+    for series in &workspace.series {
+        let id = series["id"].as_str().unwrap_or_default();
+        let brand = series["brandId"].as_str().unwrap_or_default().to_string();
+        if id.trim().is_empty() || id.len() > MAX_FIELD_LENGTH || !series_ids.insert(id) || !brand_ids.contains(&brand) {
+            return Err("Each series needs a unique ID and a brand.".into());
+        }
+        if serde_json::to_vec(series).map(|bytes| bytes.len()).unwrap_or(usize::MAX) > MAX_SERIES_BYTES {
+            return Err("A series is too long to save. Shorten its story or scripts.".into());
+        }
+    }
+    for video in &workspace.videos {
+        if video.series_id.as_deref().is_some_and(|id| !series_ids.contains(id)) {
+            return Err("A video belongs to a series that does not exist.".into());
+        }
+    }
+    Ok(())
+}
+
 fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS || workspace.brands.len() > MAX_ACCOUNTS {
         return Err("The workspace is too large to save.".into());
@@ -259,6 +296,7 @@ fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
             return Err("Each video needs a unique ID and a category of its brand.".into());
         }
     }
+    validate_series(workspace, &brand_ids)?;
     let mut ids = HashSet::new();
     for account in &workspace.accounts {
         if account.id.trim().is_empty()
@@ -588,6 +626,7 @@ mod tests {
             videos: vec![],
             setup: Default::default(),
             developer_logins: Default::default(),
+            series: vec![],
         };
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -630,7 +669,7 @@ mod tests {
 
     #[test]
     fn accounts_must_belong_to_a_saved_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
         workspace.accounts[0].brand_id = Some("b".into());
         let json = serde_json::to_string(&workspace).unwrap();
         assert!(json.contains(r#""brandId":"b""#));
@@ -641,9 +680,36 @@ mod tests {
     }
 
     #[test]
+    fn series_round_trip_and_episodes_need_their_series() {
+        let json = serde_json::json!({"businessName": "", "accounts": [], "brands": [{"id": "b", "name": "Mia"}],
+            "categories": [{"id": "c", "brandId": "b", "name": "Stories"}],
+            "series": [{"id": "s", "brandId": "b", "title": "The Lost Key", "bible": "A rabbit looks for a key.", "characters": [{"id": "k", "name": "Pip", "imageFile": "x.jpg"}], "episodes": [{"id": "e1", "number": 1, "summary": "Pip loses the key."}]}],
+            "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Part 1", "seriesId": "s", "episode": 1}]});
+        let mut workspace: Workspace = serde_json::from_value(json).unwrap();
+        assert!(validate_workspace(&workspace).is_ok());
+        let saved = serde_json::to_value(&workspace).unwrap();
+        assert_eq!(saved["series"][0]["episodes"][0]["summary"], "Pip loses the key.");
+        assert_eq!(saved["series"][0]["characters"][0]["imageFile"], "x.jpg");
+        assert_eq!(saved["videos"][0]["seriesId"], "s");
+        assert_eq!(saved["videos"][0]["episode"], 1);
+        workspace.videos[0].series_id = Some("missing".into());
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.videos[0].series_id = None;
+        workspace.series.push(serde_json::json!({"id": "s2", "brandId": "nobody"}));
+        assert!(validate_workspace(&workspace).is_err());
+        workspace.series[1] = serde_json::json!({"id": "s", "brandId": "b"});
+        assert!(validate_workspace(&workspace).is_err(), "duplicate ids");
+        workspace.series[1] = serde_json::json!({"id": "s2", "brandId": "b", "bible": "x".repeat(MAX_SERIES_BYTES)});
+        assert!(validate_workspace(&workspace).is_err(), "too large");
+        let old: Workspace = serde_json::from_value(serde_json::json!({"businessName": "", "accounts": []})).unwrap();
+        assert!(old.series.is_empty());
+        assert!(serde_json::to_value(&old).unwrap().get("series").is_none());
+    }
+
+    #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default() });
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), series_id: None, episode: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());
@@ -656,7 +722,7 @@ mod tests {
 
     #[test]
     fn videos_can_carry_an_ai_generation_in_progress() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default() };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
         let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
         workspace.videos.push(serde_json::from_value(json).unwrap());
         assert!(validate_workspace(&workspace).is_ok());
@@ -727,6 +793,7 @@ mod tests {
             videos: vec![],
             setup: Default::default(),
             developer_logins: Default::default(),
+            series: vec![],
         };
         write_workspace(&path, &workspace).unwrap();
         assert_eq!(read_workspace(&path).unwrap(), workspace);

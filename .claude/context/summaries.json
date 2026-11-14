@@ -54,6 +54,18 @@
    "h": "24a980b90fcc",
    "s": "Setup tab connections; exports useConnectFlow (connect/disconnect/one-time app setup) shared with BrandAccounts"
   },
+  "src/SeriesPanel.tsx": {
+   "h": "d4358a11b68a",
+   "s": "Series tab on a brand: new series (Grok plan), story bible, character reference pictures, write scripts, make clips via the series' video source"
+  },
+  "src/series.ts": {
+   "h": "fa16395cd82b",
+   "s": "Series logic: Part N of M captions, recaps, cast and <IMAGE_n> reference prompts, posting-order checks (waitingOnEarlierPart)"
+  },
+  "src/seriesWriter.ts": {
+   "h": "743e6683d111",
+   "s": "Grok writes series: plan (bible, cast, arc) and per-episode script/videoPrompt/caption with recap; JSON parsing"
+  },
   "src/signupFlows.ts": {
    "h": "af3b122c1ca2",
    "s": "Each social's real sign-up steps (who does each: app fills or Nate); shown in the Create accounts side panel"

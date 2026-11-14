@@ -57,16 +57,43 @@ pub async fn generate_video(
     prompt: String,
     aspect_ratio: String,
     duration: u8,
+    references: Option<Vec<String>>,
 ) -> Result<StartedVideo, String> {
     let _guard = GenerateGuard::acquire(&lock)?;
     crate::kling::validate_prompt(&prompt, &aspect_ratio, duration)?;
     let source = crate::video_sources::resolve(&app, &sources, source_id.as_deref())?;
     let key = crate::video_sources::read_source_key(&source.id)?;
+    let references = reference_pictures(&app, &references.unwrap_or_default())?;
     let task = match source.provider {
+        VideoProvider::Kling if !references.is_empty() => return Err(KLING_NO_REFERENCES.into()),
         VideoProvider::Kling => crate::kling::create(&key, &prompt, &aspect_ratio, duration).await?,
-        VideoProvider::Grok => crate::grok::create(&key, &prompt, &aspect_ratio, duration).await?,
+        VideoProvider::Grok => crate::grok::create(&key, &prompt, &aspect_ratio, duration, references).await?,
     };
     Ok(StartedVideo { source_id: source.id, source_name: source.name, provider: source.provider, task })
+}
+
+const KLING_NO_REFERENCES: &str = "Kling can't take character pictures here. Use a Grok video source for this series, or make the clip without pictures.";
+
+/// Series character pictures (brand picture file names) as data URLs for a video source.
+fn reference_pictures(app: &AppHandle, files: &[String]) -> Result<Vec<String>, String> {
+    use base64::Engine;
+    use tauri::Manager;
+    if files.is_empty() {
+        return Ok(vec![]);
+    }
+    if files.len() > crate::grok::MAX_REFERENCES {
+        return Err(format!("A clip can use at most {} character pictures.", crate::grok::MAX_REFERENCES));
+    }
+    let data_dir = app.path().app_data_dir().map_err(|_| "Could not locate the app data folder.".to_string())?;
+    files
+        .iter()
+        .map(|file| {
+            let bytes = crate::brand_images::read(&data_dir, file)
+                .ok_or("A character picture hasn't arrived on this PC yet, or isn't a saved picture. Make it again under the series.")?;
+            let mime = if file.ends_with(".png") { "image/png" } else { "image/jpeg" };
+            Ok(format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+        })
+        .collect()
 }
 
 async fn fetch(app: &AppHandle, sources: &SourcesLock, source_id: &str, task_id: &str) -> Result<VideoTask, String> {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AppWindow, ArrowLeft, Pencil, Plus, Search, Trash2, UserPlus, UsersRound } from 'lucide-react';
 import VideoLibrary from '../VideoLibrary';
+import SeriesPanel from '../SeriesPanel';
 import type { OpenBrand } from '../App';
 import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type BrandImage, type Platform, type PlatformAction, type View, type Workspace } from '../model';
 import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, passwordGroup, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
@@ -69,7 +70,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   const setOpened = onOpenBrand ?? setLocalOpen;
   const openId = opened?.id ?? null;
   const brandTab = opened?.tab ?? 'content';
-  const showBrandTab = (tab: 'content' | 'accounts') => { if (opened) setOpened({ ...opened, tab }); };
+  const showBrandTab = (tab: 'content' | 'series' | 'accounts') => { if (opened) setOpened({ ...opened, tab }); };
   const [renaming, setRenaming] = useState<string | null>(null);
   // Migrated once, so accounts saved before brands existed keep the same brand on every read.
   const migrated = useMemo(() => { const moved = migrateWorkspace(workspace); return { ...workspace, brands: moved.brands, accounts: moved.accounts }; }, [workspace]);
@@ -178,9 +179,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       })}</div>
       <div className="segmented account-tabs brand-tabs" role="tablist" aria-label={`${brand.name} sections`}>
         <button type="button" role="tab" aria-selected={brandTab === 'content'} aria-pressed={brandTab === 'content'} onClick={() => showBrandTab('content')}>Posts</button>
+        {onSave && <button type="button" role="tab" aria-selected={brandTab === 'series'} aria-pressed={brandTab === 'series'} onClick={() => showBrandTab('series')}>Series</button>}
         <button type="button" role="tab" aria-selected={brandTab === 'accounts'} aria-pressed={brandTab === 'accounts'} onClick={() => showBrandTab('accounts')}>Accounts</button>
       </div>
-      {brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
+      {brandTab === 'series' && onSave ? <SeriesPanel workspace={workspace} brand={brand} loaded={loaded} busy={busy} onSave={onSave} onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined}/>
+      : brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
         instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
       {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}

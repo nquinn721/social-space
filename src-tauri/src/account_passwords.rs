@@ -6,7 +6,8 @@ const PASSWORD_LENGTH: usize = 20;
 const LOWER: &[u8] = b"abcdefghijkmnopqrstuvwxyz";
 const UPPER: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ";
 const DIGITS: &[u8] = b"23456789";
-const SYMBOLS: &[u8] = b"!@#$%^&*-_=+?";
+// Only symbols every social's sign-up accepts (TikTok lists # ? ! @ $ % ^ & *).
+const SYMBOLS: &[u8] = b"!@#$%^&*?";
 #[cfg(windows)]
 const KEYRING_SERVICE: &str = "social-manager-account-password";
 
@@ -170,6 +171,18 @@ mod tests {
         assert_ne!(first, second);
         for set in [LOWER, UPPER, DIGITS, SYMBOLS] {
             assert!(first.bytes().any(|b| set.contains(&b)));
+        }
+    }
+
+    #[test]
+    fn passwords_fit_every_social() {
+        // TikTok allows 8-20 characters; X, Google and Instagram accept anything longer than 8.
+        let allowed: Vec<u8> = [LOWER, UPPER, DIGITS, SYMBOLS].concat();
+        for _ in 0..200 {
+            let password = generate_password().unwrap();
+            assert!((8..=20).contains(&password.len()));
+            assert!(password.bytes().all(|b| allowed.contains(&b)));
+            assert!(!password.contains(['_', '=', '+', '-', ' ']));
         }
     }
 

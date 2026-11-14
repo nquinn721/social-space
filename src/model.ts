@@ -33,11 +33,32 @@ export type VideoGeneration = { sourceId: string; sourceName: string; provider: 
 export type PostDetails = { hashtags: string[]; youtubeTitle: string; coverMs?: number; madeWithAi: boolean; shareToFeed: boolean; madeForKids: boolean };
 /** prompt: what an AI-made video was asked to show, kept to help write its description. */
 /** links: the live post on each social the app published it to. */
-export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration; details?: PostDetails; prompt?: string; links?: Partial<Record<Platform, string>>; /** Socials it was marked posted on while their app was in test mode (TikTok Sandbox, YouTube before the audit), with when (ms). */ testPosts?: Partial<Record<Platform, number>> };
+export type Video = { id: string; brandId: string; categoryId: string; title: string; mediaSource: string; caption: string; posted: Platform[]; createdAt: number; generation?: VideoGeneration; details?: PostDetails; prompt?: string; links?: Partial<Record<Platform, string>>; /** Socials it was marked posted on while their app was in test mode (TikTok Sandbox, YouTube before the audit), with when (ms). */ testPosts?: Partial<Record<Platform, number>>; /** The series this video is an episode of, and which part (1 is the first). */ seriesId?: string; episode?: number };
 /** setup: steps of the setup checklist ticked by hand, by step id, with when (ms). */
 /** A developer-site sign-in tracked by the app (one per social, on the main email). Its password is saved under developerPasswordId(provider). */
 export type DeveloperLogin = { email: string };
-export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[]; setup?: Record<string, number>; developerLogins?: Record<string, DeveloperLogin> };
+/**
+ * A recurring character of a series. imageFile is its reference picture (a brand pictures file name, so
+ * it syncs); it goes to the video source with every episode so the character looks the same each time.
+ */
+export type SeriesCharacter = { id: string; name: string; description: string; imageFile?: string };
+/** One part of a series: what happens (summary), its script, what the video source is asked to show, and its caption. */
+export type SeriesEpisode = { id: string; number: number; title: string; summary: string; script?: string; videoPrompt?: string; caption?: string };
+/**
+ * A story told across several videos, posted in order as "Part N of M". Grok writes the story bible,
+ * the episode arc and each script; the video source makes the clips (sourceId, or the active source when unset).
+ * Its videos live in categoryId of its brand, linked back by Video.seriesId and Video.episode.
+ */
+export type Series = {
+  id: string; brandId: string; categoryId: string; title: string; premise: string;
+  /** The story bible: world, tone, rules and where the story is going. Every script is written from it. */
+  bible: string;
+  /** The visual look every clip shares, e.g. "soft pastel 3D animation". */
+  style?: string;
+  characters: SeriesCharacter[]; episodes: SeriesEpisode[];
+  sourceId?: string; aspectRatio: string; duration: number; createdAt: number;
+};
+export type Workspace = { businessName: string; brands: Brand[]; accounts: Account[]; channels: Channel[]; categories?: VideoCategory[]; videos?: Video[]; setup?: Record<string, number>; developerLogins?: Record<string, DeveloperLogin>; series?: Series[] };
 /** Where a developer site's generated password is kept, next to the account passwords. */
 export function developerPasswordId(provider: string) { return `developer-${provider}`; }
 export const EMPTY_WORKSPACE: Workspace = { businessName: '', brands: [], accounts: [], channels: [] };
