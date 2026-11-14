@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SIGNUP_BIRTHDAY, passwordGroup, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
+import { addsToLogin, DEFAULT_SIGNUP_BIRTHDAY, passwordGroup, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
 import type { Account } from './model';
 
 const BASE = 'softwings25@gmail.com';
@@ -57,6 +57,16 @@ describe('brand model', () => {
     expect(passwordGroup([ig1, ig2, tt2], tt2)).toEqual(['tt2']);
     const yt2 = { ...account('yt2', 'youtube', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
     expect(passwordGroup([ig1, ig2, tt2, yt2], yt2)).toEqual(['tt2', 'yt2']);
+  });
+
+  it('knows a profile joining another brand login is not a sign-up', () => {
+    const ig1 = { ...account('ig1', 'instagram', 'One'), brandId: 'b1' };
+    const ig2 = { ...account('ig2', 'instagram', 'Two'), brandId: 'b2' };
+    const tt2 = { ...account('tt2', 'tiktok', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
+    expect(addsToLogin([ig1, ig2, tt2], ig2)).toBe(true);
+    expect(addsToLogin([ig2, tt2], ig2)).toBe(false);
+    expect(addsToLogin([ig1, ig2, tt2], tt2)).toBe(false);
+    expect(addsToLogin([ig1, { ...ig2, signupEmail: 'other@gmail.com' }], { ...ig2, signupEmail: 'other@gmail.com' })).toBe(false);
   });
 
   it('flags shared emails on TikTok and X and duplicate usernames', () => {

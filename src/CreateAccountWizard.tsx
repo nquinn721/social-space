@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
-import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, passwordGroup, planPresence } from './brands';
+import { addsToLogin, DEFAULT_SIGNUP_BIRTHDAY, emailTag, passwordGroup, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
 import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
 import InboxList from './InboxList';
-import { SIGNUP_FLOWS } from './signupFlows';
+import { ADD_PROFILE_FLOWS, SIGNUP_FLOWS } from './signupFlows';
 import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
@@ -30,7 +30,7 @@ export function sharedBioLimit(platforms: Platform[]) {
 }
 
 /** A page to show in the wizard's site area. nonce makes "Reopen" load it again. */
-type SitePage = { account: Account; action: 'create' | 'manage'; imagePath?: string; nonce: number };
+type SitePage = { account: Account; action: 'create' | 'addProfile' | 'manage'; imagePath?: string; nonce: number };
 function boundsOf(element: HTMLElement): Bounds {
   const rect = element.getBoundingClientRect();
   return { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height };
@@ -88,6 +88,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const bioTooLong = bioLength > tightest.limit;
   const account = accounts[current];
   const name = account ? getPlatform(account.platform).name : '';
+  const steps = account ? (addsProfile(account) && ADD_PROFILE_FLOWS[account.platform]) || SIGNUP_FLOWS[account.platform] : [];
   const stepIndex = STEPS.findIndex((item) => item.id === step);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy && step === 'details') onClose(); };
@@ -108,6 +109,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         setWindowId(id);
         await fillSiteForm(id, formFieldsFor(page.account), page.action === 'create'
           ? { accountId: page.account.id, includePassword: true, keepFilling: true }
+          : page.action === 'addProfile' ? { accountId: page.account.id, includePassword: false, keepFilling: true }
           : { imagePath: page.imagePath, accountId: page.account.id, includePassword: 'ifSaved', keepFilling: true });
       } catch (reason) { if (!cancelled) setError(errorText(reason)); }
     })();
@@ -149,7 +151,9 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   });
   function toggle(platform: Platform) { setChosen((list) => list.includes(platform) ? list.filter((item) => item !== platform) : [...list, platform]); }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
-  function openSignup(target: Account) { setPage((last) => ({ account: target, action: 'create', nonce: (last?.nonce ?? 0) + 1 })); }
+  // A brand added to an existing login gets that social's "add a profile" page, never its sign-up page.
+  function addsProfile(target: Account) { return addsToLogin([...existing, ...accounts.filter((item) => !existing.some((known) => known.id === item.id))], target); }
+  function openSignup(target: Account) { setPage((last) => ({ account: target, action: addsProfile(target) ? 'addProfile' : 'create', nonce: (last?.nonce ?? 0) + 1 })); }
 
   function start(event: FormEvent) {
     event.preventDefault();
@@ -270,13 +274,13 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
 
       {step !== 'details' && <>
         <div className="wizard-top">{step === 'signup' && account
-          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>Your details are filled in on the {name} page below. Check them, then press Next or Sign up on the page yourself.</p></div>
+          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>{steps === ADD_PROFILE_FLOWS[account.platform] ? `This adds the brand to your existing ${name} login. Follow the steps on the right.` : `Your details are filled in on the ${name} page below. Check them, then press Next or Sign up on the page yourself.`}</p></div>
           : <div><h3>Finish the profiles</h3><p>{created.length ? `Created on ${created.map((item) => getPlatform(item.platform).name).join(', ')}.` : 'No accounts were marked as created.'} Add the picture and description now, or later from Accounts. Skipped socials stay saved as planned.</p></div>}{closeButton}</div>
         <div className="site-stage">
           <div ref={frame} className="site-frame" aria-label="Site page">{!windowId && <span>{page ? 'Loading the page…' : 'Pick a social on the right to open its profile settings here.'}</span>}</div>
           <aside className="site-side">
             {step === 'signup' && account && <>
-              <ol className="signup-steps flow-steps" aria-label={`${name} sign-up steps`}>{SIGNUP_FLOWS[account.platform].map((item) => <li key={item.title} className={`by-${item.by}`}><strong>{item.title}</strong> <em>{item.by === 'app' ? 'filled for you' : 'you'}</em><span>{item.detail}</span></li>)}</ol>
+              <ol className="signup-steps flow-steps" aria-label={`${name} sign-up steps`}>{steps.map((item) => <li key={item.title} className={`by-${item.by}`}><strong>{item.title}</strong> <em>{item.by === 'app' ? 'filled for you' : 'you'}</em><span>{item.detail}</span></li>)}</ol>
               <section className="credentials copy-list" aria-label="Sign-up details">
                 <h3>Sign-up details</h3>
                 <div className="credential-row"><span>Email</span><code>{account.signupEmail}</code><button type="button" className="icon-button" aria-label="Copy email" onClick={() => void copy('Email', account.signupEmail ?? '')}><Copy size={15}/></button></div>

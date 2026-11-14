@@ -9,6 +9,24 @@ export type SignupStep = { title: string; by: StepBy; detail: string };
  * every field it can as each page appears; Nate presses every button and does the checks.
  * Full notes (fields, selectors, where codes and checks show up) are in docs/signup-flows.md.
  */
+/**
+ * Adding a brand to a login that already holds another brand. Instagram's website cannot make a second
+ * profile under the same login, so that happens in the Instagram phone app; Accounts Center shows it after.
+ */
+export const ADD_PROFILE_FLOWS: Partial<Record<Platform, SignupStep[]>> = {
+  instagram: [
+    { title: 'On your phone', by: 'you', detail: 'In the Instagram app, open your profile and tap your username at the top.' },
+    { title: 'Add Instagram account', by: 'you', detail: 'Tap Add Instagram account, then Create new account.' },
+    { title: 'Username', by: 'you', detail: 'Use the username on the right. Instagram adds it to the same login, so it keeps your existing password.' },
+    { title: 'Check it here', by: 'app', detail: 'The page below is Accounts Center. Press "Start Instagram over" to reload it; the new profile shows in the list.' },
+  ],
+  youtube: [
+    { title: 'Google sign-in', by: 'you', detail: 'Sign in to the Google account that holds your channels, if asked.' },
+    { title: 'New channel', by: 'app', detail: 'Opens "Create a new channel" (not your existing one) and fills the channel name.' },
+    { title: 'Create', by: 'you', detail: 'Press Create. YouTube may ask you to confirm with your Google password.' },
+  ],
+};
+
 export const SIGNUP_FLOWS: Record<Platform, SignupStep[]> = {
   tiktok: [
     { title: 'Email sign-up form', by: 'app', detail: 'Opens straight on "Sign up with email" and picks the birthday, email and password.' },

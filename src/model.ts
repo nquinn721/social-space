@@ -3,7 +3,7 @@ export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
 export type View = 'overview' | 'accounts' | 'inbox' | 'updates' | 'settings';
 export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'updates', 'settings'];
 /** identity: where name and username are edited (Instagram's Accounts Center). */
-export type PlatformAction = 'create' | 'manage' | 'post' | 'developer' | 'identity';
+export type PlatformAction = 'create' | 'addProfile' | 'manage' | 'post' | 'developer' | 'identity';
 /** platformId: the account's own ID on the social (e.g. the Instagram account ID), when known. */
 export type AccountProfile = { platformId?: string; displayName?: string; bio?: string; website?: string; signupEmail?: string; imagePath?: string; birthday?: string; /** This social's own picture instead of the brand's (a brand pictures file name, so it syncs). */ imageFile?: string };
 /**

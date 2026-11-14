@@ -171,6 +171,11 @@ describe('verification code detection', () => {
     await screen.findByText('Now: Instagram (1 of 2)');
     expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', DEFAULT_SIGNUP_EMAIL, 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);
     expect(saved.every((item) => item.handle === 'massagewithmia' && item.displayName === 'Massage With Mia')).toBe(true);
+    // Joining an existing login is not a sign-up: it opens the add-a-profile page and its own steps.
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('instagram', 'addProfile', expect.anything()));
+    expect(screen.getByRole('list', { name: 'Instagram sign-up steps' })).toHaveTextContent('Add Instagram account');
+    await user.click(screen.getByRole('button', { name: /Instagram account is created, next/ }));
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('tiktok', 'create', expect.anything()));
   });
   it('opens Google sign-up with the brand filled in for an optional new Gmail', async () => {
     vi.mocked(profile.openGmailSignup).mockResolvedValue('site-9');

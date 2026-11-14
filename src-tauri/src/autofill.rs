@@ -317,6 +317,15 @@ const FILL_SCRIPT: &str = r#"function (data) {
     const text = (describe(box) + ' ' + (box.textContent || '')).toLowerCase();
     return /month/.test(text) ? 'month' : /year/.test(text) ? 'year' : /\bday\b/.test(text) ? 'day' : null;
   };
+  const press = (el) => {
+    el.scrollIntoView({ block: 'nearest' });
+    const rect = el.getBoundingClientRect();
+    const at = { bubbles: true, cancelable: true, view: window, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+    for (const type of ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove', 'pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
+      el.dispatchEvent(type.startsWith('pointer') ? new PointerEvent(type, at) : new MouseEvent(type, at));
+    }
+    el.click();
+  };
   const pickMenus = async () => {
     if (!data.fields.birthday || window.__socialspaceMenus) return [];
     window.__socialspaceMenus = true;
@@ -337,7 +346,14 @@ const FILL_SCRIPT: &str = r#"function (data) {
         await wait(250);
         const option = Array.from(document.querySelectorAll('[role=option]'))
           .find((item) => visible(item) && wanted[key]((item.textContent || '').trim().toLowerCase()));
-        if (option) { option.click(); done.add(box); box.style.outline = '2px solid #8b5cf6'; picked.push(key); }
+        if (option) {
+          // TikTok's menus select the highlighted row, not the clicked node, so hover it like a mouse first.
+          press(option);
+          await wait(250);
+          // Only count it when the menu now shows the wanted value; a wrong pick is left for Nate to fix.
+          if (wanted[key]((box.textContent || '').trim().toLowerCase())) { done.add(box); box.style.outline = '2px solid #8b5cf6'; picked.push(key); }
+          else box.style.outline = '2px solid #ef4444';
+        }
         else if (box.getAttribute('aria-expanded') === 'true') box.click();
         await wait(200);
       }
@@ -578,7 +594,7 @@ mod tests {
         // Only birthday menus and their options are ever clicked; never a button.
         for line in script.lines().filter(|line| line.contains(".click(")) {
             assert!(
-                line.contains("box.click()") || line.contains("option.click()"),
+                line.contains("box.click()") || line.contains("option.click()") || line.contains("el.click()"),
                 "unexpected click: {line}"
             );
         }

@@ -396,6 +396,9 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Instagram, "post") => Some("https://www.instagram.com/"),
         // Instagram moved name and username editing to Accounts Center.
         (Platform::Instagram, "identity") => Some("https://accountscenter.instagram.com/profiles/"),
+        // A brand added to an existing login: the website cannot make a second profile, so the wizard shows
+        // the phone-app steps and Accounts Center, where the new profile appears.
+        (Platform::Instagram, "addProfile") => Some("https://accountscenter.instagram.com/profiles/"),
         // The app list (/apps/) shows "link broken" until you are signed in, so start at the home page.
         (Platform::Instagram, "developer") => Some(META_DEVELOPERS_HOME),
         // Straight to the email sign-up form, past the "Use phone or email / Facebook / Google" chooser.
@@ -404,6 +407,8 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Tiktok, "post") => Some("https://www.tiktok.com/upload"),
         (Platform::Tiktok, "developer") => Some("https://developers.tiktok.com/"),
         (Platform::Youtube, "create") => Some("https://www.youtube.com/create_channel"),
+        // Plain create_channel shows the existing channel when the Google account has one; this asks for another.
+        (Platform::Youtube, "addProfile") => Some("https://www.youtube.com/create_channel?action_create_new_channel_redirect=true"),
         (Platform::Youtube, "manage") => Some("https://studio.youtube.com/"),
         (Platform::Youtube, "post") => Some("https://www.youtube.com/upload"),
         (Platform::Youtube, "developer") => Some("https://developers.google.com/youtube/v3"),
@@ -746,6 +751,8 @@ mod tests {
         );
         assert_eq!(platform_url(Platform::X, "https://example.com"), None);
         assert_eq!(platform_url(Platform::Youtube, "unknown"), None);
+        assert!(platform_url(Platform::Youtube, "addProfile").unwrap().contains("action_create_new_channel_redirect=true"));
+        assert!(platform_url(Platform::Instagram, "addProfile").unwrap().starts_with("https://accountscenter.instagram.com/"));
     }
 
     #[test]
