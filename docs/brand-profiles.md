@@ -19,6 +19,12 @@ Each brand has one bio per social and YouTube channel keywords, saved on its pro
 | TikTok | `tiktok.com/@handle` | Press Edit profile; picture, name and bio fill in as it opens; press Save. |
 | YouTube | `studio.youtube.com` | Customization, Profile: name, description, picture. Keywords: Settings, Channel. |
 
+If the brand's window isn't signed in yet, its sign-in page fills first: TikTok and X with the brand's own
+username and password, Instagram and YouTube with the parent login the profile or channel lives under (for
+example the main Instagram login or Google account). A signed-out TikTok window starts on TikTok's
+email-and-password sign-in and returns to the profile afterwards, since the profile page's own sign-in pop-up
+opens on the QR code. Each brand card on the Accounts tab shows that login (username, email, password).
+
 The window keeps filling for 10 minutes as the editor opens or changes step. Back end: `open_profile_editor`
 in `src-tauri/src/posting.rs`, fill script `profile_edit_script` in `src-tauri/src/autofill.rs`.
 

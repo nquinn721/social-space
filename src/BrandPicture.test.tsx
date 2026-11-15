@@ -6,11 +6,13 @@ import BrandPicture from './BrandPicture';
 import ProfileImageStudio from './ProfileImageStudio';
 import * as pictures from './brandImageService';
 import * as profile from './profileService';
+import * as posting from './postingService';
 import type { Account, Brand } from './model';
 
 vi.mock('./brandImageService', async (original) => ({ ...(await original<typeof import('./brandImageService')>()),
   geminiKeyStatus: vi.fn(), generateGeminiImages: vi.fn(), keepSquare: vi.fn(), keepBanner: vi.fn(), keepFile: vi.fn(), profilePicturePath: vi.fn(), brandImagePreview: vi.fn(), revealBrandImage: vi.fn() }));
-vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()), openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn() }));
+vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()), chooseImageFile: vi.fn() }));
+vi.mock('./postingService', async (original) => ({ ...(await original<typeof import('./postingService')>()), openProfileEditor: vi.fn() }));
 
 const brand: Brand = { id: 'b1', name: 'Bunnies', notes: '' };
 const account = (platform: Account['platform'], extra: Partial<Account> = {}): Account => ({ id: `a-${platform}`, platform, label: 'Bunnies', handle: 'bunnies', status: 'active', notes: '', brandId: 'b1', signupEmail: 'me@example.com', ...extra });
@@ -24,7 +26,7 @@ beforeEach(() => {
   vi.mocked(pictures.keepBanner).mockResolvedValue('banner.jpg');
   vi.mocked(pictures.brandImagePreview).mockImplementation(async (file) => `data:image/jpeg;base64,${file}`);
   vi.mocked(pictures.profilePicturePath).mockImplementation(async (file, platform) => `C:\\sized\\${platform}-${file}`);
-  vi.mocked(profile.openPlatformWindow).mockResolvedValue('window-1');
+  vi.mocked(posting.openProfileEditor).mockResolvedValue('window-1');
 });
 afterEach(cleanup);
 
@@ -52,9 +54,9 @@ describe('brand picture', () => {
     render(<BrandPicture brand={withImage} accounts={[account('x'), account('youtube', { status: 'planned', imageFile: 'own.jpg' })]} busy={false} onSaveImage={vi.fn()} onSaveAccountImage={onSaveAccountImage}/>);
     expect(screen.getByText(/Used when it's created/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Put on X/ }));
-    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalled());
+    await waitFor(() => expect(posting.openProfileEditor).toHaveBeenCalled());
     expect(pictures.profilePicturePath).toHaveBeenCalledWith('brand.jpg', 'x');
-    expect(vi.mocked(profile.fillSiteForm).mock.calls[0][2]).toMatchObject({ imagePath: 'C:\\sized\\x-brand.jpg', accountId: 'a-x' });
+    expect(vi.mocked(posting.openProfileEditor).mock.calls[0][0]).toMatchObject({ platform: 'x', brandId: 'b1', imagePath: 'C:\\sized\\x-brand.jpg', accountId: 'a-x', fields: {} });
     expect(await screen.findByRole('status')).toHaveTextContent('press Save on the page');
 
     await user.click(screen.getByRole('button', { name: /Use brand picture/ }));

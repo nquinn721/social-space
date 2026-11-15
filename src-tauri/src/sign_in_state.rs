@@ -142,6 +142,13 @@ pub fn check(app: &AppHandle, window: &WebviewWindow, brand: &str, platform: Pla
     }
 }
 
+/// Whether a brand's window folder was last seen signed in to a social (false when never checked).
+pub fn known_signed_in(app: &AppHandle, brand: &str, platform: Platform) -> bool {
+    let Some(path) = state_path(app) else { return false };
+    let Ok(_guard) = FILE_LOCK.lock() else { return false };
+    read(&path).get(brand).and_then(|map| map.get(key(platform))).map_or(false, |state| state.signed_in)
+}
+
 /// Every brand's last known sign-ins on this PC: brand id → social → state.
 #[tauri::command]
 pub fn posting_sign_ins(app: AppHandle) -> Result<Brands, String> {

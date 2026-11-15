@@ -33,7 +33,7 @@ describe('browser posting', () => {
     });
     expect(postRequest(workspace, workspace.videos![0], 'youtube').accountId).toBeUndefined();
   });
-  it('never fills the main Gmail or a developer login', () => {
+  it('never fills the main Gmail or a developer login on TikTok or X', () => {
     const account = workspace.accounts[0];
     expect(brandLogin(undefined, { ...account, signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: undefined, email: '' });
     expect(brandLogin({ tiktok: { email: 'dev@example.com' } }, { ...account, signupEmail: 'Dev@example.com' })).toEqual({ accountId: undefined, email: '' });
@@ -43,7 +43,11 @@ describe('browser posting', () => {
     const account = workspace.accounts[0];
     expect(wrongLogin(undefined, { ...account, signupEmail: 'softwings25@gmail.com' })).toBe(true);
     expect(wrongLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' })).toBe(false);
-    expect(brandLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' }).email).toBe('');
+  });
+  it('fills the parent login of an Instagram profile or YouTube channel kept under the main Gmail', () => {
+    const account = workspace.accounts[0];
+    expect(brandLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: 'a1', email: 'softwings25@gmail.com' });
+    expect(brandLogin(undefined, { ...account, platform: 'instagram', signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: 'a1', email: 'softwings25@gmail.com' });
   });
   it('marks a video posted once', () => {
     const next = markPosted(workspace, 'v1', 'tiktok')!;
