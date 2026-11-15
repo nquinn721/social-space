@@ -2,6 +2,7 @@ import { AppWindow, Check, Copy, ExternalLink, Pencil, Plus, Trash2, TriangleAle
 import { openProfilePage, type BrandSignIn } from './postingService';
 import { useSignIns } from './useSignIns';
 import { brandLogin, wrongLogin } from './useBrowserPosting';
+import { sharesLogins } from './brands';
 import { useState } from 'react';
 import { useConnectFlow } from './Connections';
 import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
@@ -152,6 +153,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button></p>}
         {!live && onAlreadyCreated && <p className="profile-card-note">Made it on {platformName} yourself? <button type="button" className="text-button" disabled={disabled} onClick={() => onAlreadyCreated(account)}>Mark it live</button></p>}
         <dl className="profile-signin" aria-label={`${platformName} sign-in`}>
+          {!sharesLogins(account.platform) && account.handle && <div><dt>Username</dt><dd><CopyValue value={account.handle} label={`${platformName} username`}/></dd></div>}
           <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${platformName} email`}/></dd></div>
           <div><dt>Password</dt><dd><PasswordCell account={account}/></dd></div>
         </dl>

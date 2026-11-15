@@ -80,7 +80,8 @@ struct PostConfig<'a> {
     file_name: String,
     /// Why the video is not attached by the app, if it isn't.
     file_note: Option<String>,
-    /// Whether sign-in pages get the profile's own saved login (never the main Gmail).
+    /// Whether sign-in pages get the profile's saved login (its own, or the parent login of an
+    /// Instagram profile or YouTube channel).
     login_filled: bool,
 }
 
@@ -428,8 +429,9 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
     Ok(window)
 }
 
-/// The sign-in fill for a brand profile's window. Only a profile the app sends (its own login, never
-/// the main Gmail) is filled; without one the sign-in page is left for Nate.
+/// The sign-in fill for a brand profile's window. Only a profile the app sends is filled: its own
+/// login on TikTok and X, or the parent login an Instagram profile or YouTube channel lives under.
+/// Without one the sign-in page is left for Nate.
 fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, email: &str, password: Option<String>) -> Result<Option<String>, String> {
     if account_id.as_deref().map_or(true, str::is_empty) {
         return Ok(None);
@@ -511,6 +513,7 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
         cover_ms: None,
     };
     let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script: None, file: None, shared_session: Default::default() });
+    let address = signed_out_entry(request.platform, &address, crate::sign_in_state::known_signed_in(&app, &request.brand_id, request.platform));
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
     open_signed_in(&app, url, dir, posting).map(|_| ())
 }
@@ -892,6 +895,18 @@ pub(crate) fn profile_edit_url(platform: Platform, handle: &str) -> Option<Strin
     }
 }
 
+/// TikTok's profile page signs in through a pop-up that opens on the QR-code screen, which the app
+/// cannot fill. While the brand's folder is not signed in to TikTok, the window starts on TikTok's
+/// email-and-password sign-in instead, and TikTok returns to the profile page afterwards.
+pub(crate) fn signed_out_entry(platform: Platform, address: &str, signed_in: bool) -> String {
+    if platform != Platform::Tiktok || signed_in {
+        return address.to_owned();
+    }
+    let mut login = url::Url::parse("https://www.tiktok.com/login/phone-or-email/email").expect("valid TikTok sign-in URL");
+    login.query_pairs_mut().append_pair("redirect_url", address);
+    login.into()
+}
+
 /// What the page banner says until the editor shows up, since some socials need a click to open it.
 fn profile_edit_note(platform: Platform) -> &'static str {
     match platform {
@@ -951,6 +966,7 @@ pub async fn open_profile_editor(app: AppHandle, request: ProfileEditRequest) ->
         cover_ms: None,
     };
     let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script: Some(profile_script), file: None, shared_session: Default::default() });
+    let address = signed_out_entry(request.platform, &address, crate::sign_in_state::known_signed_in(&app, &request.brand_id, request.platform));
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
     open_signed_in(&app, url, dir, posting).map(|window| window.label().to_owned())
 }
@@ -966,6 +982,10 @@ mod profile_edit_tests {
         assert_eq!(profile_edit_url(Platform::Tiktok, "@massage.with.mia").as_deref(), Some("https://www.tiktok.com/@massage.with.mia"));
         assert!(profile_edit_url(Platform::Tiktok, "").is_none());
         assert!(profile_edit_url(Platform::Tiktok, "bad/handle").is_none());
+        assert_eq!(signed_out_entry(Platform::Tiktok, "https://www.tiktok.com/@mia", false),
+            "https://www.tiktok.com/login/phone-or-email/email?redirect_url=https%3A%2F%2Fwww.tiktok.com%2F%40mia");
+        assert_eq!(signed_out_entry(Platform::Tiktok, "https://www.tiktok.com/@mia", true), "https://www.tiktok.com/@mia");
+        assert_eq!(signed_out_entry(Platform::X, "https://x.com/settings/profile", false), "https://x.com/settings/profile");
         for platform in [Platform::Instagram, Platform::X, Platform::Tiktok, Platform::Youtube] {
             assert!(profile_edit_note(platform).contains("yourself"));
             assert!(profile_edit_url(platform, "mia").unwrap().starts_with("https://"));

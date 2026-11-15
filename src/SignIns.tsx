@@ -1,4 +1,3 @@
-import { usesMainLogin } from './useBrowserPosting';
 import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { Copy, DatabaseBackup, Eye, EyeOff, FileJson, KeyRound, Pencil, Upload } from 'lucide-react';
 import { getPlatform, PLATFORMS, type Account, type Workspace } from './model';
@@ -120,7 +119,7 @@ export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup
         <span role="cell"><button type="button" className="text-button" onClick={() => onEdit(account)} disabled={busy}><BrandMark platform={account.platform} small/> {getPlatform(account.platform).name}</button><em className={`pill ${account.status}`}>{account.status === 'active' ? 'Live' : 'Not created yet'}</em></span>
         <span role="cell"><CopyText text={account.handle ? account.handle : ''} label={`username for ${getPlatform(account.platform).name} ${brandName(account)}`}/></span>
         <span role="cell"><CopyText text={account.signupEmail ?? ''} label={`email for ${getPlatform(account.platform).name} ${brandName(account)}`}/></span>
-        <span role="cell">{account.platform === 'youtube' && usesMainLogin(workspace.developerLogins, account) ? <span className="muted" title="YouTube channels live under your main Google account, so there is no brand password.">Your main Google account</span> : <PasswordCell account={account}/>}</span>
+        <span role="cell"><PasswordCell account={account}/></span>
       </div></Fragment>)}
     </div>}
   </section>;
