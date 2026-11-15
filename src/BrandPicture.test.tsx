@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import BrandPicture from './BrandPicture';
 import ProfileImageStudio from './ProfileImageStudio';
 import * as pictures from './brandImageService';
-import * as profile from './profileService';
 import * as posting from './postingService';
 import type { Account, Brand } from './model';
 
