@@ -2,7 +2,7 @@
   "id": "social-space",
   "name": "Social Space",
   "kind": "external",
-  "version": "0.30.0",
+  "version": "0.30.1",
   "identifier": "com.socialmanager.desktop",
   "versionFiles": [
     "package.json",

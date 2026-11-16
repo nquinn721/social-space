@@ -206,7 +206,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <button type="button" className="ghost-button small-button" onClick={() => setResetting((current) => ({ ...current, [account.id]: false }))}>Cancel</button>
         </div>}
         {expanded && <div className="social-row-details">
-          {account.platform === 'facebook' ? <p className="footnote">Facebook Pages have no login of their own: the Page sits under your own Facebook account, and the app posts Reels to it through Meta with the Page's own key, kept in Windows Credential Manager.</p>
+          {account.platform === 'facebook' ? <p className="footnote">Facebook Pages have no login of their own: the Page belongs to the SoftWings business portfolio (you manage it with your own Facebook account), and the app posts Reels to it through Meta with the Page's own key, kept in Windows Credential Manager.</p>
           : <dl className="profile-signin" aria-label={`${name} sign-in`}>
             {!sharesLogins(account.platform) && account.handle && <div><dt>Username</dt><dd><CopyValue value={account.handle} label={`${name} username`}/></dd></div>}
             <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${name} email`}/></dd></div>

@@ -142,7 +142,7 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
           status: mainLogin ? 'problem' : 'done' });
       }
       // YouTube channels live under the main Google account, so there is no brand login to save there.
-      // Facebook Pages have no login of their own either: they sit under your own Facebook account.
+      // Facebook Pages have no login of their own either: they belong to the SoftWings business portfolio.
       if (platform !== 'facebook' && !(platform === 'youtube' && mainLogin)) {
         const saved = passwords[account.id];
         needs.push({ id: `${account.id}:sign-in`, platform, accountId: account.id, title: `${who}username and password saved`, optional: !browser || platform === 'youtube',

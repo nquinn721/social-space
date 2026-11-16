@@ -388,6 +388,8 @@ fn save_workspace(
 
 // URLs are selected entirely in Rust, so the webview cannot open arbitrary destinations.
 const META_DEVELOPERS_HOME: &str = "https://developers.facebook.com/";
+/// The Pages list of the SoftWings business portfolio, where every brand's Facebook Page is made.
+const SOFTWINGS_PAGES: &str = "https://business.facebook.com/latest/settings/pages?business_id=591387440571702";
 
 fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
     match (platform, action) {
@@ -416,9 +418,10 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Youtube, "manage") => Some("https://studio.youtube.com/"),
         (Platform::Youtube, "post") => Some("https://www.youtube.com/upload"),
         (Platform::Youtube, "developer") => Some("https://developers.google.com/youtube/v3"),
-        // Pages cannot be made through the API; this is Facebook's own Create Page form, under your Facebook login.
-        (Platform::Facebook, "create") => Some("https://www.facebook.com/pages/create"),
-        (Platform::Facebook, "addProfile") => Some("https://www.facebook.com/pages/create"),
+        // Pages cannot be made through the API. Brand Pages are made inside the SoftWings business portfolio
+        // (Pages, Add, Create a new Facebook Page), so the business owns them and Meta can share them with the app.
+        (Platform::Facebook, "create") => Some(SOFTWINGS_PAGES),
+        (Platform::Facebook, "addProfile") => Some(SOFTWINGS_PAGES),
         (Platform::Facebook, "manage") => Some("https://www.facebook.com/pages/?category=your_pages"),
         (Platform::Facebook, "post") => Some("https://www.facebook.com/"),
         (Platform::Facebook, "developer") => Some(META_DEVELOPERS_HOME),
@@ -785,7 +788,7 @@ mod tests {
 
     #[test]
     fn facebook_pages_load_and_open_facebooks_own_create_page_form() {
-        assert_eq!(platform_url(Platform::Facebook, "create"), Some("https://www.facebook.com/pages/create"));
+        assert!(platform_url(Platform::Facebook, "create").unwrap().starts_with("https://business.facebook.com/latest/settings/pages?business_id="));
         let workspace: Workspace = serde_json::from_str(r#"{"businessName":"","accounts":[{"id":"f","platform":"facebook","label":"Mia","handle":"","status":"planned","notes":""}]}"#).unwrap();
         assert_eq!(workspace.accounts[0].platform, Platform::Facebook);
     }
