@@ -50,7 +50,8 @@ const DEFAULT_RATIO = '9:16';
 
 /** The socials a brand posts to: every social it has a profile on, in platform order. */
 export function brandSocials(workspace: Workspace, brandId: string): Platform[] {
-  return ORDER.filter((platform) => workspace.accounts.some((account) => account.brandId === brandId && account.platform === platform));
+  // Every brand posts Reels to its Facebook Page, so Facebook always gets a tile (it asks to connect the Page until it is).
+  return ORDER.filter((platform) => platform === 'facebook' || workspace.accounts.some((account) => account.brandId === brandId && account.platform === platform));
 }
 /** How far a category is: videos, and how many are up on every social of the brand. */
 export function categoryProgress(videos: Video[], socials: Platform[]) {
@@ -99,7 +100,8 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   /** The one step that unblocks a social: make the profile, or fix its login or connection under Accounts. */
   function fix(status: SocialStatus) {
     const kind = status.action?.kind;
-    if ((kind === 'create' || kind === 'finish-signup') && onCreateProfile) onCreateProfile(status.platform);
+    // A brand without a Facebook profile attaches its existing Page; the brand page does that from the same handler.
+    if ((kind === 'create' || kind === 'finish-signup' || (kind === 'connect' && status.platform === 'facebook' && !status.account)) && onCreateProfile) onCreateProfile(status.platform);
     else if (kind === 'connect' && onConnectInstagram) onConnectInstagram();
     else (onShowAccounts ?? onConnectInstagram)?.();
   }
@@ -351,7 +353,8 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     const status = statusOf(platform);
     const posted = video.posted.includes(platform);
     let tone: Tone = status.tone;
-    let line: React.ReactNode = status.label;
+    // Long labels ("Connected as @someone") don't fit a tile: a short word here, the whole story in the tooltip.
+    let line: React.ReactNode = status.kind === 'reconnect' && status.label.startsWith('Connected as') ? 'Wrong account' : status.label;
     let action: React.ReactNode = null;
     if (posted) {
       tone = 'ok';

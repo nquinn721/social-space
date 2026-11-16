@@ -53,6 +53,8 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
   const account = workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform && item.status === 'active')
     ?? workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform);
   const base = { platform, account, via: via(platform) };
+  // Brand Pages are made in the SoftWings business portfolio, so a brand without one here only needs its Page attached.
+  if (!account && platform === 'facebook') return { ...base, kind: 'no-profile', tone: 'todo', label: 'No Page connected', detail: 'Connect the brand\'s Facebook Page (made in the SoftWings business portfolio) so videos post there as Reels.', action: { kind: 'connect', label: 'Connect Facebook Page', short: 'Connect' }, canPost: false };
   if (!account) return { ...base, kind: 'no-profile', tone: 'muted', label: 'No profile', detail: `This brand has no ${name} profile.`, action: { kind: 'create', label: `Create ${name} profile`, short: 'Create' }, canPost: false };
   if (account.status !== 'active') return { ...base, kind: 'not-created', tone: 'todo', label: 'Not created yet', detail: `Saved here, but the ${name} account isn't made yet.`, action: { kind: 'finish-signup', label: 'Finish sign-up', short: 'Sign up' }, canPost: false };
   if (wrongLogin(workspace.developerLogins, account)) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs its own email per account, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };

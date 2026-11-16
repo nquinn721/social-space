@@ -51,6 +51,17 @@ describe('brands page', () => {
     expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
   });
 
+  it('attaches a brand\'s existing Facebook Page from its chip as a live Facebook profile', async () => {
+    const onSave = vi.fn(async () => true);
+    renderPage({ onSave });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Open Soft Wings' }));
+    await user.click(screen.getByRole('listitem', { name: /Facebook: No Page connected/ }));
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
+    const saved = (onSave.mock.calls[0] as unknown as [Workspace])[0];
+    expect(saved.accounts.find((item) => item.platform === 'facebook')).toMatchObject({ status: 'active', label: 'Soft Wings', displayName: 'Soft Wings', handle: '' });
+  });
+
   it('creates every not-created profile of a brand at once', async () => {
     const onSignUp = vi.fn();
     renderPage({ onSignUp });
