@@ -196,7 +196,7 @@ describe('video library', () => {
 describe('approving a post', () => {
   const fresh: Video = { ...bunny, id: 'v2', title: 'Carrot crunch', mediaSource: 'C:\\clips\\carrot.mp4', caption: 'Crunchy', posted: [] };
   const workspace = { ...base, videos: [fresh] };
-  const connected = () => vi.mocked(instagram.claimInstagramConnection).mockResolvedValue({ id: '178', username: 'animals', login: 'facebook' });
+  const connected = () => vi.mocked(instagram.claimInstagramConnection).mockResolvedValue({ id: '178', username: 'mia', login: 'facebook' });
 
   it('shows the whole post and posts it to Instagram when approved', async () => {
     connected();
@@ -208,12 +208,12 @@ describe('approving a post', () => {
     expect(within(row).getByLabelText('Post')).toHaveTextContent('Crunchy');
     await user.click(await within(row).findByRole('button', { name: 'Post to Instagram' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('@animals');
+    expect(dialog).toHaveTextContent('@mia');
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
     expect(confirmBox).not.toHaveBeenCalled();
     expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('1', 'mia');
     expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1', { coverMs: undefined, shareToFeed: true });
-    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), 'Posted "Carrot crunch" to @animals on Instagram.');
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), 'Posted "Carrot crunch" to @mia on Instagram.');
   });
 
   it('opens the live post from a posted video', async () => {

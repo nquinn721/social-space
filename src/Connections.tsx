@@ -7,6 +7,7 @@ import { listVideoSources } from './videoSourcesService';
 import { saveDeveloperApp } from './devAppsService';
 import { canConnect, connectProfile, disconnectProfile, PROVIDER_OF, useProfileConnections } from './profileConnections';
 import InstagramIdPrompt from './InstagramIdPrompt';
+import { INSTAGRAM_CHANGED } from './useBrandInstagram';
 import { INSTAGRAM_ID_NEEDED } from './instagramService';
 import { getPlatform, normalizeHandle, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
 import { BrandMark, errorText } from './ui';
@@ -68,6 +69,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
     try {
       const username = await connectProfile(account);
       setSetup(null); await profiles.refresh(); recheck();
+      window.dispatchEvent(new Event(INSTAGRAM_CHANGED));
       setNote(`${getPlatform(account.platform).name} connected as @${normalizeHandle(username)} for ${brandName(account)}.`);
     } catch (reason) {
       const text = errorText(reason);
@@ -79,7 +81,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
   async function disconnect(account: Account) {
     if (working || !window.confirm(`Disconnect ${getPlatform(account.platform).name} @${account.handle}? The app won't be able to post for it until you connect again.`)) return;
     setWorking(true); setNote(''); setTarget(account.id);
-    try { await disconnectProfile(account); await profiles.refresh(); recheck(); }
+    try { await disconnectProfile(account); await profiles.refresh(); recheck(); window.dispatchEvent(new Event(INSTAGRAM_CHANGED)); }
     catch (reason) { setNote(errorText(reason)); } finally { setWorking(false); }
   }
   async function saveApp(provider: Provider, id: string, secret: string, configId?: string) {
@@ -98,7 +100,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
   const panels = <>
     {note && <div className="notice conn-notice" role="status"><span>{note}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setNote('')}>×</button></div>}
     {needsId && <InstagramIdPrompt profile={needsId.id} handle={normalizeHandle(needsId.handle)} onCancel={() => setNeedsId(null)}
-      onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); recheck(); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
+      onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); recheck(); window.dispatchEvent(new Event(INSTAGRAM_CHANGED)); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
     {setup && <DevAppSetupGuide key={setup.provider} provider={setup.provider} login={developer.logins?.[setup.provider]} onTrack={developer.onLogin} working={working} onSave={(id, secret, configId) => saveApp(setup.provider, id, secret, configId)} onCancel={() => setSetup(null)}/>}
   </>;
   return { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp: (provider: Provider) => { setTarget(null); setSetup({ provider }); }, recheck, panels, brandName, target, hasPanels: Boolean(note || needsId || setup) };

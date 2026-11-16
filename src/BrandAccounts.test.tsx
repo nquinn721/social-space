@@ -36,10 +36,10 @@ describe('brand accounts', () => {
     // Saved with the main Gmail: one line says so, and the button fixes the login.
     expect(within(tiktok).getByText('Uses your main Gmail')).toBeInTheDocument();
     const user = userEvent.setup();
-    await user.click(within(tiktok).getByRole('button', { name: 'TikTok details' }));
-    await user.click(within(tiktok).getByRole('button', { name: /Open in Social Space/ }));
+    await user.click(within(tiktok).getByRole('button', { name: 'View TikTok profile' }));
     // The window opens but its sign-in is never filled with the main Gmail.
     expect(openProfilePage).toHaveBeenLastCalledWith({ platform: 'tiktok', brandId: 'b1', accountId: undefined, handle: 'softwings', email: '', inBrowser: false });
+    await user.click(within(tiktok).getByRole('button', { name: 'TikTok details' }));
     await user.click(within(tiktok).getByRole('button', { name: /Open in browser/ }));
     expect(openProfilePage).toHaveBeenLastCalledWith(expect.objectContaining({ inBrowser: true }));
   });
@@ -85,6 +85,15 @@ describe('brand accounts', () => {
     expect(within(screen.getByRole('listitem', { name: 'X profile' })).getByText('Signed in as @softwings25')).toBeInTheDocument();
     expect(within(screen.getByRole('listitem', { name: 'YouTube profile' })).getByText('Ready')).toBeInTheDocument();
     signIns.value = {};
+  });
+
+  it('flags an Instagram connection to a different account than the profile', async () => {
+    status.connections = { ig: { state: 'ok', username: 'softwings25', detail: '' } };
+    render(<BrandAccounts brand={brand} accounts={[profile('ig', 'instagram')]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
+    const instagram = screen.getByRole('listitem', { name: 'Instagram profile' });
+    expect(within(instagram).getByText('Connected as @softwings25')).toBeInTheDocument();
+    expect(within(instagram).getByText(/posts would go to @softwings25/)).toBeInTheDocument();
+    expect(within(instagram).getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
   });
 
   it('resets a password on the social and saves the new one only once it worked', async () => {

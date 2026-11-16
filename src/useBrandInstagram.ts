@@ -4,6 +4,9 @@ import { normalizeHandle, type Video, type Workspace } from './model';
 import { claimInstagramConnection, publishInstagramReelFile } from './instagramService';
 import { detailsOf, postText } from './postDetails';
 
+/** Fired after an Instagram profile connects or disconnects. */
+export const INSTAGRAM_CHANGED = 'instagram-connection-changed';
+
 /**
  * The brand's live Instagram profile and whether the app can publish to it.
  * connected: signed in through Meta (null while checking). canUploadFiles: that sign-in may upload a video from this PC.
@@ -18,6 +21,13 @@ export function useBrandInstagram(workspace: Workspace, brandId: string | undefi
   const account = workspace.accounts.find((item) => item.brandId === brandId && item.platform === 'instagram' && item.status === 'active');
   const handle = account ? normalizeHandle(account.handle) : '';
   const [state, setState] = useState<BrandInstagram | null>(null);
+  // Connect and Disconnect anywhere in the app re-check it, so every place shows the same state.
+  const [checked, setChecked] = useState(0);
+  useEffect(() => {
+    const again = () => setChecked((value) => value + 1);
+    window.addEventListener(INSTAGRAM_CHANGED, again);
+    return () => window.removeEventListener(INSTAGRAM_CHANGED, again);
+  }, []);
   useEffect(() => {
     let live = true;
     if (!account) { setState(null); return; }
@@ -28,7 +38,7 @@ export function useBrandInstagram(workspace: Workspace, brandId: string | undefi
       .then((identity) => { if (live) setState(identity ? { ...base, username: identity.username, connected: true, canUploadFiles: identity.login !== 'instagram' } : { ...base, connected: false }); })
       .catch(() => { if (live) setState({ ...base, connected: false }); });
     return () => { live = false; };
-  }, [account?.id, handle]);
+  }, [account?.id, handle, checked]);
   return state;
 }
 
