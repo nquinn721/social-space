@@ -1,0 +1,9 @@
+{
+  "summary": "Adds HANDOFF.md at the repo root: what the app is, architecture rules, release flow, brand model, posting per social, Meta setup, standing rules, current state and next steps. No code change.",
+  "features": ["updates"],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    { "path": "HANDOFF.md", "note": "new handoff document" }
+  ]
+}
