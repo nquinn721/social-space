@@ -192,8 +192,9 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <dl className="profile-signin" aria-label={`${name} sign-in`}>
             {!sharesLogins(account.platform) && account.handle && <div><dt>Username</dt><dd><CopyValue value={account.handle} label={`${name} username`}/></dd></div>}
             <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${name} email`}/></dd></div>
-            <div><dt>Password</dt><dd><PasswordCell account={account}/></dd></div>
+            <div><dt>{account.platform === 'youtube' ? 'Google password' : 'Password'}</dt><dd><PasswordCell account={account}/></dd></div>
           </dl>
+          {account.platform === 'youtube' && <p className="footnote">YouTube signs in with your Google account. The window only fills the password saved here, so if Google says it's wrong, change it here to your real Google password.</p>}
           <div className="social-row-links">
             {live && account.handle && <>
               <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> Open in Social Space</button>

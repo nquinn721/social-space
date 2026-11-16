@@ -60,7 +60,7 @@ export function onPasswordSaved(accountId: string, callback: () => void) {
   return () => window.removeEventListener(PASSWORD_SAVED_EVENT, listener);
 }
 /** Gives all these accounts one shared password (reusing one already saved, or a new strong one). */
-export async function ensureSharedPassword(accountIds: string[]): Promise<void> { desktopOnly(); return invoke('ensure_shared_password', { accountIds }); }
+export async function ensureSharedPassword(accountIds: string[]): Promise<void> { desktopOnly(); if (!accountIds.length) return; return invoke('ensure_shared_password', { accountIds }); }
 /** Saves an encrypted file with every username, email and password. Returns its name, or null if cancelled. */
 /** Saves every profile, login, developer account and API key as plain-text JSON; returns the file name, or null if cancelled. */
 export async function exportAccountsJson(): Promise<string | null> { desktopOnly(); return invoke('export_accounts_json'); }

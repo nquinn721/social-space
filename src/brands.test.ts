@@ -56,7 +56,9 @@ describe('brand model', () => {
     expect(passwordGroup([ig1, ig2, tt2], ig2)).toEqual(['ig1', 'ig2']);
     expect(passwordGroup([ig1, ig2, tt2], tt2)).toEqual(['tt2']);
     const yt2 = { ...account('yt2', 'youtube', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
-    expect(passwordGroup([ig1, ig2, tt2, yt2], yt2)).toEqual(['tt2', 'yt2']);
+    // YouTube signs in with the main Google account: no made-up password, and never one TikTok copies.
+    expect(passwordGroup([ig1, ig2, tt2, yt2], yt2)).toEqual([]);
+    expect(passwordGroup([ig1, ig2, tt2, yt2], tt2)).toEqual(['tt2']);
   });
 
   it('knows a profile joining another brand login is not a sign-up', () => {

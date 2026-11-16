@@ -166,7 +166,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
       // accounts share one new password of their own.
       const fresh = made.filter((_, index) => plans[index].mode === 'new');
       for (const item of made.filter((_, index) => plans[index].mode === 'attach')) await ensureSharedPassword(passwordGroup([...existing, ...made], item));
-      if (fresh.length) await ensureSharedPassword(fresh.map((item) => item.id));
+      await ensureSharedPassword(fresh.filter((item) => item.platform !== 'youtube').map((item) => item.id));
       setCurrent(0);
       setStep('signup');
       openSignup(made[0]);

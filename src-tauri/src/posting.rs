@@ -401,7 +401,12 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
     tauri::async_runtime::spawn(async move {
         // WebView2 cookies must be handled off the main thread.
         let (restore_app, restore_window, restore_brand) = (task_app.clone(), task_window.clone(), brand.clone());
-        let shared = tauri::async_runtime::spawn_blocking(move || crate::browser_sessions::restore(&restore_app, &restore_window, &restore_brand)).await.unwrap_or(false);
+        let shared = tauri::async_runtime::spawn_blocking(move || {
+            // A social this PC's folder is already signed in to keeps its own sign-in.
+            let here: Vec<Platform> = [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram].into_iter()
+                .filter(|social| crate::sign_in_state::known_signed_in(&restore_app, &restore_brand, *social)).collect();
+            crate::browser_sessions::restore(&restore_app, &restore_window, &restore_brand, &here)
+        }).await.unwrap_or(false);
         posting.shared_session.store(shared, Ordering::Relaxed);
         if task_window.navigate(url).is_err() {
             return;
@@ -421,9 +426,13 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
             if task_window.url().is_err() {
                 return;
             }
-            let (save_app, save_window, save_brand) = (task_app.clone(), task_window.clone(), brand.clone());
-            let _ = tauri::async_runtime::spawn_blocking(move || crate::browser_sessions::capture(&save_app, &save_window, &save_brand)).await;
             check(task_app.clone(), task_window.clone(), brand.clone()).await;
+            // Only a signed-in window is shared with the other PC.
+            let (save_app, save_window, save_brand) = (task_app.clone(), task_window.clone(), brand.clone());
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let signed_in = crate::sign_in_state::known_signed_in(&save_app, &save_brand, platform);
+                crate::browser_sessions::capture(&save_app, &save_window, &save_brand, signed_in)
+            }).await;
         }
     });
     Ok(window)

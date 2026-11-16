@@ -1,11 +1,12 @@
 {
-  "summary": "Brand Accounts tab cleaned up: each social is one line with its real state (created, signed in, connected, login saved) and the one button that moves it on; sign-in details, links, Reset password and setup steps sit under Details. One shared bio (TikTok's limit) unless the saved bios differ, with one Fill row. Pictures move last, with per-social pictures folded away. The brand page's Connect/Sign in chips now act directly. Connect Instagram shows its result on the Instagram line and brings an already-open approval window to the front. New Reset password opens the social's forgot-password page in the brand window with the email and a new password filled in, saved only after Nate confirms.",
+  "summary": "Brand Accounts tab cleaned up: each social is one line with its real state (created, signed in, connected, login saved) and the one button that moves it on; sign-in details, links, Reset password and setup steps sit under Details. One shared bio (TikTok's limit) unless the saved bios differ, with one Fill row. Pictures move last, with per-social pictures folded away. The brand page's Connect/Sign in chips now act directly. Connect Instagram shows its result on the Instagram line and brings an already-open approval window to the front. New Reset password opens the social's forgot-password page in the brand window with the email and a new password filled in, saved only after Nate confirms. Sign-ins: a shared session from the other PC never overwrites a social this PC is signed in to, and only signed-in windows are shared. YouTube (main Google account) never gets a made-up password, and TikTok never copies YouTube's.",
   "features": [
     "accounts",
     "connections",
     "instagram",
     "posting",
-    "profile-images"
+    "profile-images",
+    "team-sync"
   ],
   "changes": [
     {
@@ -125,6 +126,42 @@
     {
       "path": "docs/brand-profiles.md",
       "note": "Bio section, Reset password"
+    },
+    {
+      "path": "src-tauri/src/browser_sessions.rs",
+      "note": "restore skips socials signed in here; capture only when signed in"
+    },
+    {
+      "path": "src/brands.ts",
+      "note": "passwordGroup: no generated password for YouTube"
+    },
+    {
+      "path": "src/brands.test.ts",
+      "note": "tests"
+    },
+    {
+      "path": "src/profileService.ts",
+      "note": "ensureSharedPassword no-ops on an empty list"
+    },
+    {
+      "path": "src/CreateAccountWizard.tsx",
+      "note": "no generated password for YouTube"
+    },
+    {
+      "path": "src-tauri/gen/schemas/acl-manifests.json",
+      "note": "generated"
+    },
+    {
+      "path": "src-tauri/gen/schemas/capabilities.json",
+      "note": "generated"
+    },
+    {
+      "path": "src-tauri/gen/schemas/desktop-schema.json",
+      "note": "generated"
+    },
+    {
+      "path": "src-tauri/gen/schemas/windows-schema.json",
+      "note": "generated"
     }
   ],
   "kept": []
