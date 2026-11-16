@@ -21,6 +21,12 @@ describe('brand status', () => {
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'none', username: '', detail: '' } } })).toMatchObject({ kind: 'connect', action: { kind: 'connect' } });
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
   });
+  it('asks to sign in when the brand window is not signed in, and never says Ready then', () => {
+    const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' }), account('y', 'youtube')]);
+    const signIns = { tiktok: { signedIn: false, checkedAt: 0 }, youtube: { signedIn: true, checkedAt: 0 } };
+    expect(socialStatus(ws, 'b', 'tiktok', { signIns })).toMatchObject({ kind: 'sign-in', tone: 'todo', action: { kind: 'sign-in' }, canPost: true });
+    expect(socialStatus(ws, 'b', 'youtube', { signIns })).toMatchObject({ kind: 'ready' });
+  });
   it('tells a missing profile from one not created yet, and a missing saved login', () => {
     const ws = base([account('t', 'tiktok', { status: 'planned' }), account('x', 'x')]);
     expect(socialStatus(ws, 'b', 'instagram')).toMatchObject({ kind: 'no-profile', action: { kind: 'create' } });

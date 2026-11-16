@@ -6,6 +6,8 @@ import { wrongLogin } from './useBrowserPosting';
 import { hasAccountPassword } from './profileService';
 import type { ConnectionCheck } from './setupNeeds';
 import type { BrandInstagram } from './useBrandInstagram';
+import type { BrandSignIn } from './postingService';
+import { useSignIns } from './useSignIns';
 
 /**
  * Where a brand stands on each social, worked out from the real data: whether its profile exists, which
@@ -16,9 +18,9 @@ import type { BrandInstagram } from './useBrandInstagram';
  * through their own upload page in a per-brand app window (needs the profile and its login). YouTube
  * channels live under the main Google account on purpose, so that is never a problem.
  */
-export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'connect' | 'reconnect' | 'no-password' | 'ready';
+export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'connect' | 'reconnect' | 'sign-in' | 'no-password' | 'ready';
 export type Tone = 'ok' | 'ready' | 'todo' | 'problem' | 'muted' | 'checking';
-export type SocialAction = 'create' | 'finish-signup' | 'own-login' | 'connect' | 'save-login';
+export type SocialAction = 'create' | 'finish-signup' | 'own-login' | 'connect' | 'sign-in' | 'save-login';
 export type SocialStatus = {
   platform: Platform;
   account?: Account;
@@ -35,7 +37,12 @@ export type SocialStatus = {
   via: PostMode;
 };
 /** What the app knows about connections and saved sign-ins; a missing entry means still checking. */
-export type StatusInputs = { connections?: Record<string, ConnectionCheck | undefined>; passwords?: Record<string, boolean | undefined> };
+export type StatusInputs = {
+  connections?: Record<string, ConnectionCheck | undefined>;
+  passwords?: Record<string, boolean | undefined>;
+  /** Whether this brand's window is signed in on each social (checked when it was last open). */
+  signIns?: Partial<Record<Platform, BrandSignIn>>;
+};
 
 const via = (platform: Platform) => postMode(platform);
 const viaText = (platform: Platform) => via(platform) === 'api' ? 'Posts by itself through the API.' : 'Posts through its upload page in a brand window; you press Post.';
@@ -54,6 +61,12 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
     if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${viaText(platform)}`, canPost: true };
     if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Instagram connection ran out.', action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
     return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect it through Meta so the app can post Reels for it.', action: { kind: 'connect', label: 'Connect Instagram', short: 'Connect' }, canPost: false };
+  }
+  // The brand window posts as whoever it is signed in as, so a window that isn't signed in comes first.
+  // Posting still works: the window asks for the sign-in and fills it.
+  const signIn = inputs.signIns?.[platform];
+  if (via(platform) === 'browser' && signIn && !signIn.signedIn) {
+    return { ...base, kind: 'sign-in', tone: 'todo', label: 'Not signed in', detail: `The ${name} window isn't signed in. Sign in once and it stays signed in.`, action: { kind: 'sign-in', label: `Sign in to ${name}`, short: 'Sign in' }, canPost: true };
   }
   // YouTube channels sit under the main Google account by design: nothing to save per brand.
   const ownLogin = platform !== 'youtube';
@@ -77,6 +90,7 @@ export function chipLabel(status: SocialStatus): string {
     case 'no-profile': return 'None';
     case 'checking': return '…';
     case 'no-password': return 'Save login';
+    case 'sign-in': return 'Sign in';
     default: return status.action?.short ?? status.label;
   }
 }
@@ -142,5 +156,6 @@ export function instagramConnection(instagram: BrandInstagram | null): Record<st
 /** A brand's status on every social, with its Instagram connection and saved logins checked. */
 export function useBrandStatuses(workspace: Workspace, brandId: string | undefined, instagram: BrandInstagram | null): SocialStatus[] {
   const passwords = useSavedPasswords(workspace.accounts.filter((account) => account.brandId === brandId));
-  return useMemo(() => brandId ? brandStatuses(workspace, brandId, { connections: instagramConnection(instagram), passwords }) : [], [workspace, brandId, instagram, passwords]);
+  const signIns = useSignIns()[brandId ?? ''];
+  return useMemo(() => brandId ? brandStatuses(workspace, brandId, { connections: instagramConnection(instagram), passwords, signIns }) : [], [workspace, brandId, instagram, passwords, signIns]);
 }

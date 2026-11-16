@@ -1,14 +1,15 @@
-# Brand profile details and ghost-text suggestions
+# Brand bio and ghost-text suggestions
 
-## Profile details (brand page, Accounts tab)
+## Bio (brand page, Accounts tab)
 
-Each brand has one bio per social and YouTube channel keywords, saved on its profiles (`Account.bio`,
-`Account.keywords`).
+Each brand has one bio for every social by default (one box, held to the tightest limit, TikTok's 80
+characters), and YouTube channel keywords, saved on its profiles (`Account.bio`, `Account.keywords`). When the
+saved bios differ, or after **Use a different bio per social**, each social gets its own box.
 
 - When a bio or the keywords are empty, Grok writes suggestions for all of the brand's socials in one request
   (`src/assistant/profileWriter.ts`), each bio fitted to that social's limit (`BIO_LIMITS`). They show as grey
   ghost text; Tab takes one. **Suggest with Grok** asks for new ones.
-- **Fill on <social>** / **Fill all N profiles** saves the details, then opens each live profile's editor in the
+- The **Fill on** row (one button per live social, plus **All N**) saves the details, then opens each live profile's editor in the
   brand's own window (the same signed-in folder posting uses) and fills the brand picture (at the social's
   size), name, bio, website and, on YouTube, the keywords. It never presses Save, Submit or Publish.
 
@@ -23,7 +24,9 @@ If the brand's window isn't signed in yet, its sign-in page fills first: TikTok 
 username and password, Instagram and YouTube with the parent login the profile or channel lives under (for
 example the main Instagram login or Google account). A signed-out TikTok window starts on TikTok's
 email-and-password sign-in and returns to the profile afterwards, since the profile page's own sign-in pop-up
-opens on the QR code. Each brand card on the Accounts tab shows that login (username, email, password).
+opens on the QR code. Each social's line on the Accounts tab shows that login (username, email, password) under Details, with
+**Reset password**: the social's forgot-password page in the brand window, the email and a new password filled
+in, saved only after **It worked, save it** (`open_password_reset` / `save_reset_password` in `posting.rs`).
 
 The window keeps filling for 10 minutes as the editor opens or changes step. Back end: `open_profile_editor`
 in `src-tauri/src/posting.rs`, fill script `profile_edit_script` in `src-tauri/src/autofill.rs`.
@@ -36,5 +39,5 @@ Tab badge. Tab takes it; typing replaces it; Shift+Tab, or Tab in a field with t
 Where suggestions come from:
 
 - Post panel description and hashtags: Grok's caption for the video (`cachedPostSuggestion`, once per video).
-- Brand Profile details: bios and YouTube keywords (above).
+- Brand Bio: bios and YouTube keywords (above).
 - Account panel: the bio (Grok, for that social) and the display name (the account name).

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppWindow, Check, FolderOpen, ImagePlus, Loader2, RotateCcw, Sparkles, Wand2, X as Close } from 'lucide-react';
+import { Check, FolderOpen, ImagePlus, Loader2, RotateCcw, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { getPlatform, normalizeHandle, type Account, type Brand, type BrandImage, type View, type Workspace } from './model';
 import { buildPrompt, buildRefinePrompt, STYLES, type ImageStyle } from './imageAiService';
 import { BANNER, bannerPrompt, brandImagePreview, generatePictures, keepBanner, keepFile, keepSquare, pictureFileFor, PROFILE_SIZES, profilePicturePath, revealBrandImage, type Aspect, type GeneratedImage } from './brandImageService';
@@ -185,11 +185,12 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
           <button type="button" className="primary-button small-button" disabled={blocked} aria-expanded={target?.kind === 'brand'} onClick={() => studioFor({ kind: 'brand' })}><Wand2 size={14}/> {image?.file ? 'Make a new one' : 'Generate with Grok'}</button>
           <button type="button" className="outline-button small-button" disabled={blocked} onClick={() => void choose()}><ImagePlus size={14}/> Choose a file</button>
         </div>
+        {image?.file && accounts.some((account) => account.status === 'active') && <div className="picture-put-on"><span>Put it on</span>{accounts.filter((account) => account.status === 'active').map((account) => <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || !pictureFileFor(account, brand)} aria-label={`Put on ${getPlatform(account.platform).name}`} title={`Opens ${getPlatform(account.platform).name} profile settings with the picture filled in`} onClick={() => void putOn(account)}><BrandMark platform={account.platform} small/> {getPlatform(account.platform).name}</button>)}</div>}
       </div>
     </div>
     {target?.kind === 'brand' && <PictureStudio key="brand" title={`Picture for ${brand.name}`} aspect="1:1" initial={image?.prompt ? '' : brand.name} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
 
-    {image?.file && <div className="banner-row">
+    {image?.file && youtube && <div className="banner-row">
       <div className="banner-frame" aria-label="YouTube banner preview">{bannerPreview ? <img src={bannerPreview} alt=""/> : <span>{image.banner ? 'Banner is on its way from your partner\'s app' : 'No YouTube banner yet'}</span>}<i className="safe-area" title={`Shown on every device: the centre ${BANNER.safeWidth} x ${BANNER.safeHeight}`}/></div>
       <div className="banner-text"><strong>YouTube banner</strong><small>{BANNER.width} x {BANNER.height}. The outlined middle shows on phones, TVs and computers.</small>
         <div className="heading-buttons">
@@ -199,7 +200,9 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
     </div>}
     {target?.kind === 'banner' && <PictureStudio key="banner" title="YouTube banner" aspect="16:9" initial={bannerPrompt(brand.name, image?.prompt ?? '')} busy={blocked} onUse={(preview) => useBanner(preview)} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
 
-    {accounts.length > 0 && <ul className="picture-socials">{accounts.map((account) => {
+    {accounts.length > 0 && <details className="picture-own" open={target?.kind === 'account' || accounts.some((account) => account.imageFile) || undefined}>
+    <summary>Picture per social <small>{accounts.filter((account) => account.imageFile).length ? `${accounts.filter((account) => account.imageFile).length} with their own` : 'all use the brand picture'}</small></summary>
+    <ul className="picture-socials">{accounts.map((account) => {
       const own = Boolean(account.imageFile);
       const file = pictureFileFor(account, brand);
       const name = getPlatform(account.platform).name;
@@ -210,9 +213,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
           <BrandMark platform={account.platform} small/>
           <div className="picture-social-text"><strong>{name}</strong><small>{own ? 'Its own picture' : file ? 'Brand picture' : 'No picture yet'} · {PROFILE_SIZES[account.platform]} px</small></div>
           <div className="picture-social-actions">
-            {account.status === 'active'
-              ? <button type="button" className="outline-button small-button" disabled={blocked || !file} title={file ? undefined : 'Make a brand picture first'} onClick={() => void putOn(account)}><AppWindow size={13}/> Put on {name}</button>
-              : <small className="footnote">Used when it's created</small>}
+            {account.status !== 'active' && <small className="footnote">Used when it's created</small>}
             <button type="button" className="ghost-button small-button" disabled={blocked} aria-expanded={open} onClick={() => studioFor({ kind: 'account', account })}><Wand2 size={13}/> Own picture</button>
             <button type="button" className="ghost-button small-button" disabled={blocked} onClick={() => void choose(account)}><ImagePlus size={13}/><span className="sr-only">Choose a file for {name}</span></button>
             {own && <button type="button" className="ghost-button small-button" disabled={blocked} onClick={() => void run(async () => { await onSaveAccountImage(account, undefined, `${name} uses the brand picture again.`); })}><RotateCcw size={13}/> Use brand picture</button>}
@@ -220,7 +221,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
         </div>
         {open && <PictureStudio key={account.id} title={`Own picture for ${name}`} aspect="1:1" initial={image?.prompt ? '' : brand.name} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
       </li>;
-    })}</ul>}
+    })}</ul></details>}
     {youtube && image?.banner && youtube.status !== 'active' && <p className="footnote">The banner goes on YouTube once the channel is created.</p>}
     {working && <p className="studio-working" role="status"><Loader2 size={14} className="spin"/> Working…</p>}
     {note && <p className="success-message" role="status">{note}</p>}

@@ -55,6 +55,8 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
   /** A profile Meta approved without naming its Instagram account; its ID finishes the connection. */
   const [needsId, setNeedsId] = useState<Account | null>(null);
   const [setup, setSetup] = useState<Setup>(null);
+  /** The profile the last Connect or Disconnect was for, so its result can show next to it. */
+  const [target, setTarget] = useState<string | null>(null);
   const [checked, setChecked] = useState(0);
   const status = useSetupStatus(accounts, checked);
   const recheck = () => setChecked((value) => value + 1);
@@ -62,7 +64,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
 
   async function connect(account: Account) {
     if (working) return;
-    setWorking(true); setNote('');
+    setWorking(true); setNote(''); setTarget(account.id);
     try {
       const username = await connectProfile(account);
       setSetup(null); await profiles.refresh(); recheck();
@@ -76,7 +78,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
   }
   async function disconnect(account: Account) {
     if (working || !window.confirm(`Disconnect ${getPlatform(account.platform).name} @${account.handle}? The app won't be able to post for it until you connect again.`)) return;
-    setWorking(true); setNote('');
+    setWorking(true); setNote(''); setTarget(account.id);
     try { await disconnectProfile(account); await profiles.refresh(); recheck(); }
     catch (reason) { setNote(errorText(reason)); } finally { setWorking(false); }
   }
@@ -99,7 +101,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
       onDone={(username) => { const account = needsId; setNeedsId(null); void profiles.refresh(); recheck(); setNote(`Instagram connected as @${normalizeHandle(username)} for ${brandName(account)}.`); }}/>}
     {setup && <DevAppSetupGuide key={setup.provider} provider={setup.provider} login={developer.logins?.[setup.provider]} onTrack={developer.onLogin} working={working} onSave={(id, secret, configId) => saveApp(setup.provider, id, secret, configId)} onCancel={() => setSetup(null)}/>}
   </>;
-  return { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp: (provider: Provider) => setSetup({ provider }), recheck, panels, brandName };
+  return { profiles, status, working, setWorking, setNote, connect, disconnect, setupApp: (provider: Provider) => { setTarget(null); setSetup({ provider }); }, recheck, panels, brandName, target, hasPanels: Boolean(note || needsId || setup) };
 }
 
 /**

@@ -6,7 +6,7 @@ export function useSignIns(): SignIns {
   const [signIns, setSignIns] = useState<SignIns>({});
   useEffect(() => {
     let live = true;
-    const load = () => { postingSignIns().then((next) => { if (live) setSignIns(next); }).catch(() => undefined); };
+    const load = () => { postingSignIns().then((next) => { if (live) setSignIns(next ?? {}); }).catch(() => undefined); };
     load();
     let stop: (() => void) | undefined;
     void onSignInChange(load).then((unlisten) => { if (live) stop = unlisten; else unlisten(); });

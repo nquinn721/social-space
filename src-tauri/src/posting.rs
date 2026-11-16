@@ -518,6 +518,69 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
     open_signed_in(&app, url, dir, posting).map(|_| ())
 }
 
+/// Each social's "forgot password" page. YouTube channels sign in through the main Google account, which
+/// the app never resets.
+pub(crate) fn reset_url(platform: Platform) -> Option<&'static str> {
+    match platform {
+        Platform::Tiktok => Some("https://www.tiktok.com/login/email/forget-password"),
+        Platform::X => Some("https://x.com/i/flow/password_reset"),
+        Platform::Instagram => Some("https://www.instagram.com/accounts/password/reset/"),
+        Platform::Youtube => None,
+    }
+}
+
+/// New passwords handed to a reset window and not saved yet, per profile. Memory only: the saved
+/// password changes only when Nate says the reset went through.
+static PENDING_RESETS: std::sync::Mutex<Option<std::collections::HashMap<String, String>>> = std::sync::Mutex::new(None);
+
+/// Opens the social's password reset page in the brand's window with the profile's email and a new
+/// strong password filled in. Nate enters the emailed code and presses the button; the new password is
+/// saved by `save_reset_password` once he confirms it worked.
+#[tauri::command]
+pub async fn open_password_reset(app: AppHandle, request: ProfileRequest) -> Result<(), String> {
+    let address = reset_url(request.platform).ok_or("YouTube signs in with your main Google account, so there is nothing to reset here.")?;
+    let account_id = request.account_id.clone().filter(|id| !id.is_empty()).ok_or("Choose the profile to reset.")?;
+    if request.email.len() > 320 || account_id.len() > 128 {
+        return Err("The account details are not valid.".into());
+    }
+    let password = crate::account_passwords::generate_password()?;
+    let login = if request.email.trim().is_empty() { request.handle.trim().trim_start_matches('@').to_owned() } else { request.email.trim().to_owned() };
+    let script = crate::autofill::reset_script(&login, &password)?;
+    if let Ok(mut pending) = PENDING_RESETS.lock() {
+        pending.get_or_insert_with(std::collections::HashMap::new).insert(account_id.clone(), password);
+    }
+    let dir = profile_dir(&app, &request.brand_id)?;
+    std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
+    let post = PostRequest {
+        platform: request.platform,
+        brand_id: request.brand_id.clone(),
+        video_id: String::new(),
+        account_id: Some(account_id),
+        handle: request.handle.trim().trim_start_matches('@').to_owned(),
+        email: request.email.clone(),
+        video_path: String::new(),
+        title: String::new(),
+        text: String::new(),
+        made_with_ai: false,
+        made_for_kids: false,
+        cover: String::new(),
+        cover_ms: None,
+    };
+    // The same fill runs on the reset page and on the sign-in page the social may return to afterwards,
+    // where the new password is then already filled.
+    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script: Some(script.clone()), profile_script: Some(script), file: None, shared_session: Default::default() });
+    let url: url::Url = address.parse().map_err(|_| "Invalid reset address.")?;
+    open_signed_in(&app, url, dir, posting).map(|_| ())
+}
+
+/// Saves the new password of a reset Nate finished, replacing the old saved one.
+#[tauri::command]
+pub fn save_reset_password(account_id: String) -> Result<(), String> {
+    let password = PENDING_RESETS.lock().ok().and_then(|mut pending| pending.as_mut()?.remove(&account_id))
+        .ok_or("Press Reset password first, then save once the social accepted the new password.")?;
+    crate::account_passwords::set_account_password(account_id, password)
+}
+
 /// Runs in the upload page. Shows a panel with the post (and Copy buttons as a fallback), attaches the
 /// video once the app has handed it over, fills the caption and title once each, sets the cover, the
 /// AI label and YouTube's audience, steps YouTube through to Visibility and picks Public, and watches
@@ -974,6 +1037,16 @@ pub async fn open_profile_editor(app: AppHandle, request: ProfileEditRequest) ->
 #[cfg(test)]
 mod profile_edit_tests {
     use super::*;
+
+    #[test]
+    fn resets_open_each_socials_forgot_password_page() {
+        assert!(reset_url(Platform::Youtube).is_none());
+        for platform in [Platform::Instagram, Platform::X, Platform::Tiktok] {
+            let page: url::Url = reset_url(platform).unwrap().parse().unwrap();
+            assert!(crate::browser::allowed_navigation(&page, false) && on_social(&page));
+        }
+        assert!(save_reset_password("nothing-pending".into()).is_err());
+    }
 
     #[test]
     fn each_social_opens_its_profile_editor() {

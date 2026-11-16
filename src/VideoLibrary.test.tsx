@@ -18,7 +18,7 @@ import * as files from './videoFileService';
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: vi.fn() }));
 import { invoke } from '@tauri-apps/api/core';
 let postingHandler: ((event: { payload: unknown }) => void) | undefined;
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async (_name: string, handler: (event: { payload: unknown }) => void) => { postingHandler = handler; return () => {}; }) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(async (name: string, handler: (event: { payload: unknown }) => void) => { if (name !== 'posting-sign-in') postingHandler = handler; return () => {}; }) }));
 vi.mock('./videoSourcesService', () => ({
   DESKTOP_ONLY: 'desktop only',
   listVideoSources: vi.fn(),

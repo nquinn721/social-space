@@ -66,7 +66,7 @@ describe('brand picture', () => {
   it('makes a 16:9 YouTube banner', async () => {
     const onSaveImage = vi.fn().mockResolvedValue(true);
     const user = userEvent.setup();
-    render(<BrandPicture brand={{ ...brand, image: { file: 'brand.jpg', prompt: 'bunny face' } }} accounts={[]} busy={false} onSaveImage={onSaveImage} onSaveAccountImage={vi.fn()}/>);
+    render(<BrandPicture brand={{ ...brand, image: { file: 'brand.jpg', prompt: 'bunny face' } }} accounts={[account('youtube')]} busy={false} onSaveImage={onSaveImage} onSaveAccountImage={vi.fn()}/>);
     await user.click(screen.getByRole('button', { name: /Make a banner/ }));
     await user.click(await screen.findByRole('button', { name: /Make 4 takes/ }));
     expect(vi.mocked(pictures.generatePictures).mock.calls[0][0]).toMatchObject({ aspect: '16:9' });

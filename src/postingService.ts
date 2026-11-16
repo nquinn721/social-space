@@ -25,6 +25,17 @@ export async function openProfilePage(request: { platform: Platform; brandId: st
   desktopOnly(); return invoke('open_profile_page', { request });
 }
 
+/** Opens the social's forgot-password page in the brand's window, with the profile's email and a new password filled in (not saved yet). */
+export async function openPasswordReset(request: { platform: Platform; brandId: string; accountId: string; handle: string; email: string }): Promise<void> {
+  desktopOnly(); return invoke('open_password_reset', { request: { ...request, inBrowser: false } });
+}
+/** Saves the new password of the last reset of this profile, once the social accepted it. */
+export async function saveResetPassword(accountId: string): Promise<void> {
+  desktopOnly();
+  await invoke('save_reset_password', { accountId });
+  window.dispatchEvent(new CustomEvent('account-password-saved', { detail: accountId }));
+}
+
 /** What a brand profile's editor gets filled with: the profile's own name, bio, website and keywords, and its picture. */
 export type ProfileEditRequest = { platform: Platform; brandId: string; accountId?: string; handle: string; email: string; fields: FormFields; imagePath?: string };
 /** Opens the profile's editor (picture, name, bio) in a Social Space window signed in as the brand, filled for Nate to check and save. */

@@ -8,7 +8,7 @@ import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, passwordGroup, pla
 
 const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id, item])).values()];
 import { ensureSharedPassword } from '../profileService';
-import BrandAccounts from '../BrandAccounts';
+import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
 import { useBrandInstagram } from '../useBrandInstagram';
 import { brandStatuses, brandSummary, useBrandStatuses, type SocialStatus } from '../brandStatus';
 import BrandCard from '../BrandCard';
@@ -117,6 +117,8 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     return onSave({ ...workspace, accounts: workspace.accounts.map((item) => { const draft = byId.get(item.id); return draft ? { ...item, bio: draft.bio, keywords: draft.keywords } : item; }) }, message);
   }
   const [adding, setAdding] = useState(false);
+  /** A chip on the brand page that connects or signs in one social: the Accounts tab acts on it. */
+  const [accountRequest, setAccountRequest] = useState<AccountRequest | undefined>();
   /** The new profile shares the brand's password, so every social signs in the same way. */
   async function startSignUp(account: Account, siblings: Account[]) {
     if (!onSignUp) return;
@@ -156,7 +158,10 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       const kind = status.action?.kind;
       if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
       else if (kind === 'finish-signup' && status.account && onSignUp) void startSignUp(status.account, accounts);
-      else showBrandTab('accounts');
+      else {
+        showBrandTab('accounts');
+        if (kind === 'connect' || kind === 'sign-in') setAccountRequest({ platform: status.platform, kind, at: Date.now() });
+      }
     };
     const notCreated = accounts.filter((account) => account.status !== 'active');
     const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
@@ -192,12 +197,12 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       : brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
         instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
-      {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} developerLogins={developerLogins} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
-      {onSave && <BrandProfiles key={brand.id} brand={brand} accounts={accounts} busy={busy || !loaded} developerLogins={developerLogins} onSave={saveProfiles}/>}
       <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
         onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
-        addHint={(platform) => planPresence(all, platform, brand.name, baseEmail).reason} warnings={(account) => issues.filter((issue) => issue.accountId === account.id).map((issue) => issue.text)}/>
+        addHint={(platform) => planPresence(all, platform, brand.name, baseEmail).reason} warnings={(account) => issues.filter((issue) => issue.accountId === account.id).map((issue) => issue.text)} request={accountRequest}/>
+      {onSave && <BrandProfiles key={brand.id} brand={brand} accounts={accounts} busy={busy || !loaded} developerLogins={developerLogins} onSave={saveProfiles}/>}
+      {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} developerLogins={developerLogins} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
       {onRemoveBrand && <div className="danger-zone"><button type="button" className="remove-button" disabled={!loaded || busy} onClick={() => onRemoveBrand(brand)}><Trash2 size={14}/> Delete {brand.name}</button><small>{accounts.some((account) => account.status === 'active') ? 'Live profiles stay on the socials; only their saved details here are removed.' : 'Removes the brand, its profiles and its videos from the app.'}</small></div>}
       </>}
     </>;

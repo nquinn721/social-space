@@ -95,6 +95,8 @@
     "allow-open-posting-window",
     "allow-open-profile-page",
     "allow-open-profile-editor",
+    "allow-open-password-reset",
+    "allow-save-reset-password",
     "allow-posting-sign-ins",
     "allow-choose-image-file",
     "allow-load-image-preview",

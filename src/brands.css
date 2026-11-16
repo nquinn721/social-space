@@ -180,3 +180,30 @@
 .sign-ins-brand + .sign-ins-row { border-top: 0; }
 .sign-ins-row .password-edit { flex-wrap: nowrap; }
 .sign-ins-row .password-edit input { flex: 1; width: auto; }
+
+/* Brand Accounts tab: one compact line per social, details on demand */
+.brand-accounts { display: grid; gap: 10px; margin-bottom: 16px; }
+.brand-accounts-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.brand-accounts-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.brand-accounts-head small { color: var(--text-3); font-size: 12.5px; }
+.social-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.social-row { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.social-row.tone-problem, .social-row.tone-todo { border-color: var(--tone-line); }
+.social-row-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.social-row-title { flex: 1; min-width: 140px; }
+.social-row-title strong { display: block; font-size: 14px; font-weight: 600; }
+.social-row-title small { display: block; font-size: 12.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.social-row .status-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--tone); }
+.social-row-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.social-row-actions .flip { transform: rotate(180deg); }
+.social-row-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12.5px; color: var(--tone, var(--warning)); line-height: 1.45; }
+.social-row-note svg { flex-shrink: 0; margin-top: 3px; }
+.social-row-reset { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--accent-soft); }
+.social-row-reset span { flex: 1; min-width: 220px; }
+.social-row-details { display: grid; gap: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.social-row-details .profile-signin { background: var(--surface); max-width: 560px; }
+.social-row-details .profile-signin > div { grid-template-columns: 80px minmax(0, 1fr); }
+.social-row-details .copy-text { flex-wrap: nowrap; max-width: 100%; }
+.social-row-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.social-row-details .footnote { margin: 0; }
+.add-socials { display: flex; flex-wrap: wrap; gap: 8px; }
