@@ -1,0 +1,50 @@
+{
+ "summary": "Repo context kit change gates: feature map completed (stale InstagramAppSetup.tsx entry fixed, 6 new features, every menu and screen mapped), pre-push gate and the gate rule in AGENTS.md and CLAUDE.md. The Claude Code Stop hook is held back: it diffs against the local main branch, which is 182 commits behind origin/main here. features.json and .githooks are checked by the checker itself, so they are not listed as spots.",
+ "features": [
+  "accounts",
+  "connections",
+  "email",
+  "instagram",
+  "partner-review",
+  "profile-images",
+  "video-library",
+  "assistant-grok",
+  "navigation",
+  "overview",
+  "settings",
+  "posting",
+  "team-sync",
+  "series"
+ ],
+ "changes": [
+  {
+   "old": "InstagramAppSetup",
+   "new": "DevAppSetupGuide"
+  }
+ ],
+ "spots": [
+  {
+   "path": "AGENTS.md",
+   "note": "pointer to .claude/CLAUDE.md and the gate rule"
+  },
+  {
+   "path": "CLAUDE.md",
+   "note": "gate rule"
+  },
+  {
+   "path": ".gitattributes",
+   "note": "hooks keep LF endings"
+  },
+  {
+   "path": ".gitignore",
+   "note": "graph cache ignored"
+  }
+ ],
+ "kept": [
+  {
+   "term": "InstagramAppSetup",
+   "path": ".claude/context/features.json",
+   "reason": "the instagram feature's note records what replaced it (75522b4)"
+  }
+ ]
+}
