@@ -93,13 +93,15 @@ describe('video library', () => {
     expect(categoryProgress(base.videos!, ['instagram', 'tiktok'])).toEqual({ total: 1, everywhere: 0 });
     setup();
     expect(screen.getByRole('button', { name: 'Rabbit 1' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('1 video · 2 posts to make')).toBeInTheDocument();
+    // Facebook always has a tile: every brand posts Reels to its Page.
+    expect(screen.getByText('1 video · 3 posts to make')).toBeInTheDocument();
   });
 
   it("shows where a video is up, never marks one posted from a logo, and unmarks after asking", async () => {
     const { onSave, onOpen, user } = setup();
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
-    expect(within(video).getByText('Posted on 1 of 3')).toBeInTheDocument();
+    expect(within(video).getByText('Posted on 1 of 4')).toBeInTheDocument();
+    expect(within(video).getByRole('button', { name: 'Connect Facebook Page (Facebook)' })).toBeInTheDocument();
     expect(within(video).getByRole('group', { name: 'Where it goes' })).toHaveTextContent('TikTok');
     expect(within(video).queryByRole('button', { name: 'TikTok' })).not.toBeInTheDocument();
     await user.click(within(video).getByRole('button', { name: /Edit post/ }));
@@ -347,7 +349,8 @@ describe('post details', () => {
 describe('content stages', () => {
   it('filters posts by stage', async () => {
     const review: Video = { ...bunny, id: 'v3', title: 'Hop review', posted: [], createdAt: 3 };
-    const { user } = setup({ ...base, accounts: [profile('1', 'instagram')], videos: [bunny, review] });
+    const bunnyEverywhere = { ...bunny, posted: ['instagram', 'facebook'] as Video['posted'] };
+    const { user } = setup({ ...base, accounts: [profile('1', 'instagram')], videos: [bunnyEverywhere, review] });
     await user.click(screen.getByRole('button', { name: 'To post 1' }));
     expect(screen.getByRole('listitem', { name: 'Hop review' })).toBeInTheDocument();
     expect(screen.queryByRole('listitem', { name: 'Bunny hop' })).not.toBeInTheDocument();
@@ -363,7 +366,7 @@ describe('content stages', () => {
     const second = screen.getByRole('listitem', { name: 'Knots: Part 2 of 2' });
     expect(within(second).getByText('Part 2 of 2')).toBeInTheDocument();
     const tiles = within(second).getByRole('group', { name: 'Where it goes' });
-    expect(within(tiles).getByText('After Part 1')).toBeInTheDocument();
+    expect(within(tiles).getAllByText('After Part 1').length).toBeGreaterThan(0);
     expect(within(tiles).queryByRole('button', { name: 'Post on TikTok' })).not.toBeInTheDocument();
   });
 });

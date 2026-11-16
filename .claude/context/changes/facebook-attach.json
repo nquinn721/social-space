@@ -1,0 +1,66 @@
+{
+  "summary": "Facebook Pages made in SoftWings can be attached: a brand without a Facebook profile shows Connect Facebook Page (chip and video tile), which saves a live Facebook profile and opens Meta's window. Every video has a Facebook tile. Instagram's wrong-account tile says 'Wrong account' with the detail in its tooltip.",
+  "features": [
+    "facebook",
+    "accounts",
+    "video-library",
+    "updates"
+  ],
+  "changes": [
+    {
+      "old": "Create Facebook profile",
+      "new": "Connect Facebook Page"
+    }
+  ],
+  "kept": [],
+  "spots": [
+    {
+      "path": "src/brandStatus.ts",
+      "note": "facebook with no profile: Connect Facebook Page"
+    },
+    {
+      "path": "src/pages/AccountsPage.tsx",
+      "note": "attachFacebook: saves a live Facebook profile, then connects it"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "Facebook tile on every video; fix routes Page connect to the brand page; Instagram 'Wrong account' short label"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "tests"
+    },
+    {
+      "path": "src/brandStatus.test.ts",
+      "note": "tests"
+    },
+    {
+      "path": "src/pages/AccountsPage.test.tsx",
+      "note": "tests"
+    },
+    {
+      "path": "package.json",
+      "note": "version 0.30.2"
+    },
+    {
+      "path": "package-lock.json",
+      "note": "version 0.30.2"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "version 0.30.2"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "note": "version 0.30.2"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "version 0.30.2"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "version 0.30.2"
+    }
+  ]
+}

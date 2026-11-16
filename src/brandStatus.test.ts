@@ -25,6 +25,7 @@ describe('brand status', () => {
   it('reads a Facebook Page from its connection: a Page name is never a wrong handle, and no login is asked for', () => {
     const ws = base([account('f', 'facebook', { handle: '', signupEmail: 'softwings25@gmail.com' })]);
     expect(socialStatus(ws, 'b', 'facebook').kind).toBe('checking');
+    expect(socialStatus(base([]), 'b', 'facebook')).toMatchObject({ kind: 'no-profile', tone: 'todo', action: { kind: 'connect', label: 'Connect Facebook Page' } });
     expect(socialStatus(ws, 'b', 'facebook', { connections: { f: { state: 'none', username: '', detail: '' } } })).toMatchObject({ kind: 'connect', action: { kind: 'connect', label: 'Connect Facebook Page' }, canPost: false });
     expect(socialStatus(ws, 'b', 'facebook', { connections: { f: { state: 'ok', username: 'Bunny Daily', detail: '' } }, passwords: { f: false } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
   });
