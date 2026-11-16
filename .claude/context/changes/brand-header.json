@@ -1,0 +1,22 @@
+{
+  "summary": "Brand page header chips are the social and one short state (Ready, Connect, Sign in, Wrong account, Not added) with the handle, full detail and action in the tooltip, so nothing overlaps or gets cut off. An Instagram connection to another account is labelled 'Wrong account' (full text in its detail).",
+  "features": ["accounts", "instagram", "updates"],
+  "changes": [
+    { "old": "Connected as @", "new": "Wrong account" }
+  ],
+  "kept": [
+    { "term": "Connected as @", "path": "src/BrandAccounts.tsx", "reason": "the Accounts tab row has room to name the account Meta connected" }
+  ],
+  "spots": [
+    { "path": "src/pages/AccountsPage.tsx", "note": "social-strip chips: name + short state; details in the tooltip" },
+    { "path": "src/styles.css", "note": "social-chip-text holds the state line" },
+    { "path": "src/brandStatus.ts", "note": "mismatch label 'Wrong account'; chipLabel no-profile 'Not added'" },
+    { "path": "src/brandStatus.test.ts", "note": "Wrong account label" },
+    { "path": "package.json", "note": "0.30.3" },
+    { "path": "package-lock.json", "note": "0.30.3" },
+    { "path": "hub-app.json", "note": "0.30.3" },
+    { "path": "src-tauri/tauri.conf.json", "note": "0.30.3" },
+    { "path": "src-tauri/Cargo.toml", "note": "0.30.3" },
+    { "path": "src-tauri/Cargo.lock", "note": "0.30.3" }
+  ]
+}

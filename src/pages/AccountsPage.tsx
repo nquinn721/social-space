@@ -10,7 +10,7 @@ const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id,
 import { ensureSharedPassword } from '../profileService';
 import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
 import { useBrandInstagram } from '../useBrandInstagram';
-import { brandStatuses, brandSummary, useBrandStatuses, type SocialStatus } from '../brandStatus';
+import { brandStatuses, brandSummary, chipLabel, useBrandStatuses, type SocialStatus } from '../brandStatus';
 import BrandCard from '../BrandCard';
 import { useSetupStatus } from '../setupService';
 const NO_ACCOUNTS: Account[] = [];
@@ -199,11 +199,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       <div className="social-strip" role="list" aria-label={`${brand.name} on each social`}>{statuses.map((status) => {
         const name = getPlatform(status.platform).name;
         const handle = status.account?.handle ? `@${status.account.handle.replace(/^@/, '')}` : '';
-        return <button type="button" role="listitem" key={status.platform} className={`social-chip tone-${status.tone}`} title={status.detail} disabled={!loaded || busy || adding}
+        // The social and one short state; the handle, the full detail and the action are in the tooltip.
+        return <button type="button" role="listitem" key={status.platform} className={`social-chip tone-${status.tone}`} title={[handle, status.detail, status.tone !== 'ok' ? status.action?.label : ''].filter(Boolean).join(' · ')} disabled={!loaded || busy || adding}
           onClick={() => fixStatus(status)} aria-label={`${name}: ${status.label}${status.action ? `. ${status.action.label}` : ''}`}>
           <BrandMark platform={status.platform}/>
-          <span className="social-chip-text"><strong>{name}</strong><small>{handle || status.detail}</small></span>
-          <span className="social-chip-state"><span className="dot"/>{status.action && status.tone !== 'ok' ? status.action.label : status.label}</span>
+          <span className="social-chip-text"><strong>{name}</strong><span className="social-chip-state"><span className="dot"/>{status.kind === 'reconnect' ? status.label : chipLabel(status)}</span></span>
         </button>;
       })}</div>
       <div className="segmented account-tabs brand-tabs" role="tablist" aria-label={`${brand.name} sections`}>

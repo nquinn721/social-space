@@ -20,7 +20,8 @@ describe('brand status', () => {
     expect(socialStatus(ws, 'b', 'instagram').kind).toBe('checking');
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'none', username: '', detail: '' } } })).toMatchObject({ kind: 'connect', action: { kind: 'connect' } });
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
-    expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } })).toMatchObject({ kind: 'reconnect', label: 'Connected as @softwings25', canPost: false });
+    expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } })).toMatchObject({ kind: 'reconnect', label: 'Wrong account', canPost: false });
+    expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } }).detail).toMatch(/Meta connected @softwings25/);
   });
   it('reads a Facebook Page from its connection: a Page name is never a wrong handle, and no login is asked for', () => {
     const ws = base([account('f', 'facebook', { handle: '', signupEmail: 'softwings25@gmail.com' })]);

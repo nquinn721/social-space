@@ -63,7 +63,7 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
     if (!check) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking the Instagram connection.', canPost: false };
     const connectedAs = check.username.replace(/^@/, '');
     if (check.state === 'ok' && connectedAs && account.handle && connectedAs.toLowerCase() !== account.handle.replace(/^@/, '').toLowerCase()) {
-      return { ...base, kind: 'reconnect', tone: 'problem', label: `Connected as @${connectedAs}`, detail: `Meta connected @${connectedAs}, not @${account.handle.replace(/^@/, '')}, so posts would go to @${connectedAs}. Connect again and pick @${account.handle.replace(/^@/, '')} in the Meta window.`, action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
+      return { ...base, kind: 'reconnect', tone: 'problem', label: 'Wrong account', detail: `Meta connected @${connectedAs}, not @${account.handle.replace(/^@/, '')}, so posts would go to @${connectedAs}. Connect again and pick @${account.handle.replace(/^@/, '')} in the Meta window.`, action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
     }
     if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${viaText(platform)}`, canPost: true };
     if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Instagram connection ran out.', action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
@@ -103,7 +103,7 @@ export const withProfile = (statuses: SocialStatus[]) => statuses.filter((status
 export function chipLabel(status: SocialStatus): string {
   switch (status.kind) {
     case 'ready': return 'Ready';
-    case 'no-profile': return 'None';
+    case 'no-profile': return 'Not added';
     case 'checking': return '…';
     case 'no-password': return 'Save login';
     case 'sign-in': return 'Sign in';
