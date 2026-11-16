@@ -128,13 +128,17 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       const check = status.connections[account.id];
       if (working && flow.target === account.id) return { tone: 'checking', text: 'Waiting for Meta…', note: 'Sign in and press Allow in the Connect Instagram window.' };
       if (!check) return { tone: 'checking', text: 'Checking…' };
+      const as = normalizeHandle(check.username);
+      if (check.state === 'ok' && as && account.handle && as.toLowerCase() !== normalizeHandle(account.handle).toLowerCase()) return { tone: 'problem', text: `Connected as @${as}`, action: { label: 'Reconnect', run: () => void connect(account) },
+        note: `Meta connected @${as}, not @${normalizeHandle(account.handle)}, so posts would go to @${as}. Press Reconnect and pick @${normalizeHandle(account.handle)} in the Meta window. If it isn't listed, it isn't a Professional account linked to your Meta business yet.` };
       if (check.state === 'ok') return { tone: 'ok', text: 'Ready' };
       if (check.state === 'expired' || check.state === 'unchecked') return { tone: 'problem', text: 'Connection ran out', action: { label: 'Reconnect', run: () => void connect(account) }, note: check.detail || undefined };
       return { tone: 'todo', text: 'Not connected', action: { label: 'Connect', run: () => void connect(account) } };
     }
     const signIn = signIns[account.platform];
     const own = normalizeHandle(account.handle).toLowerCase();
-    if (signIn && !signIn.signedIn) return { tone: 'todo', text: 'Not signed in', action: { label: 'Sign in', run: () => void viewProfile(account, false) } };
+    if (signIn && !signIn.signedIn) return { tone: 'todo', text: 'Not signed in', action: { label: 'Sign in', run: () => void viewProfile(account, false) },
+      note: account.platform === 'youtube' ? undefined : `Sign in once and it stays signed in. If ${name} says the password is wrong, use Details, Reset password.` };
     if (signIn?.handle && own && signIn.handle.toLowerCase() !== own) return { tone: 'problem', text: `Signed in as @${signIn.handle}`, action: { label: 'Fix sign-in', run: () => void viewProfile(account, false) },
       note: `The ${brand.name} window is signed in to another account. Sign out there and sign in as @${normalizeHandle(account.handle)}.` };
     if (account.platform !== 'youtube' && status.passwords[account.id] === false) return { tone: 'todo', text: 'Login not saved', action: { label: 'Save login', run: () => onEditAccount(account) } };
@@ -161,7 +165,6 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       const name = getPlatform(account.platform).name;
       const live = account.status === 'active';
       const check = status.connections[account.id];
-      const connectedAs = check?.state === 'ok' ? normalizeHandle(check.username) : '';
       const state = rowState(account);
       const who = `${brand.name}${account.handle ? ` (@${account.handle})` : ''}: `;
       const steps = live && !(postMode(account.platform) === 'api' && check?.state === 'ok') ? needsOf(account).filter((need) => need.manual && need.status !== 'done' && !need.optional) : [];
@@ -173,11 +176,12 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <BrandMark platform={account.platform}/>
           <div className="social-row-title">
             <strong>{name}</strong>
-            <small>{account.handle ? `@${normalizeHandle(account.handle)}` : 'No username yet'}{connectedAs && connectedAs.toLowerCase() !== normalizeHandle(account.handle).toLowerCase() ? ` · connected as @${connectedAs}` : ''}</small>
+            <small>{account.handle ? `@${normalizeHandle(account.handle)}` : 'No username yet'}</small>
           </div>
           <span className="status-chip">{state.tone === 'checking' ? <Loader2 size={12} className="spin"/> : <span className="dot"/>}{state.text}</span>
           <span className="social-row-actions">
             {state.action && <button type="button" className="primary-button small-button" disabled={disabled} onClick={state.action.run}>{state.action.label}</button>}
+            {live && account.handle && <button type="button" className="outline-button small-button" aria-label={`View ${name} profile`} title={`Opens @${normalizeHandle(account.handle)} on ${name} in a Social Space window signed in as ${brand.name}`} onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> View</button>}
             <button type="button" className="ghost-button small-button" aria-expanded={expanded} aria-label={`${name} details`} onClick={() => setOpen((current) => ({ ...current, [account.id]: !expanded }))}>Details <ChevronDown size={14} className={expanded ? 'flip' : ''}/></button>
           </span>
         </div>
@@ -196,10 +200,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           </dl>
           {account.platform === 'youtube' && <p className="footnote">YouTube signs in with your Google account. The window only fills the password saved here, so if Google says it's wrong, change it here to your real Google password.</p>}
           <div className="social-row-links">
-            {live && account.handle && <>
-              <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> Open in Social Space</button>
-              <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>
-            </>}
+            {live && account.handle && <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>}
             {live && account.platform !== 'youtube' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
             <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => onEditAccount(account)}><Pencil size={14}/> Edit details</button>
             {live && check?.state === 'ok' && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void disconnect(account)}>Disconnect</button>}

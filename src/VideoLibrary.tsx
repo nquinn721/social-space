@@ -399,7 +399,9 @@ function VideoThumb({ video, playable, watching, onToggle }: { video: Video; pla
 /** Whether approving posts the video by itself: its Instagram post is still to do and the profile is connected through Meta. */
 function canPostAutomatically(video: Video, socials: Platform[], instagram: BrandInstagram | null | undefined, canPost: boolean) {
   return !video.generation && canPost && socials.includes('instagram') && !video.posted.includes('instagram')
-    && !!instagram?.connected && instagram.canUploadFiles && isLocalVideo(video.mediaSource);
+    && !!instagram?.connected && instagram.canUploadFiles && isLocalVideo(video.mediaSource)
+    // Never to an account other than the brand's own profile.
+    && instagram.username.replace(/^@/, '').toLowerCase() === instagram.handle.replace(/^@/, '').toLowerCase();
 }
 
 type PanelProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; instagram?: BrandInstagram | null; onOpen: Props['onOpen'];

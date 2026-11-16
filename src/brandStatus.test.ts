@@ -20,6 +20,7 @@ describe('brand status', () => {
     expect(socialStatus(ws, 'b', 'instagram').kind).toBe('checking');
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'none', username: '', detail: '' } } })).toMatchObject({ kind: 'connect', action: { kind: 'connect' } });
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
+    expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } })).toMatchObject({ kind: 'reconnect', label: 'Connected as @softwings25', canPost: false });
   });
   it('asks to sign in when the brand window is not signed in, and never says Ready then', () => {
     const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' }), account('y', 'youtube')]);

@@ -1,12 +1,13 @@
 {
-  "summary": "Brand Accounts tab cleaned up: each social is one line with its real state (created, signed in, connected, login saved) and the one button that moves it on; sign-in details, links, Reset password and setup steps sit under Details. One shared bio (TikTok's limit) unless the saved bios differ, with one Fill row. Pictures move last, with per-social pictures folded away. The brand page's Connect/Sign in chips now act directly. Connect Instagram shows its result on the Instagram line and brings an already-open approval window to the front. New Reset password opens the social's forgot-password page in the brand window with the email and a new password filled in, saved only after Nate confirms. Sign-ins: a shared session from the other PC never overwrites a social this PC is signed in to, and only signed-in windows are shared. YouTube (main Google account) never gets a made-up password, and TikTok never copies YouTube's.",
+  "summary": "Brand Accounts tab cleaned up: each social is one line with its real state (created, signed in, connected, login saved) and the one button that moves it on; sign-in details, links, Reset password and setup steps sit under Details. One shared bio (TikTok's limit) unless the saved bios differ, with one Fill row. Pictures move last, with per-social pictures folded away. The brand page's Connect/Sign in chips now act directly. Connect Instagram shows its result on the Instagram line and brings an already-open approval window to the front. New Reset password opens the social's forgot-password page in the brand window with the email and a new password filled in, saved only after Nate confirms. Sign-ins: a shared session from the other PC never overwrites a social this PC is signed in to, and only signed-in windows are shared. YouTube (main Google account) never gets a made-up password, and TikTok never copies YouTube's. 0.28.2: every Instagram status reads the same re-checked connection (Connect/Disconnect fire instagram-connection-changed); a Meta connection to a different account than the profile shows 'Connected as @x' and blocks posting; each live row has a View button.",
   "features": [
     "accounts",
     "connections",
     "instagram",
     "posting",
     "profile-images",
-    "team-sync"
+    "team-sync",
+    "video-library"
   ],
   "changes": [
     {
@@ -162,6 +163,18 @@
     {
       "path": "src-tauri/gen/schemas/windows-schema.json",
       "note": "generated"
+    },
+    {
+      "path": "src/useBrandInstagram.ts",
+      "note": "re-checks on instagram-connection-changed"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "no automatic Instagram post to an account other than the profile"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "tests"
     }
   ],
   "kept": []
