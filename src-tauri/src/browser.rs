@@ -34,18 +34,24 @@ pub(crate) fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
 
 /// TikTok's sign-in always opens on its email-and-password form, never the choice screen (QR code,
 /// Google, phone): the page the app can fill with the profile's saved login. Keeps `redirect_url`.
+/// Its password reset pages (/login/email/forget-password, ...) also sit under /login and are left alone.
 pub(crate) fn email_login_page(url: &url::Url) -> Option<url::Url> {
     let host = url.host_str()?.trim_start_matches("www.");
     if url.scheme() != "https" || host != "tiktok.com" {
         return None;
     }
     let path = url.path().trim_end_matches('/');
-    if path != "/login" && !path.starts_with("/login/") || path.starts_with("/login/phone-or-email/email") {
+    if path != "/login" && !path.starts_with("/login/") || path.starts_with("/login/phone-or-email/email") || is_password_reset(path) {
         return None;
     }
     let mut next = url.clone();
     next.set_path("/login/phone-or-email/email");
     Some(next)
+}
+
+/// TikTok's "forgot password" pages, which live under /login but must never be sent to the sign-in form.
+fn is_password_reset(path: &str) -> bool {
+    path.split('/').any(|part| part.contains("forget") || part.contains("forgot") || part.contains("reset"))
 }
 
 /// TikTok switches between its sign-in screens inside the page (QR code, "Back", "Use phone"), which
@@ -56,7 +62,8 @@ pub(crate) const EMAIL_LOGIN_SCRIPT: &str = r#"(() => {
   const EMAIL = '/login/phone-or-email/email';
   const check = () => {
     const path = location.pathname.replace(/\/+$/, '');
-    if ((path === '/login' || path.startsWith('/login/')) && !path.startsWith(EMAIL)) {
+    const reset = path.split('/').some((part) => /forget|forgot|reset/.test(part));
+    if ((path === '/login' || path.startsWith('/login/')) && !path.startsWith(EMAIL) && !reset) {
       location.replace(EMAIL + location.search + location.hash);
     }
   };
@@ -145,6 +152,9 @@ mod tests {
         assert_eq!(next("https://www.tiktok.com/login/qrcode").as_deref(), Some("https://www.tiktok.com/login/phone-or-email/email"));
         assert_eq!(next("https://www.tiktok.com/login/phone-or-email").as_deref(), Some("https://www.tiktok.com/login/phone-or-email/email"));
         assert!(next("https://www.tiktok.com/login/phone-or-email/email").is_none());
+        // Its password reset pages stay where they are.
+        assert!(next("https://www.tiktok.com/login/email/forget-password").is_none());
+        assert!(next("https://www.tiktok.com/login/phone/forget-password?lang=en").is_none());
         assert!(next("https://www.tiktok.com/loginx").is_none());
         assert!(next("https://www.tiktok.com/tiktokstudio/upload").is_none());
         assert!(next("https://x.com/login").is_none());
@@ -156,6 +166,7 @@ mod tests {
         assert!(EMAIL_LOGIN_SCRIPT.contains("'/login/phone-or-email/email'"));
         assert!(EMAIL_LOGIN_SCRIPT.contains("pushState") && EMAIL_LOGIN_SCRIPT.contains("popstate"));
         assert!(EMAIL_LOGIN_SCRIPT.contains("location.search"));
+        assert!(EMAIL_LOGIN_SCRIPT.contains("forget|forgot|reset"));
     }
 
     #[test]
