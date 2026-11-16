@@ -20,7 +20,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Must be registered as the Redirect URL in the Meta app. It is caught in the window
 /// and never actually requested. Meta rejects localhost, so it is an HTTPS address on
@@ -40,6 +40,8 @@ const CONFIG_ENTRY: &str = "meta";
 const APPROVAL_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 static BUSY: Mutex<bool> = Mutex::new(false);
+/// The approval window that is open now, so a second Connect brings it to the front instead of failing.
+static OPEN_WINDOW: Mutex<Option<String>> = Mutex::new(None);
 /// Marks the error Connect returns when Meta connected but would not say which Instagram account.
 pub const ID_NEEDED: &str = "INSTAGRAM_ID_NEEDED";
 /// A working business token whose Instagram account could not be looked up, kept in memory only
@@ -392,7 +394,10 @@ impl Busy {
     }
 }
 impl Drop for Busy {
-    fn drop(&mut self) { if let Ok(mut busy) = BUSY.lock() { *busy = false; } }
+    fn drop(&mut self) {
+        if let Ok(mut busy) = BUSY.lock() { *busy = false; }
+        if let Ok(mut open) = OPEN_WINDOW.lock() { *open = None; }
+    }
 }
 
 /// One click: opens Instagram's approval page with the profile's saved username and
@@ -400,7 +405,19 @@ impl Drop for Busy {
 #[tauri::command]
 /// instagram_id: the profile's Instagram account ID when it is known, used when Meta will not list the account.
 pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, username: Option<String>, instagram_id: Option<String>) -> Result<crate::instagram::InstagramConnection, String> {
-    let _busy = Busy::take()?;
+    let _busy = match Busy::take() {
+        Ok(busy) => busy,
+        Err(reason) => {
+            // The approval window may be hidden behind the app: bring it forward rather than doing nothing.
+            let open = OPEN_WINDOW.lock().ok().and_then(|open| open.clone()).and_then(|label| app.get_webview_window(&label));
+            if let Some(window) = open {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+                return Err("The Connect Instagram window is already open; it's in front now. Sign in there and press Allow.".into());
+            }
+            return Err(reason);
+        }
+    };
     // New Meta apps only offer Unified login, so an app saved without its configuration
     // (from the earlier form) is set up again instead of opening Instagram's page, which fails.
     let meta = load_app()?.filter(|app| app.config_id.is_some()).ok_or("SETUP_NEEDED")?;
@@ -430,6 +447,8 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
         })
         .build()
         .map_err(|_| "Could not open the Instagram window.")?;
+    let _ = window.set_focus();
+    if let Ok(mut open) = OPEN_WINDOW.lock() { *open = Some(label.clone()); }
     let closed = label.clone();
     window.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::Destroyed) {

@@ -88,6 +88,8 @@ fn main() {
         "open_posting_window",
         "open_profile_page",
         "open_profile_editor",
+        "open_password_reset",
+        "save_reset_password",
         "posting_sign_ins",
         "choose_image_file",
         "load_image_preview",

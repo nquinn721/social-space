@@ -585,6 +585,12 @@
           "markdownDescription": "Enables the open_kling command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_password_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-password-reset",
+          "markdownDescription": "Enables the open_password_reset command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_platform_action command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-platform-action",
@@ -787,6 +793,12 @@
           "type": "string",
           "const": "allow-save-production-app",
           "markdownDescription": "Enables the save_production_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_reset_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-reset-password",
+          "markdownDescription": "Enables the save_reset_password command without any pre-configured scope."
         },
         {
           "description": "Enables the save_workspace command without any pre-configured scope.",
@@ -1299,6 +1311,12 @@
           "markdownDescription": "Denies the open_kling command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_password_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-password-reset",
+          "markdownDescription": "Denies the open_password_reset command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_platform_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-platform-action",
@@ -1501,6 +1519,12 @@
           "type": "string",
           "const": "deny-save-production-app",
           "markdownDescription": "Denies the save_production_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_reset_password command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-reset-password",
+          "markdownDescription": "Denies the save_reset_password command without any pre-configured scope."
         },
         {
           "description": "Denies the save_workspace command without any pre-configured scope.",

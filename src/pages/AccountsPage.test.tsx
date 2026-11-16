@@ -40,7 +40,7 @@ describe('brands page', () => {
     renderPage({ onSignUp });
     const user = await openBrand('Soft Wings');
     const profiles = screen.getByRole('region', { name: 'Soft Wings profiles' });
-    expect(within(profiles).getByRole('article', { name: 'Instagram profile' })).toHaveTextContent(/Live/);
+    expect(within(profiles).getByRole('listitem', { name: 'Instagram profile' })).toBeInTheDocument();
     expect(within(profiles).getByText('Not created yet')).toBeInTheDocument();
     await user.click(within(profiles).getByRole('button', { name: 'Create on X' }));
     // The brand's Instagram sits on a login shared with Clip Lab, so its password is not the brand's: X gets its own.
@@ -63,6 +63,7 @@ describe('brands page', () => {
     const onAlreadyCreated = vi.fn();
     renderPage({ onAlreadyCreated });
     const user = await openBrand('Soft Wings');
+    await user.click(screen.getByRole('button', { name: 'X details' }));
     await user.click(screen.getByRole('button', { name: 'Mark it live' }));
     expect(onAlreadyCreated).toHaveBeenCalledWith(expect.objectContaining({ id: '1', platform: 'x' }));
   });
@@ -72,6 +73,8 @@ describe('brands page', () => {
     const onRemoveBrand = vi.fn();
     renderPage({ onRemoveAccount, onRemoveBrand });
     const user = await openBrand('Soft Wings');
+    await user.click(screen.getByRole('button', { name: 'Instagram details' }));
+    await user.click(screen.getByRole('button', { name: 'X details' }));
     expect(screen.queryByRole('button', { name: 'Delete Instagram profile' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Delete X profile' }));
     expect(onRemoveAccount).toHaveBeenCalledWith(expect.objectContaining({ id: '1' }));

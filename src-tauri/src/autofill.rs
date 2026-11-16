@@ -538,6 +538,16 @@ pub(crate) fn sign_in_script(login: &str, email: &str, password: Option<String>)
     fill_script(&FillPayload { fields: &fields, image: None, password, watch: true, replace: false, sign_in_only: true, note: None }).map(Some)
 }
 
+/// The fill for a password reset page: the profile's email (or username) and the new password in every
+/// password box, with a banner on what to do. It never presses a button.
+pub(crate) fn reset_script(login: &str, password: &str) -> Result<String, String> {
+    let mut fields = FormFields::default();
+    if login.contains('@') { fields.email = Some(login.to_owned()); } else { fields.username = Some(login.to_owned()); }
+    validate(&fields)?;
+    let note = "Socialspace filled the email and a new password. Enter the emailed code, press the button, then press \"It worked, save it\" in Social Space.".to_owned();
+    fill_script(&FillPayload { fields: &fields, image: None, password: Some(password.to_owned()), watch: true, replace: true, sign_in_only: false, note: Some(note) })
+}
+
 const MAX_NOTE_CHARS: usize = 300;
 
 /// The fill for a brand's profile-edit window: name, bio, website, keywords and picture, replacing what

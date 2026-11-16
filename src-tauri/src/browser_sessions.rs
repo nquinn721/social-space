@@ -134,9 +134,27 @@ fn newer_session(sessions: &BTreeMap<String, BrandSession>, seen: &BTreeMap<Stri
     (session.saved_by != me && session.saved_at > seen.get(brand).copied().unwrap_or(0) && !session.cookies.is_empty()).then(|| session.clone())
 }
 
-/// Before a brand window loads its page: puts the other PC's newer session into this PC's folder.
-/// Returns true when a shared session was put in. Must run off the main thread (WebView2 cookies).
-pub fn restore(app: &AppHandle, window: &WebviewWindow, brand: &str) -> bool {
+/// The cookie sites of one social: a sign-in there lives in these cookies.
+pub(crate) fn social_sites(platform: crate::Platform) -> &'static [&'static str] {
+    match platform {
+        crate::Platform::Tiktok => &["tiktok.com"],
+        crate::Platform::Youtube => &["youtube.com", "google.com"],
+        crate::Platform::X => &["x.com", "twitter.com"],
+        crate::Platform::Instagram => &["instagram.com", "facebook.com"],
+    }
+}
+
+/// Whether a shared cookie may go into this PC's folder: never over a social this folder is already
+/// signed in to, so a working sign-in here is never replaced by the other PC's copy.
+fn may_restore(domain: &str, signed_in_here: &[crate::Platform]) -> bool {
+    let domain = domain.trim_start_matches('.').to_ascii_lowercase();
+    !signed_in_here.iter().any(|platform| social_sites(*platform).iter().any(|site| domain == *site || domain.ends_with(&format!(".{site}"))))
+}
+
+/// Before a brand window loads its page: puts the other PC's newer session into this PC's folder, for the
+/// socials this folder is not signed in to (`signed_in_here`). Returns true when a shared session was put
+/// in. Must run off the main thread (WebView2 cookies).
+pub fn restore(app: &AppHandle, window: &WebviewWindow, brand: &str, signed_in_here: &[crate::Platform]) -> bool {
     let Some(dir) = data_dir(app) else { return false };
     let session = {
         let Ok(_guard) = FILE_LOCK.lock() else { return false };
@@ -146,7 +164,7 @@ pub fn restore(app: &AppHandle, window: &WebviewWindow, brand: &str) -> bool {
     };
     let Some(session) = session else { return false };
     let mut put = 0;
-    for cookie in &session.cookies {
+    for cookie in session.cookies.iter().filter(|cookie| may_restore(&cookie.domain, signed_in_here)) {
         if window.set_cookie(live(cookie)).is_ok() {
             put += 1;
         }
@@ -160,9 +178,13 @@ pub fn restore(app: &AppHandle, window: &WebviewWindow, brand: &str) -> bool {
     put > 0
 }
 
-/// Saves the brand window's social cookies for the other PC, when they changed. Must run off the main
+/// Saves the brand window's social cookies for the other PC, when they changed and the window is signed in
+/// (`signed_in`), so a signed-out folder never replaces a good shared session. Must run off the main
 /// thread (WebView2 cookies).
-pub fn capture(app: &AppHandle, window: &WebviewWindow, brand: &str) {
+pub fn capture(app: &AppHandle, window: &WebviewWindow, brand: &str, signed_in: bool) {
+    if !signed_in {
+        return;
+    }
     let Some(dir) = data_dir(app) else { return };
     let Ok(cookies) = window.cookies() else { return };
     let now = now_ms();
@@ -200,6 +222,17 @@ pub const REJECTED_NOTICE: &str = r#"(() => {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn never_restores_over_a_social_signed_in_here() {
+        let here = [crate::Platform::X, crate::Platform::Youtube];
+        assert!(!may_restore(".x.com", &here));
+        assert!(!may_restore("accounts.google.com", &here));
+        assert!(!may_restore(".youtube.com", &here));
+        assert!(may_restore(".tiktok.com", &here));
+        assert!(may_restore(".instagram.com", &here));
+        assert!(may_restore(".x.com", &[]));
+    }
 
     fn cookie(name: &str, domain: &str, expires: Option<i64>) -> Cookie<'static> {
         let mut built = Cookie::build((name.to_string(), "v".to_string())).domain(domain.to_string()).path("/").secure(true).http_only(true).same_site(SameSite::Lax);

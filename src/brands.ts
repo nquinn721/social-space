@@ -191,13 +191,16 @@ export function addsToLogin(all: Account[], account: Account): boolean {
 }
 
 export function passwordGroup(all: Account[], account: Account): string[] {
+  // A YouTube channel signs in with the main Google account: its password is Google's, typed by Nate,
+  // never one the app makes up.
+  if (account.platform === 'youtube') return [];
   const key = emailKey(account.signupEmail);
   if (sharesLogins(account.platform) && key) {
     const login = all.filter((item) => item.id !== account.id && item.platform === account.platform && emailKey(item.signupEmail) === key);
     if (login.length) return [...login.map((item) => item.id), account.id];
   }
   const sharedLogin = (item: Account) => sharesLogins(item.platform) && all.some((other) => other.id !== item.id && other.platform === item.platform && other.brandId !== item.brandId && emailKey(other.signupEmail) === emailKey(item.signupEmail));
-  const own = all.filter((item) => item.id !== account.id && account.brandId && item.brandId === account.brandId && !sharedLogin(item))
+  const own = all.filter((item) => item.id !== account.id && account.brandId && item.brandId === account.brandId && item.platform !== 'youtube' && !sharedLogin(item))
     .sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active'));
   return [...own.map((item) => item.id), account.id];
 }

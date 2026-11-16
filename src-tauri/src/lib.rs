@@ -538,6 +538,8 @@ pub fn run() {
             posting::open_posting_window,
             posting::open_profile_page,
             posting::open_profile_editor,
+            posting::open_password_reset,
+            posting::save_reset_password,
             sign_in_state::posting_sign_ins,
             autofill::choose_image_file,
             autofill::load_image_preview,

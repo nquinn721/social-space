@@ -45,6 +45,8 @@ export default function BrandProfiles({ brand, accounts, busy, developerLogins, 
   const [working, setWorking] = useState('');
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
+  /** Whether each social gets its own bio; one shared bio unless the saved ones already differ. */
+  const [split, setSplit] = useState(() => new Set(accounts.map((account) => (account.bio ?? '').trim())).size > 1);
   const asked = useRef('');
   // Profiles added or saved elsewhere show their latest details, keeping what is being typed here.
   const saved = accounts.map((account) => `${account.id}:${account.bio ?? ''}:${keywordText(account.keywords)}`).join('|');
@@ -107,42 +109,59 @@ export default function BrandProfiles({ brand, accounts, busy, developerLogins, 
   });
 
   if (!accounts.length) return null;
+  const fillButton = (account: Account) => {
+    const name = getPlatform(account.platform).name;
+    const length = (drafts[account.id]?.bio ?? '').trim().length;
+    return <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || length > BIO_LIMITS[account.platform]} title={`Opens ${name}'s profile editor as ${brand.name} with the picture, name and bio filled in`} onClick={() => void fill([account])}>
+      {working === account.id ? <Loader2 size={13} className="spin"/> : <BrandMark platform={account.platform} small/>} {name}</button>;
+  };
+  const youtube = accounts.find(takesKeywords);
+  const keywordsField = youtube && (() => {
+    const draft = drafts[youtube.id] ?? draftOf(youtube);
+    const keywordsId = `profile-keywords-${youtube.id}`;
+    return <div className="brand-profile-field">
+      <label htmlFor={keywordsId}>YouTube channel keywords <span>comma-separated</span></label>
+      <GhostInput id={keywordsId} maxLength={600} value={draft.keywords} suggestion={copy?.keywords.length ? copy.keywords.join(', ') : undefined} onAccept={(keywords) => set(youtube.id, { keywords })} onChange={(event) => set(youtube.id, { keywords: event.target.value })} onBlur={() => set(youtube.id, { keywords: parseKeywords(draft.keywords).join(', ') })} placeholder="massage, relaxation, self care"/>
+    </div>;
+  })();
+  // One bio for every social unless they already differ: the shortest limit (TikTok's) is what fits all.
+  const tightest = accounts.reduce((best, account) => BIO_LIMITS[account.platform] < BIO_LIMITS[best.platform] ? account : best, accounts[0]);
+  const shared = drafts[tightest.id] ?? draftOf(tightest);
+  const sharedLength = shared.bio.trim().length;
+  const setAll = (bio: string) => setDrafts((current) => Object.fromEntries(accounts.map((account) => [account.id, { ...(current[account.id] ?? draftOf(account)), bio }])));
+
   return <section className="card brand-profiles" aria-labelledby="brand-profiles-title">
     <div className="brand-profiles-head">
       <div>
-        <h3 id="brand-profiles-title">Profile details</h3>
-        <p>Grok suggests each bio and the YouTube keywords in grey: press Tab to take one, or type your own. Fill opens each social's profile editor as {brand.name} with the brand picture, name and bio filled in, and you press Save there.</p>
+        <h3 id="brand-profiles-title">Bio</h3>
+        <p>{split ? 'Each social has its own bio.' : `One bio for every social. Press Tab to take Grok's grey suggestion.`} Fill opens a social's profile editor as {brand.name} with the picture, name and bio filled in; you press Save there.</p>
       </div>
       <div className="heading-buttons">
         <button type="button" className="ghost-button small-button" disabled={blocked || writing} onClick={() => void suggest(true)}>{writing ? <><Loader2 size={14} className="spin"/> Writing…</> : <><Sparkles size={14}/> {copy ? 'New suggestions' : 'Suggest with Grok'}</>}</button>
         {dirty.length > 0 && <button type="button" className="outline-button small-button" disabled={blocked || Boolean(tooLong)} onClick={() => void run('save', async () => { await save(); })}><Save size={14}/> Save</button>}
-        {live.length > 1 && <button type="button" className="primary-button small-button" disabled={blocked || Boolean(tooLong)} onClick={() => void fill(live)}><AppWindow size={14}/> {working === 'all' ? 'Opening…' : `Fill all ${live.length} profiles`}</button>}
       </div>
     </div>
-    <ul className="brand-profile-list">{accounts.map((account) => {
+    {split ? <ul className="brand-profile-list">{accounts.map((account) => {
       const name = getPlatform(account.platform).name;
       const draft = drafts[account.id] ?? draftOf(account);
       const limit = BIO_LIMITS[account.platform];
       const length = draft.bio.trim().length;
       const bioId = `profile-bio-${account.id}`;
-      const keywordsId = `profile-keywords-${account.id}`;
-      const suggestedKeywords = copy?.keywords.length ? copy.keywords.join(', ') : undefined;
       return <li key={account.id} className="brand-profile">
-        <div className="brand-profile-top">
-          <BrandMark platform={account.platform} small/>
-          <strong>{name}</strong>{account.handle && <small>@{account.handle.replace(/^@/, '')}</small>}
-          <span className="brand-profile-action">{account.status === 'active'
-            ? <button type="button" className="outline-button small-button" disabled={blocked || length > limit} onClick={() => void fill([account])}>{working === account.id ? <><Loader2 size={13} className="spin"/> Opening…</> : <><AppWindow size={13}/> Fill on {name}</>}</button>
-            : <small className="footnote">Filled in when it's created</small>}</span>
-        </div>
-        <label htmlFor={bioId}>Bio <span className={`bio-count ${length > limit ? 'over' : ''}`}>{length}/{limit}</span></label>
-        <GhostTextarea id={bioId} rows={account.platform === 'youtube' ? 4 : 2} maxLength={1000} value={draft.bio} suggestion={copy?.bios[account.platform]} onAccept={(bio) => set(account.id, { bio })} onChange={(event) => set(account.id, { bio: event.target.value })} placeholder={writing ? 'Grok is writing a suggestion…' : `What ${brand.name} is about on ${name}`}/>
-        {takesKeywords(account) && <>
-          <label htmlFor={keywordsId}>Channel keywords <span>comma-separated</span></label>
-          <GhostInput id={keywordsId} maxLength={600} value={draft.keywords} suggestion={suggestedKeywords} onAccept={(keywords) => set(account.id, { keywords })} onChange={(event) => set(account.id, { keywords: event.target.value })} onBlur={() => set(account.id, { keywords: parseKeywords(draft.keywords).join(', ') })} placeholder="massage, relaxation, self care"/>
-        </>}
+        <label htmlFor={bioId}><BrandMark platform={account.platform} small/> {name} <span className={`bio-count ${length > limit ? 'over' : ''}`}>{length}/{limit}</span></label>
+        <GhostTextarea id={bioId} rows={2} maxLength={1000} value={draft.bio} suggestion={copy?.bios[account.platform]} onAccept={(bio) => set(account.id, { bio })} onChange={(event) => set(account.id, { bio: event.target.value })} placeholder={writing ? 'Grok is writing a suggestion…' : `What ${brand.name} is about on ${name}`}/>
       </li>;
-    })}</ul>
+    })}</ul> : <div className="brand-profile-field">
+      <label htmlFor={`profile-bio-${brand.id}`}>Bio on every social <span className={`bio-count ${sharedLength > BIO_LIMITS[tightest.platform] ? 'over' : ''}`}>{sharedLength}/{BIO_LIMITS[tightest.platform]}{accounts.length > 1 ? ` (${getPlatform(tightest.platform).name}'s limit)` : ''}</span></label>
+      <GhostTextarea id={`profile-bio-${brand.id}`} rows={2} maxLength={1000} value={shared.bio} suggestion={copy?.bios[tightest.platform]} onAccept={setAll} onChange={(event) => setAll(event.target.value)} placeholder={writing ? 'Grok is writing a suggestion…' : `What ${brand.name} is about`}/>
+    </div>}
+    {accounts.length > 1 && <button type="button" className="text-button bio-mode" onClick={() => { if (split) setAll(shared.bio); setSplit(!split); }}>{split ? 'Use one bio everywhere' : 'Use a different bio per social'}</button>}
+    {keywordsField}
+    {live.length > 0 && <div className="brand-profile-fill">
+      <span>Fill on</span>
+      {live.map(fillButton)}
+      {live.length > 1 && <button type="button" className="primary-button small-button" disabled={blocked || Boolean(tooLong)} onClick={() => void fill(live)}><AppWindow size={14}/> {working === 'all' ? 'Opening…' : `All ${live.length}`}</button>}
+    </div>}
     {note && <p className="success-message" role="status">{note}</p>}
     {error && <div className="error-message" role="alert">{error}</div>}
   </section>;
