@@ -1,29 +1,99 @@
 {
   "summary": "Instagram for a brand is set up the way Meta needs it: a professional account linked to the brand's Facebook Page in the business portfolio. Connect never saves a different account than the profile's own (Meta offering only @softwings25 for @massagewithmia is now refused with what to do). The Instagram row shows its setup steps, explained, until it is connected to its own account: make the Page in the business portfolio's Pages settings and create or log into the Instagram profile from that Page (Connect assets), and switch an existing account to professional in the brand's own window, never the shared one.",
-  "features": ["accounts", "connections", "instagram", "posting", "updates"],
+  "features": [
+    "accounts",
+    "connections",
+    "instagram",
+    "posting",
+    "updates"
+  ],
   "changes": [
-    { "old": "Linked to a Facebook Page or business portfolio", "new": "Linked to the brand's Facebook Page in your business portfolio" },
-    { "old": "Professional account (Business or Creator)", "new": "Professional account (Business)" }
+    {
+      "old": "Linked to a Facebook Page or business portfolio",
+      "new": "Linked to the brand's Facebook Page in your business portfolio"
+    },
+    {
+      "old": "Professional account (Business or Creator)",
+      "new": "Professional account (Business)"
+    }
   ],
   "kept": [],
   "spots": [
-    { "path": "src-tauri/src/instagram_login.rs", "note": "choose_account refuses another account than the profile's handle (WRONG_ACCOUNT), never asks for an ID for it" },
-    { "path": "src-tauri/src/posting.rs", "note": "ProfileRequest.target (profile|settings), settings_url opens Instagram settings in the brand window" },
-    { "path": "src-tauri/src/setup_pages.rs", "note": "meta-business-pages: the business portfolio's Pages settings" },
-    { "path": "src/setupNeeds.ts", "note": "Instagram profile steps: Page in the business portfolio + Instagram from the Page, then professional (brand window)" },
-    { "path": "src/setupNeeds.test.ts", "note": "new step titles and pages" },
-    { "path": "src/setupService.ts", "note": "openNeedPage opens brandWindow steps in the profile's own window" },
-    { "path": "src/setupService.openNeedPage.test.ts", "note": "brand-window steps never open the shared window" },
-    { "path": "src/postingService.ts", "note": "openProfilePage target" },
-    { "path": "src/BrandAccounts.tsx", "note": "steps shown on the Instagram row (explained) until connected to its own account; notes point at them" },
-    { "path": "src/BrandAccounts.test.tsx", "note": "steps on the row, opening a step page" },
-    { "path": "src/SetupTracker.tsx", "note": "uses openNeedPage" },
-    { "path": "src/SetupTracker.test.tsx", "note": "uses openNeedPage" },
-    { "path": "package.json", "note": "0.30.0" },
-    { "path": "package-lock.json", "note": "0.30.0" },
-    { "path": "hub-app.json", "note": "0.30.0" },
-    { "path": "src-tauri/tauri.conf.json", "note": "0.30.0" },
-    { "path": "src-tauri/Cargo.toml", "note": "0.30.0" },
-    { "path": "src-tauri/Cargo.lock", "note": "0.30.0" }
+    {
+      "path": "src-tauri/src/instagram_login.rs",
+      "note": "choose_account refuses another account than the profile's handle (WRONG_ACCOUNT), never asks for an ID for it"
+    },
+    {
+      "path": "src-tauri/src/posting.rs",
+      "note": "ProfileRequest.target (profile|settings), settings_url opens Instagram settings in the brand window"
+    },
+    {
+      "path": "src-tauri/src/setup_pages.rs",
+      "note": "meta-business-pages: the business portfolio's Pages settings"
+    },
+    {
+      "path": "src/setupNeeds.ts",
+      "note": "Instagram profile steps: Page in the business portfolio + Instagram from the Page, then professional (brand window)"
+    },
+    {
+      "path": "src/setupNeeds.test.ts",
+      "note": "new step titles and pages"
+    },
+    {
+      "path": "src/setupService.ts",
+      "note": "openNeedPage opens brandWindow steps in the profile's own window"
+    },
+    {
+      "path": "src/setupService.openNeedPage.test.ts",
+      "note": "brand-window steps never open the shared window"
+    },
+    {
+      "path": "src/postingService.ts",
+      "note": "openProfilePage target"
+    },
+    {
+      "path": "src/BrandAccounts.tsx",
+      "note": "steps shown on the Instagram row (explained) until connected to its own account; notes point at them"
+    },
+    {
+      "path": "src/BrandAccounts.test.tsx",
+      "note": "steps on the row, opening a step page"
+    },
+    {
+      "path": "src/SetupTracker.tsx",
+      "note": "uses openNeedPage"
+    },
+    {
+      "path": "src/SetupTracker.test.tsx",
+      "note": "uses openNeedPage"
+    },
+    {
+      "path": "package.json",
+      "note": "0.30.0"
+    },
+    {
+      "path": "package-lock.json",
+      "note": "0.30.0"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "0.30.0"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "0.30.0"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "0.30.0"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "note": "0.30.0"
+    },
+    {
+      "path": "src-tauri/gen/schemas/windows-schema.json",
+      "note": "regenerated by the build (Facebook commands from 0.29.0 were missing)"
+    }
   ]
 }
