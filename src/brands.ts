@@ -12,8 +12,8 @@ export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number; explain: 
   youtube: { profilesPerLogin: 100, explain: 'YouTube channels live under one Google account as Brand Accounts.' },
   tiktok: { profilesPerLogin: 1, explain: 'TikTok needs a separate account with its own email for each profile.' },
   x: { profilesPerLogin: 1, explain: 'X needs a separate account with its own email for each profile.' },
-  // Pages have no login of their own: they all sit under your own Facebook account.
-  facebook: { profilesPerLogin: 100, explain: 'Facebook Pages live under your own Facebook account; each brand gets its own Page there.' },
+  // Pages have no login of their own: they all belong to the SoftWings business portfolio, managed with your own Facebook account.
+  facebook: { profilesPerLogin: 100, explain: 'Facebook Pages live in the SoftWings business portfolio; each brand gets its own Page there.' },
 };
 
 /** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */

@@ -129,7 +129,7 @@
   {
     "id": "facebook",
     "notes": [
-      "A brand's Facebook profile is its Page (no login of its own, it sits under Nate's Facebook). Connect reuses the Meta app and Login for Business configuration from instagram_login.rs; the configuration needs pages_show_list, pages_read_engagement, pages_manage_posts. Pages can't be created by API, so the wizard embeds facebook.com/pages/create filled in."
+      "A brand's Facebook profile is its Page (no login of its own, it belongs to the SoftWings business portfolio, business_id 591387440571702). Connect reuses the Meta app and Login for Business configuration from instagram_login.rs; the configuration needs pages_show_list, pages_read_engagement, pages_manage_posts. Pages can't be created by API, so the wizard embeds the SoftWings business Pages settings (Add, Create a new Facebook Page) with name and bio filled in."
     ],
     "paths": [
       "src-tauri/src/facebook.rs",

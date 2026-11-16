@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import SetupTracker from './SetupTracker';
 import type { Account } from './model';
 
-vi.mock('./setupService', () => ({ openSetupPage: vi.fn(async () => undefined) }));
-import { openSetupPage } from './setupService';
+vi.mock('./setupService', () => ({ openNeedPage: vi.fn(async () => undefined) }));
+import { openNeedPage } from './setupService';
 
 const yt: Account = { id: 'yt', platform: 'youtube', label: 'Animals', handle: 'animals', status: 'active', notes: '', brandId: 'animals' };
 const brands = [{ id: 'animals', name: 'Animals', notes: '' }];
@@ -24,7 +24,7 @@ describe('setup tracker', () => {
     await user.click(within(published).getByRole('button', { name: 'Mark done' }));
     expect(onMark).toHaveBeenCalledWith('youtube:app:published', true);
     await user.click(within(published).getByRole('button', { name: /Open consent screen/ }));
-    expect(openSetupPage).toHaveBeenCalledWith('google-consent');
+    expect(openNeedPage).toHaveBeenCalledWith(expect.objectContaining({ id: 'youtube:app:published', page: expect.objectContaining({ id: 'google-consent' }) }), [yt], undefined);
     const connection = within(group).getByRole('listitem', { name: 'Animals (@animals): connected for API posting' });
     expect(within(connection).getByText('Google stopped accepting this connection.')).toBeInTheDocument();
     await user.click(within(connection).getByRole('button', { name: 'Reconnect' }));

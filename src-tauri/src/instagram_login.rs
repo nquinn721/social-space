@@ -44,6 +44,8 @@ static BUSY: Mutex<bool> = Mutex::new(false);
 static OPEN_WINDOW: Mutex<Option<String>> = Mutex::new(None);
 /// Marks the error Connect returns when Meta connected but would not say which Instagram account.
 pub const ID_NEEDED: &str = "INSTAGRAM_ID_NEEDED";
+/// Meta shared accounts, but not the one this profile is for.
+pub const WRONG_ACCOUNT: &str = "Wrong Instagram account";
 /// A working business token whose Instagram account could not be looked up, kept in memory only
 /// (never on disk) per profile slot until the user gives the account ID.
 static PENDING: Mutex<Option<std::collections::HashMap<String, String>>> = Mutex::new(None);
@@ -237,12 +239,18 @@ pub(crate) async fn unified_exchange(app: &MetaApp, code: &str) -> Result<String
     Ok(token.access_token)
 }
 
-/// Picks the account to post from: the one matching the profile's handle, else the only one.
+/// Picks the account to post from: the one matching the profile's handle (never another one), or the only one when
+/// the profile has no handle yet.
 fn choose_account(accounts: Vec<IgAccount>, wanted: Option<&str>) -> Result<IgAccount, String> {
     let accounts: Vec<IgAccount> = accounts.into_iter().filter(|account| !account.id.is_empty() && account.id.bytes().all(|b| b.is_ascii_digit())).collect();
-    if let Some(wanted) = wanted {
+    if let Some(wanted) = wanted.map(|name| name.trim().trim_start_matches('@')).filter(|name| !name.is_empty()) {
         if let Some(index) = accounts.iter().position(|account| account.username.eq_ignore_ascii_case(wanted)) {
             return Ok(accounts.into_iter().nth(index).expect("index is in range"));
+        }
+        // Never save another account to this profile: its videos would post there.
+        if !accounts.is_empty() {
+            return Err(format!("{WRONG_ACCOUNT}: Meta offered {} but not @{wanted}. Instagram only shares an account that is Professional (Business or Creator) and linked to a Facebook Page you manage. Do the steps on the Instagram row, then press Connect and tick @{wanted}.",
+                accounts.iter().map(|account| format!("@{}", account.username)).collect::<Vec<_>>().join(", ")));
         }
     }
     match accounts.len() {
@@ -480,6 +488,7 @@ pub async fn connect_instagram_app(app: AppHandle, account_id: Option<String>, u
             Ok(account) => account,
             // Meta connected but kept the account list behind business_management: keep the token
             // in memory and ask for the account ID instead of making the user sign in again.
+            Err(reason) if reason.starts_with(WRONG_ACCOUNT) => return Err(reason),
             Err(reason) => {
                 // A known account ID finishes it straight away; Meta checks it against the token.
                 if let Some(id) = instagram_id.as_deref().map(str::trim).filter(|id| !id.is_empty() && id.len() <= 32 && id.bytes().all(|b| b.is_ascii_digit())) {
@@ -562,7 +571,11 @@ mod tests {
     fn the_matching_or_only_instagram_account_is_chosen() {
         let account = |id: &str, name: &str| IgAccount { id: id.into(), username: name.into() };
         assert_eq!(choose_account(vec![account("1", "other"), account("2", "SoftWings")], Some("softwings")).unwrap().id, "2");
-        assert_eq!(choose_account(vec![account("3", "massagewithmia")], Some("softwings")).unwrap().id, "3");
+        // One account that is not the profile's own is refused, never saved in its place.
+        let wrong = choose_account(vec![account("3", "softwings25")], Some("massagewithmia")).unwrap_err();
+        assert!(wrong.starts_with(WRONG_ACCOUNT) && wrong.contains("@softwings25") && wrong.contains("@massagewithmia"));
+        assert_eq!(choose_account(vec![account("3", "MassageWithMia")], Some("@massagewithmia")).unwrap().id, "3");
+        assert_eq!(choose_account(vec![account("3", "massagewithmia")], None).unwrap().id, "3");
         assert!(choose_account(vec![], None).unwrap_err().contains("asset"));
         assert!(choose_account(vec![account("1", "a"), account("2", "b")], None).unwrap_err().contains("@a, @b"));
         assert!(choose_account(vec![account("../x", "a")], None).is_err());

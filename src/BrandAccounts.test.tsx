@@ -10,7 +10,8 @@ const status = vi.hoisted(() => ({
   connections: {} as Record<string, { state: 'none' | 'ok' | 'expired' | 'unchecked'; username: string; detail: string }>,
   passwords: {} as Record<string, boolean>,
 }));
-vi.mock('./setupService', () => ({ useSetupStatus: () => ({ ...status, refresh: vi.fn() }), openSetupPage: vi.fn(async () => undefined) }));
+vi.mock('./setupService', () => ({ useSetupStatus: () => ({ ...status, refresh: vi.fn() }), openSetupPage: vi.fn(async () => undefined), openNeedPage: vi.fn(async () => undefined) }));
+import { openNeedPage } from './setupService';
 vi.mock('./profileConnections', () => ({
   canConnect: (account: Account) => account.status === 'active',
   connectProfile: vi.fn(async () => 'softwings'),
@@ -57,10 +58,15 @@ describe('brand accounts', () => {
     const user = userEvent.setup();
     await user.click(within(instagram).getByRole('button', { name: 'Connect' }));
     expect(connectProfile).toHaveBeenCalledWith(ig);
+    // Instagram can't connect before its account steps, so they sit on the row, explained.
+    const before = within(instagram).getByRole('list', { name: 'Instagram steps before connecting' });
+    expect(within(before).getByText(/Create a new Instagram profile/)).toBeInTheDocument();
+    await user.click(within(before).getAllByRole('button', { name: 'Done' })[0]);
+    expect(onMark).toHaveBeenCalledWith('ig:page', true);
+    await user.click(within(before).getByRole('button', { name: /Open its settings/ }));
+    expect(openNeedPage).toHaveBeenCalledWith(expect.objectContaining({ id: 'ig:professional' }), [ig, tt], undefined);
     await user.click(within(instagram).getByRole('button', { name: 'Instagram details' }));
     expect(within(instagram).getByText('softwings25@gmail.com')).toBeInTheDocument();
-    await user.click(within(within(instagram).getByRole('list', { name: 'Instagram steps left' })).getAllByRole('button', { name: 'Done' })[0]);
-    expect(onMark).toHaveBeenCalledWith('ig:professional', true);
 
     const tiktok = screen.getByRole('listitem', { name: 'TikTok profile' });
     // TikTok posts through its upload page in the brand's window: ready without an API connection.
@@ -92,7 +98,9 @@ describe('brand accounts', () => {
     render(<BrandAccounts brand={brand} accounts={[profile('ig', 'instagram')]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
     const instagram = screen.getByRole('listitem', { name: 'Instagram profile' });
     expect(within(instagram).getByText('Connected as @softwings25')).toBeInTheDocument();
-    expect(within(instagram).getByText(/posts would go to @softwings25/)).toBeInTheDocument();
+    expect(within(instagram).getByText(/nothing posts here/)).toBeInTheDocument();
+    // The steps that make the right account show up in Meta are on the row.
+    expect(within(instagram).getByRole('list', { name: 'Instagram steps before connecting' })).toBeInTheDocument();
     expect(within(instagram).getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
   });
 

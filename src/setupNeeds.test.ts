@@ -20,8 +20,9 @@ describe('setup needs', () => {
     expect(find(inputs, 'youtube:app:published')?.title).toMatch(/Consent screen published/);
     expect(find(inputs, 'youtube:app:audit')?.why).toMatch(/Private/);
     expect(find(inputs, 'youtube:app:quota')?.optional).toBe(true);
-    expect(find(inputs, 'ig:professional')?.title).toBe('Animals (@animals): Professional account (Business or Creator)');
-    expect(find(inputs, 'ig:page')?.page?.id).toBe('meta-business');
+    expect(find(inputs, 'ig:professional')?.title).toBe('Animals (@animals): Professional account (Business)');
+    expect(find(inputs, 'ig:professional')?.page?.brandWindow).toBe(true);
+    expect(find(inputs, 'ig:page')?.page?.id).toBe('meta-business-pages');
   });
 
   it('tracks X plan and TikTok review and audit', () => {

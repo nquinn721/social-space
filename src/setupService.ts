@@ -5,12 +5,25 @@ import { hasAccountPassword } from './profileService';
 import { canConnect, profileConnection } from './profileConnections';
 import type { Account } from './model';
 import type { Bounds } from './profileService';
-import type { ConnectionCheck, SetupPage } from './setupNeeds';
+import type { ConnectionCheck, Need, SetupPage } from './setupNeeds';
+import type { Workspace } from './model';
+import { openProfilePage } from './postingService';
+import { brandLogin } from './useBrowserPosting';
 
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to check setup.'); }
 
 /** Opens a developer or account page from the setup tracker in an app window. */
 export async function openSetupPage(page: SetupPage): Promise<void> { desktopOnly(); return invoke('open_setup_page', { page }); }
+/**
+ * Opens a step's page. A profile's own settings (switching Instagram to a professional account) open in the
+ * brand's window, signed in as that profile, so the change never lands on another account.
+ */
+export async function openNeedPage(need: Need, accounts: Account[], developerLogins?: Workspace['developerLogins']): Promise<void> {
+  if (!need.page) return;
+  const account = need.page.brandWindow ? accounts.find((item) => item.id === need.accountId) : undefined;
+  if (!account) return openSetupPage(need.page.id);
+  return openProfilePage({ platform: account.platform, brandId: account.brandId ?? '', ...brandLogin(developerLogins, account), handle: account.handle, inBrowser: false, target: 'settings' });
+}
 /** Shows a setup page inside the app at these bounds (for the guided setup) and returns its id. */
 export async function embedSetupPage(page: SetupPage, bounds: Bounds): Promise<string> { desktopOnly(); return invoke('embed_setup_page', { page, bounds }); }
 
