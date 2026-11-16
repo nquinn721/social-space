@@ -94,6 +94,8 @@ pub(crate) fn make_window(
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title("Socialspace · Website")
         .inner_size(1100.0, 800.0)
+        // The app fills logins itself; WebView2's autofill would offer old entries over its fill.
+        .general_autofill_enabled(false)
         .initialization_script(EMAIL_LOGIN_SCRIPT)
         .on_navigation(move |url| allowed_navigation(url, oauth_callback))
         .on_page_load(|window, payload| {

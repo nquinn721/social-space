@@ -1,0 +1,16 @@
+{
+  "summary": "Brand and site windows turn off WebView2's own form autofill, so TikTok's reset page no longer offers the main Gmail typed there before; YouTube gets a thumbnail only where Studio offers a thumbnail upload (Shorts and unverified channels failed to save the video).",
+  "features": ["posting", "updates"],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    { "path": "src-tauri/src/posting.rs", "note": "build_window general_autofill_enabled(false); POST_SCRIPT youtube cover only when 'Upload file' is offered; tests" },
+    { "path": "src-tauri/src/browser.rs", "note": "make_window general_autofill_enabled(false)" },
+    { "path": "package.json", "note": "0.30.5" },
+    { "path": "package-lock.json", "note": "0.30.5" },
+    { "path": "hub-app.json", "note": "0.30.5" },
+    { "path": "src-tauri/tauri.conf.json", "note": "0.30.5" },
+    { "path": "src-tauri/Cargo.toml", "note": "0.30.5" },
+    { "path": "src-tauri/Cargo.lock", "note": "0.30.5" }
+  ]
+}
