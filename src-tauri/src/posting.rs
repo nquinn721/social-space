@@ -288,6 +288,9 @@ fn build_window(
         .title(title)
         .inner_size(1200.0, 860.0)
         .data_directory(dir)
+        // WebView2's own form autofill would offer whatever was typed in this brand window before (the
+        // main Gmail, another profile's login) and fill it over the app's fill; the app fills logins itself.
+        .general_autofill_enabled(false)
         .initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
         .on_navigation(|url| crate::browser::allowed_navigation(url, false))
         .on_page_load(move |window, payload| {
@@ -740,7 +743,11 @@ const POST_SCRIPT: &str = r#"function (data) {
       fillOnce('description', ['#description-textarea #textbox', 'ytcp-social-suggestions-textbox#description-textarea [contenteditable="true"]'], data.text, true);
       if (!state.filled.title) return;
       if (data.coverMs != null && state.coverFile && !state.filled.cover) {
-        const input = document.querySelector('input#file-loader') || fileInputs('image')[0];
+        // Only when YouTube offers its thumbnail upload: a Short or a channel that is not phone-verified has a
+        // hidden file input, and a picture slipped into it makes YouTube fail to save the whole video.
+        const offer = byText(/^Upload (file|thumbnail)$/i);
+        const offered = offer && offer.getAttribute('aria-disabled') !== 'true' && !offer.hasAttribute('disabled') && !(offer.closest && offer.closest('[disabled], [aria-disabled="true"]'));
+        const input = offered && (document.querySelector('input#file-loader') || fileInputs('image')[0]);
         if (input) { attachTo(input, state.coverFile); state.filled.cover = true; }
         else if (!state.coverWait) state.coverWait = now();
         else if (now() - state.coverWait > 8000) state.coverMissing = true;
@@ -901,6 +908,23 @@ mod tests {
 
     fn url(value: &str) -> url::Url {
         value.parse().unwrap()
+    }
+
+    #[test]
+    fn youtube_thumbnail_only_goes_where_youtube_offers_an_upload() {
+        let youtube = POST_SCRIPT.split("youtube: () => {").nth(1).unwrap().split("x: () => {").next().unwrap();
+        let guard = youtube.find("const offered").unwrap();
+        assert!(guard < youtube.find("attachTo(input, state.coverFile)").unwrap());
+        assert!(youtube.contains("const input = offered &&"));
+    }
+
+    #[test]
+    fn brand_windows_never_use_webview_autofill() {
+        let source = include_str!("posting.rs");
+        let builder = source.split("fn build_window(").nth(1).unwrap().split(".build()").next().unwrap();
+        assert!(builder.contains(".general_autofill_enabled(false)"));
+        let site = include_str!("browser.rs").split("fn make_window(").nth(1).unwrap().split(".build()").next().unwrap();
+        assert!(site.contains(".general_autofill_enabled(false)"));
     }
 
     #[test]
