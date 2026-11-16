@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PY=python3; \"$PY\" -c \"\" 2>/dev/null || PY=python; D=\"${CLAUDE_PROJECT_DIR:-.}\"; \"$PY\" \"$D/.githooks/repoctx-check.py\" --repo \"$D\" hook stop"
+          }
+        ]
+      }
+    ]
+  }
+}

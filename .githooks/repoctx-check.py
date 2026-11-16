@@ -156,14 +156,31 @@ def rev(root, ref):
     return git(root, "rev-parse", "--verify", "--quiet", ref + "^{commit}", check=False).strip()
 
 
+def is_ancestor(root, older, newer):
+    return subprocess.run(["git", "-C", root, "merge-base", "--is-ancestor", older, newer],
+                          capture_output=True).returncode == 0
+
+
+# Branches work is cut from: the mains, and an integration branch where a repo has one.
+BASE_BRANCHES = MAINS + ("dev", "develop")
+
+
 def default_base(root, head="HEAD"):
-    for name in MAINS:
+    """Where this branch's work starts: the newest commit it shares with a main or integration
+    branch, local or origin/ (a stale local main, or a branch cut from dev, would otherwise count
+    every commit since an old point as this branch's change)."""
+    bases = []
+    for name in BASE_BRANCHES:
         for ref in (name, "origin/" + name):
             if rev(root, ref):
                 base = git(root, "merge-base", head, ref, check=False).strip()
-                if base:
-                    return base
-    return ""
+                if base and base not in bases:
+                    bases.append(base)
+    for base in bases:
+        if all(other == base or is_ancestor(root, other, base)
+               for other in bases):
+            return base
+    return bases[0] if bases else ""
 
 
 def read_json(root, rel, default):

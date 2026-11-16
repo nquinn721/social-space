@@ -1,0 +1,9 @@
+{
+  "summary": "Refresh the repo-context kit change gates to the kit's latest checker in .githooks/repoctx-check.py (default base is the newest point shared with main/master/dev, local or origin) and add the Claude Code Stop hook that runs it.",
+  "features": [],
+  "changes": [],
+  "spots": [
+    {"path": ".claude/settings.json", "note": "Claude Code Stop hook runs .githooks/repoctx-check.py (portable python lookup, CLAUDE_PROJECT_DIR)"}
+  ],
+  "kept": []
+}
