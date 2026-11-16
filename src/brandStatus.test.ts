@@ -22,6 +22,12 @@ describe('brand status', () => {
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } })).toMatchObject({ kind: 'reconnect', label: 'Connected as @softwings25', canPost: false });
   });
+  it('reads a Facebook Page from its connection: a Page name is never a wrong handle, and no login is asked for', () => {
+    const ws = base([account('f', 'facebook', { handle: '', signupEmail: 'softwings25@gmail.com' })]);
+    expect(socialStatus(ws, 'b', 'facebook').kind).toBe('checking');
+    expect(socialStatus(ws, 'b', 'facebook', { connections: { f: { state: 'none', username: '', detail: '' } } })).toMatchObject({ kind: 'connect', action: { kind: 'connect', label: 'Connect Facebook Page' }, canPost: false });
+    expect(socialStatus(ws, 'b', 'facebook', { connections: { f: { state: 'ok', username: 'Bunny Daily', detail: '' } }, passwords: { f: false } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
+  });
   it('asks to sign in when the brand window is not signed in, and never says Ready then', () => {
     const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' }), account('y', 'youtube')]);
     const signIns = { tiktok: { signedIn: false, checkedAt: 0 }, youtube: { signedIn: true, checkedAt: 0 } };

@@ -9,6 +9,7 @@ mod browser_sessions;
 mod autofill;
 mod browser;
 mod email;
+mod facebook;
 mod embedded;
 mod gmail_session;
 mod hub;
@@ -218,6 +219,7 @@ enum Platform {
     Instagram,
     Tiktok,
     Youtube,
+    Facebook,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -414,6 +416,12 @@ fn platform_url(platform: Platform, action: &str) -> Option<&'static str> {
         (Platform::Youtube, "manage") => Some("https://studio.youtube.com/"),
         (Platform::Youtube, "post") => Some("https://www.youtube.com/upload"),
         (Platform::Youtube, "developer") => Some("https://developers.google.com/youtube/v3"),
+        // Pages cannot be made through the API; this is Facebook's own Create Page form, under your Facebook login.
+        (Platform::Facebook, "create") => Some("https://www.facebook.com/pages/create"),
+        (Platform::Facebook, "addProfile") => Some("https://www.facebook.com/pages/create"),
+        (Platform::Facebook, "manage") => Some("https://www.facebook.com/pages/?category=your_pages"),
+        (Platform::Facebook, "post") => Some("https://www.facebook.com/"),
+        (Platform::Facebook, "developer") => Some(META_DEVELOPERS_HOME),
         _ => None,
     }
 }
@@ -508,6 +516,11 @@ pub fn run() {
             instagram::publish_instagram_photo,
             instagram::publish_instagram_reel_file,
             instagram::open_instagram_post,
+            facebook::connect_facebook_page,
+            facebook::facebook_connection,
+            facebook::disconnect_facebook,
+            facebook::publish_facebook_reel_file,
+            facebook::open_facebook_post,
             instagram::choose_instagram_video,
             queue::list_queue,
             queue::add_queue_job,
@@ -768,6 +781,13 @@ mod tests {
         assert_eq!(platform_url(Platform::Youtube, "unknown"), None);
         assert!(platform_url(Platform::Youtube, "addProfile").unwrap().contains("action_create_new_channel_redirect=true"));
         assert!(platform_url(Platform::Instagram, "addProfile").unwrap().starts_with("https://accountscenter.instagram.com/"));
+    }
+
+    #[test]
+    fn facebook_pages_load_and_open_facebooks_own_create_page_form() {
+        assert_eq!(platform_url(Platform::Facebook, "create"), Some("https://www.facebook.com/pages/create"));
+        let workspace: Workspace = serde_json::from_str(r#"{"businessName":"","accounts":[{"id":"f","platform":"facebook","label":"Mia","handle":"","status":"planned","notes":""}]}"#).unwrap();
+        assert_eq!(workspace.accounts[0].platform, Platform::Facebook);
     }
 
     #[test]

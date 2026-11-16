@@ -22,6 +22,11 @@ const CHECK_COMMAND = { instagram: 'check_instagram_connection', x: 'check_x_con
  */
 export async function checkConnection(account: Account): Promise<ConnectionCheck> {
   if (!canConnect(account)) return { state: 'none', username: '', detail: '' };
+  if (account.platform === 'facebook') {
+    // A Page token made from a long-lived login does not run out, so a saved Page is a working one.
+    const page = await profileConnection(account).catch(() => null);
+    return page ? { state: 'ok', username: page, detail: 'Posts Reels to this Page.' } : { state: 'none', username: '', detail: '' };
+  }
   if (account.platform !== 'instagram') {
     // Claims a connection made before per-profile connections (X), so the check finds it.
     const identity = await profileConnection(account).catch(() => null);

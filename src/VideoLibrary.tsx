@@ -14,6 +14,8 @@ import { cachedPostSuggestion, suggestPost, type PostSuggestion } from './assist
 import { GhostInput, GhostTextarea } from './GhostText';
 import { useConfirm } from './ConfirmDialog';
 import { openInstagramPost } from './instagramService';
+import { openFacebookPost } from './facebookService';
+import { publishVideoToFacebook, useBrandFacebook, type BrandFacebook } from './useBrandFacebook';
 import PartnerReviewControls from './PartnerReviewControls';
 import { useBrowserPosting } from './useBrowserPosting';
 import { progressLabel, useBrandStatuses, videoProgress, type SocialStatus, type Tone } from './brandStatus';
@@ -93,6 +95,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   const browser = useBrowserPosting(workspace, onSave);
   const socials = brand ? brandSocials(workspace, brand.id) : [];
   const statuses = useBrandStatuses(workspace, brand?.id, instagram);
+  const facebook = useBrandFacebook(workspace, brand?.id);
   /** The one step that unblocks a social: make the profile, or fix its login or connection under Accounts. */
   function fix(status: SocialStatus) {
     const kind = status.action?.kind;
@@ -141,6 +144,19 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
     }
     const posted = link ? { ...draft, links: { ...draft.links, instagram: link } } : draft;
     await savePost(posted, saveDefaults, `Posted "${draft.title}" to @${instagram.username} on Instagram.`, draft.posted.includes('instagram') ? draft.posted : [...draft.posted, 'instagram']);
+  }
+  /** Posts the video as a Reel on the brand's connected Facebook Page, then saves its details and marks it posted there. */
+  async function postFacebook(draft: Video, saveDefaults: boolean) {
+    if (!facebook?.connected) return;
+    let link: string | undefined;
+    try { link = (await publishVideoToFacebook(facebook, draft)).permalink; }
+    catch (reason) {
+      const saved = (workspace.videos ?? []).find((item) => item.id === draft.id);
+      if (saveDefaults || JSON.stringify(saved) !== JSON.stringify(draft)) await savePost(draft, saveDefaults, `Saved the post details of "${draft.title}".`);
+      throw reason;
+    }
+    const posted = link ? { ...draft, links: { ...draft.links, facebook: link } } : draft;
+    await savePost(posted, saveDefaults, `Posted "${draft.title}" as a Reel on the Facebook Page ${facebook.page}.`, draft.posted.includes('facebook') ? draft.posted : [...draft.posted, 'facebook']);
   }
   function removeVideo(video: Video) {
     const note = video.generation?.status === 'working' ? ' The source may still finish it, but it will not be saved here.' : ' This does not delete it from any social or from your PC.';
@@ -192,7 +208,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
             {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy} disabled={disabled} progress={generations.progress[video.id]}
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
               category={category} brandName={brand.name} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
-              instagram={instagram} onPost={post} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix}
+              instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix}
               part={videoPartLabel(workspace, video)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
           </ul>}
         </>}
@@ -245,6 +261,8 @@ type BrowserPosting = ReturnType<typeof useBrowserPosting>;
 type RowProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void;
   onSavePost?: (draft: Video, saveDefaults: boolean) => Promise<boolean | undefined>;
   instagram?: BrandInstagram | null; onPost?: (draft: Video, saveDefaults: boolean) => Promise<void>; onConnectInstagram?: () => void;
+  /** The brand's Facebook Page, and posting a Reel to it through the API. */
+  facebook?: BrandFacebook | null; onPostFacebook?: (draft: Video, saveDefaults: boolean) => Promise<void>;
   browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void;
   /** For a series episode: "Part 2 of 5", and why it can't go up on a social before an earlier part. */
   part?: string | null; waitingOn?: (platform: Platform) => string | null; earlierPart?: (platform: Platform) => number | null };
@@ -252,7 +270,7 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; soci
  * One video as a post: its picture and text on the left, and a tile for every social of the brand that
  * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
  */
-function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart }: RowProps) {
+function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart }: RowProps) {
   const job = video.generation;
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
@@ -266,6 +284,9 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   const instagramLink = video.links?.instagram;
   const done = videoProgress(video, socials);
   const openPost = () => { if (instagramLink) openInstagramPost(instagramLink).catch((reason) => setError(errorText(reason))); };
+  const facebookLink = video.links?.facebook;
+  const openReel = () => { if (facebookLink) openFacebookPost(facebookLink).catch((reason) => setError(errorText(reason))); };
+  const facebookReady = !job && !!onPostFacebook && !!facebook?.connected && isLocalVideo(video.mediaSource);
   const statusOf = (platform: Platform) => statuses.find((status) => status.platform === platform)!;
   async function unmark(platform: Platform) {
     const name = getPlatform(platform).name;
@@ -288,6 +309,25 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     setWorking(true); setError('');
     try { await onPost(draft, saveDefaults); return true; }
     catch (reason) { setError(errorText(reason, 'Instagram did not publish this video.')); return false; }
+    finally { setWorking(false); }
+  }
+  /** Posting a Reel to the brand's Facebook Page also goes straight out through the API, after one confirmation. */
+  async function approveFacebook(draft: Video, saveDefaults: boolean) {
+    if (!onPostFacebook || !facebook?.connected || working) return false;
+    const order = waitingOn?.('facebook');
+    if (order) { setError(order); return false; }
+    const problems = detailProblems(draft, socials);
+    if (problems.length) { setEditing(true); setError(problems[0]); return false; }
+    const caption = postText(draft);
+    const ok = await confirm({
+      title: `Post "${draft.title}" to Facebook?`,
+      body: <><p>It goes live as a Reel on the Page <strong>{facebook.page}</strong> right away. Facebook takes Reels of 3 to 90 seconds in 9:16.</p>{caption ? <p className="confirm-caption">{caption}</p> : <p className="post-empty">No description.</p>}</>,
+      confirmLabel: 'Post to Facebook',
+    });
+    if (!ok) return false;
+    setWorking(true); setError('');
+    try { await onPostFacebook(draft, saveDefaults); return true; }
+    catch (reason) { setError(errorText(reason, 'Facebook did not publish this video.')); return false; }
     finally { setWorking(false); }
   }
   /** Opens the social's upload page with this post filled in, after saving any edits. */
@@ -317,6 +357,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       tone = 'ok';
       line = <>Posted{video.testPosts?.[platform] !== undefined && <span className="test-badge" title="Posted while this social's app was in test mode">Test</span>}</>;
       action = <>{platform === 'instagram' && instagramLink && <button type="button" className="dest-link" aria-label="View on Instagram" onClick={openPost}>View</button>}
+        {platform === 'facebook' && facebookLink && <button type="button" className="dest-link" aria-label="View on Facebook" onClick={openReel}>View</button>}
         <button type="button" className="dest-link quiet" disabled={disabled} aria-label={`Mark as not posted on ${name}`} title={`Mark as not posted on ${name}`} onClick={() => void unmark(platform)}>Undo</button></>;
     } else if (job) {
       tone = 'muted'; line = job.status === 'failed' ? 'No video to post' : 'Waits for the video';
@@ -326,6 +367,9 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       tone = 'todo'; line = 'Did it go up?';
       action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
         <button type="button" className="dest-link quiet" onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button></>;
+    } else if (status.canPost && platform === 'facebook') {
+      if (facebookReady) { tone = 'ready'; line = `Posts to ${facebook?.page}`; action = <button type="button" className="dest-button primary" aria-label="Post to Facebook" disabled={busy || working} onClick={() => void approveFacebook(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
+      else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected' : 'Needs a video file'; }
     } else if (status.canPost && platform === 'instagram') {
       if (automatic) { tone = 'ready'; line = `Posts as @${instagram?.username}`; action = <button type="button" className="dest-button primary" aria-label="Post to Instagram" disabled={busy || working} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
       else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected, can\'t upload' : 'Needs a video file'; }
@@ -367,11 +411,11 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     </div>
     {socials.length > 0 && !editing && <div className="dest-grid" role="group" aria-label="Where it goes">{socials.map(destination)}</div>}
     {!editing && done.state !== 'making' && <PartnerReviewControls video={video} socials={socials} disabled={disabled || working}/>}
-    {working && !video.posted.includes('instagram') && <p className="library-hint" role="status">Uploading to Instagram. This can take a few minutes; keep the app open.</p>}
+    {working && <p className="library-hint" role="status">Uploading. This can take a few minutes; keep the app open.</p>}
     {dialog}
     {error && !editing && <div className="error-message" role="alert">{error}</div>}
     {editing && onSavePost && <PostPanel video={video} category={category} brandName={brandName} socials={socials} busy={busy || working} disabled={disabled} instagram={instagram} onOpen={onOpen}
-      error={error} working={working} onSave={onSavePost} onApprove={onPost ? approve : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}
+      error={error} working={working} onSave={onSavePost} onApprove={onPost ? approve : undefined} facebookPage={facebook?.connected ? facebook.page : undefined} onApproveFacebook={facebookReady ? approveFacebook : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}
       statuses={statuses} onFix={onFix} onPostOnPage={browser ? async (draft, platform, defaults) => { if (await postOnPage(draft, platform, defaults)) setEditing(false); } : undefined} marks={marks}/>}
     {playable && watching && <VideoPlayer path={video.mediaSource} title={video.title}/>}
   </li>;
@@ -406,12 +450,12 @@ function canPostAutomatically(video: Video, socials: Platform[], instagram: Bran
 
 type PanelProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; instagram?: BrandInstagram | null; onOpen: Props['onOpen'];
   error: string; working: boolean; onSave: (draft: Video, saveDefaults: boolean) => Promise<boolean | undefined>; onApprove?: (draft: Video, saveDefaults: boolean) => Promise<boolean>; onConnectInstagram?: () => void; onClose: () => void;
-  onPostOnPage?: (draft: Video, platform: Platform, saveDefaults: boolean) => Promise<void>; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void };
+  onPostOnPage?: (draft: Video, platform: Platform, saveDefaults: boolean) => Promise<void>; facebookPage?: string; onApproveFacebook?: (draft: Video, saveDefaults: boolean) => Promise<boolean>; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void };
 /**
  * Posting in one step: everything that goes out with the video (description, hashtags, cover, YouTube
  * title, labels), starting from the category's saved defaults, then where it goes and Post.
  */
-function PostPanel({ video, category, brandName, socials, busy, disabled, instagram, onOpen, error: postError, working, onSave, onApprove, onConnectInstagram, onClose, onPostOnPage, marks, statuses, onFix }: PanelProps) {
+function PostPanel({ video, category, brandName, socials, busy, disabled, instagram, onOpen, error: postError, working, onSave, onApprove, onConnectInstagram, onClose, onPostOnPage, facebookPage, onApproveFacebook, marks, statuses, onFix }: PanelProps) {
   const start = startingPost(video, category);
   const [caption, setCaption] = useState(start.caption);
   const [tags, setTags] = useState(hashtagText(start.details.hashtags));
@@ -486,7 +530,13 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
         const done = video.posted.includes(platform);
         let state: React.ReactNode;
         if (done) state = video.testPosts?.[platform] !== undefined ? <span className="pill planned"><span className="dot"/>Posted as a test</span> : <span className="pill active"><span className="dot"/>Posted</span>;
-        else if (API_SOCIALS.includes(platform)) {
+        else if (platform === 'facebook') {
+          const status = statuses.find((item) => item.platform === platform);
+          if (onApproveFacebook) state = <><span className="post-target-note">Posts by itself as a Reel on the Page {facebookPage}.</span>
+            <button type="button" className="outline-button small-button" disabled={disabled || working || problems.length > 0} onClick={() => void onApproveFacebook(draft, saveDefaults).then((ok) => { if (ok) onClose(); })}><Send size={14}/> Post to Facebook</button></>;
+          else if (status?.canPost) state = <span className="post-target-note">Connected to {facebookPage}. Add a video file saved on this PC to post it.</span>;
+          else state = <><span className="post-target-note">{status?.detail ?? 'Not connected yet.'}</span>{status?.action && <button type="button" className="outline-button small-button" onClick={() => onFix(status)}>{status.action.label}</button>}</>;
+        } else if (API_SOCIALS.includes(platform)) {
           const status = statuses.find((item) => item.platform === platform);
           if (automatic) state = <span className="post-target-note">Posts by itself as @{instagram?.username} when you press Post.</span>;
           else if (instagram?.connected === null) state = <span className="post-target-note">Checking the connection…</span>;

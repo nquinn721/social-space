@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-disconnect-facebook"
+description = "Enables the disconnect_facebook command without any pre-configured scope."
+commands.allow = ["disconnect_facebook"]
+
+[[permission]]
+identifier = "deny-disconnect-facebook"
+description = "Denies the disconnect_facebook command without any pre-configured scope."
+commands.deny = ["disconnect_facebook"]

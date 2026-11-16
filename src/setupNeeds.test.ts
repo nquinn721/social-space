@@ -31,6 +31,14 @@ describe('setup needs', () => {
     expect(find(inputs, 'tiktok:app:audit')?.why).toMatch(/private/);
   });
 
+  it('tracks a Facebook Page through the Meta app: Page permissions, its connection, and no login of its own', () => {
+    const inputs = base([profile('fb', 'facebook')], { connections: { fb: { state: 'ok', username: 'Animals', detail: 'Posts Reels to this Page.' } } });
+    expect(find(inputs, 'facebook:app')).toMatchObject({ status: 'done', later: false });
+    expect(find(inputs, 'facebook:app:pages')?.why).toMatch(/pages_manage_posts/);
+    expect(find(inputs, 'fb:sign-in')).toBeUndefined();
+    expect(find(inputs, 'fb:connected')).toMatchObject({ status: 'done', why: 'Connected to the Page Animals. Posts Reels to this Page.' });
+  });
+
   it('shows connection health from the check, including a connection the social stopped accepting', () => {
     const inputs = base([profile('yt', 'youtube'), profile('x1', 'x')], { connections: { yt: { state: 'expired', username: 'animals', detail: 'Google stopped accepting this connection.' }, x1: { state: 'ok', username: 'animals', detail: 'Renews by itself.' } } });
     expect(find(inputs, 'yt:connected')).toMatchObject({ status: 'problem', why: 'Google stopped accepting this connection.' });

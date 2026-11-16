@@ -1,387 +1,406 @@
 [
- {
-  "id": "accounts",
-  "menu": [
-   "Brands",
-   "Details",
-   "Sign up",
-   "Profile"
-  ],
-  "notes": [
-   "Brands is the top-nav entry; Details, Sign up and Profile are the steps of the Create accounts wizard (CreateAccountWizard.tsx), whose sign-up pages are embedded by embedded.rs."
-  ],
-  "paths": [
-   "src/pages/AccountsPage.tsx",
-   "src/CreateAccountWizard.tsx",
-   "src/AccountDrawer.tsx",
-   "src/brands.ts",
-   "src/setupNeeds.ts",
-   "src/SetupTracker.tsx",
-   "src/SignIns.tsx",
-   "src-tauri/src/autofill.rs",
-   "src-tauri/src/account_passwords.rs",
-   "src-tauri/src/backup.rs",
-   "src-tauri/src/lib.rs",
-   "src/BrandAccounts.tsx",
-   "src/BrandProfiles.tsx",
-   "src/AccountCredentials.tsx",
-   "src/signupFlows.ts",
-   "src/brandStatus.ts",
-   "src-tauri/src/embedded.rs"
-  ],
-  "summary": "Brands and their per-social profiles: create, sign up, autofill, passwords, setup tracker",
-  "terms": [
-   "brand",
-   "account",
-   "profile",
-   "signup",
-   "password",
-   "autofill",
-   "setup"
-  ]
- },
- {
-  "id": "connections",
-  "menu": [
-   "Developer accounts"
-  ],
-  "notes": [
-   "Set up / Connect without an app opens DevAppSetupGuide: the developer site embedded via embed_setup_page next to numbered steps from devAppGuides.ts. Developer-app review results are read from the inbox (useReviewWatch) and shown by ReviewNotice."
-  ],
-  "paths": [
-   "src/Connections.tsx",
-   "src/profileConnections.ts",
-   "src/socialConnectService.ts",
-   "src/devAppsService.ts",
-   "src-tauri/src/social_connect.rs",
-   "src-tauri/src/x_integration.rs",
-   "src-tauri/src/dev_apps.rs",
-   "src/DevAppSetupGuide.tsx",
-   "src/devAppGuides.ts",
-   "src/setupService.ts",
-   "src-tauri/src/setup_pages.rs",
-   "src/DeveloperAccounts.tsx",
-   "src/appReviews.ts",
-   "src/ReviewNotice.tsx",
-   "src/useReviewWatch.ts",
-   "src/xService.ts"
-  ],
-  "summary": "Per-profile connections to YouTube, TikTok, X and Instagram, and the developer apps behind them",
-  "terms": [
-   "connect",
-   "youtube",
-   "tiktok",
-   "x",
-   "oauth",
-   "developer app",
-   "setup guide",
-   "app review"
-  ]
- },
- {
-  "id": "email",
-  "menu": [
-   "Inbox",
-   "Email inbox"
-  ],
-  "notes": [],
-  "paths": [
-   "src/InboxList.tsx",
-   "src/EmailSettings.tsx",
-   "src/GmailConnect.tsx",
-   "src/emailService.ts",
-   "src-tauri/src/email.rs",
-   "src-tauri/src/gmail_session.rs"
-  ],
-  "summary": "Read-only inbox for verification codes: IMAP or the user's Gmail sign-in",
-  "terms": [
-   "email",
-   "inbox",
-   "gmail",
-   "imap",
-   "code",
-   "verification"
-  ]
- },
- {
-  "id": "instagram",
-  "notes": [
-   "The Meta app is set up in the guided developer-app setup (DevAppSetupGuide.tsx, steps in devAppGuides.ts), which replaced InstagramAppSetup.tsx in 75522b4."
-  ],
-  "paths": [
-   "src-tauri/src/instagram.rs",
-   "src-tauri/src/instagram_login.rs",
-   "src/instagramService.ts",
-   "src/useBrandInstagram.ts",
-   "src/InstagramIdPrompt.tsx",
-   "src/DevAppSetupGuide.tsx",
-   "src/devAppGuides.ts"
-  ],
-  "summary": "Connect a brand's Instagram and publish photos/reels through Meta's API",
-  "terms": [
-   "instagram",
-   "meta",
-   "reel",
-   "publish",
-   "post"
-  ]
- },
- {
-  "id": "partner-review",
-  "menu": [
-   "Partner review"
-  ],
-  "notes": [],
-  "paths": [
-   "src-tauri/src/review.rs",
-   "src/reviewService.ts",
-   "src/partnerReview.ts",
-   "src/usePartnerReview.tsx",
-   "src/PartnerReviewControls.tsx",
-   "src/PartnerReviewSettings.tsx",
-   "website/"
-  ],
-  "summary": "Partner approves posts on the review site; the app posts approved ones",
-  "terms": [
-   "review",
-   "partner",
-   "approve",
-   "firebase"
-  ]
- },
- {
-  "id": "profile-images",
-  "menu": [
-   "Pictures"
-  ],
-  "notes": [],
-  "paths": [
-   "src/ProfileImageStudio.tsx",
-   "src/imageAiService.ts",
-   "src-tauri/src/grok_ai.rs",
-   "src/BrandPicture.tsx",
-   "src/brandImageService.ts",
-   "src-tauri/src/brand_images.rs",
-   "src/PictureSettings.tsx"
-  ],
-  "summary": "Brand and profile pictures and YouTube banners: made and refined with xAI Grok Imagine (the Grok video source key), stored by hash under brand-images/",
-  "terms": [
-   "image",
-   "picture",
-   "avatar",
-   "grok",
-   "xai",
-   "banner"
-  ]
- },
- {
-  "id": "updates",
-  "notes": [],
-  "paths": [
-   "src/AppUpdates.tsx",
-   "src/updateService.ts",
-   "src-tauri/src/updater.rs",
-   "src-tauri/src/hub.rs",
-   "scripts/tauri-build.mjs",
-   "hub-app.json"
-  ],
-  "summary": "Self-update from main and Ava's hub update contract",
-  "terms": [
-   "update",
-   "release",
-   "hub",
-   "ava",
-   "version",
-   "rollback"
-  ]
- },
- {
-  "id": "video-library",
-  "menu": [
-   "Video sources"
-  ],
-  "notes": [],
-  "paths": [
-   "src/VideoLibrary.tsx",
-   "src/VideoSources.tsx",
-   "src/useVideoGenerations.ts",
-   "src/postDetails.ts",
-   "src/videoProviders.ts",
-   "src/videoFileService.ts",
-   "src-tauri/src/video_gen.rs",
-   "src-tauri/src/video_sources.rs",
-   "src-tauri/src/video_files.rs",
-   "src-tauri/src/kling.rs",
-   "src-tauri/src/grok.rs",
-   "src/videoSourcesService.ts"
-  ],
-  "summary": "Brand video library: categories, AI generation (Kling, Grok), post details, local files",
-  "terms": [
-   "video",
-   "library",
-   "kling",
-   "grok",
-   "generate",
-   "category",
-   "caption"
-  ]
- },
- {
-  "id": "assistant-grok",
-  "menu": [
-   "Assistant"
-  ],
-  "notes": [
-   "Chat uses the xAI key of the Grok video source; settings keep only the model id (default grok-4.3)."
-  ],
-  "paths": [
-   "src/assistant/grokClient.ts",
-   "src/assistant/AssistantPanel.tsx",
-   "src/assistant/suggest.ts",
-   "src/assistant/postSuggest.ts",
-   "src/pages/SettingsPage.tsx",
-   "src-tauri/src/grok_ai.rs",
-   "src-tauri/src/video_sources.rs"
-  ],
-  "summary": "In-app assistant and Suggest buttons on xAI Grok chat completions with tool calling",
-  "terms": [
-   "assistant",
-   "chat",
-   "grok",
-   "xai",
-   "suggest",
-   "model"
-  ]
- },
- {
-  "id": "navigation",
-  "notes": [
-   "Each top-nav entry's menu label is owned by the feature behind it (overview, accounts, email, settings)."
-  ],
-  "paths": [
-   "src/App.tsx",
-   "src/model.ts",
-   "src/ui.tsx",
-   "src/main.tsx"
-  ],
-  "summary": "App shell: the side nav (Overview, Brands, Inbox, Settings, Updates), the views from VIEWS in model.ts, messages and the brand page routing",
-  "terms": [
-   "view",
-   "nav",
-   "page"
-  ]
- },
- {
-  "id": "overview",
-  "menu": [
-   "Overview"
-  ],
-  "notes": [],
-  "paths": [
-   "src/pages/OverviewPage.tsx"
-  ],
-  "screens": [
-   {
-    "name": "Overview",
-    "path": "src/pages/OverviewPage.tsx"
-   }
-  ],
-  "summary": "Overview page: whether the inbox and Grok are ready, and posts waiting for approval per brand",
-  "terms": [
-   "overview",
-   "dashboard"
-  ]
- },
- {
-  "id": "settings",
-  "menu": [
-   "Settings",
-   "Workspace"
-  ],
-  "notes": [
-   "Each section's menu label is owned by the feature behind it; Workspace (the business name) is this page's own."
-  ],
-  "paths": [
-   "src/pages/SettingsPage.tsx"
-  ],
-  "screens": [
-   {
-    "name": "Settings",
-    "path": "src/pages/SettingsPage.tsx"
-   }
-  ],
-  "summary": "Settings page: one scrolling page of section cards (workspace name, posting, developer accounts, email, partner review, shared accounts, video sources, pictures, assistant)",
-  "terms": [
-   "settings",
-   "workspace"
-  ]
- },
- {
-  "id": "posting",
-  "menu": [
-   "Posting"
-  ],
-  "notes": [],
-  "paths": [
-   "src/PostingSettings.tsx",
-   "src/postingMode.ts",
-   "src/postingService.ts",
-   "src/useBrowserPosting.ts",
-   "src/queueService.ts",
-   "src-tauri/src/posting.rs",
-   "src-tauri/src/queue.rs",
-   "src-tauri/src/sign_in_state.rs",
-   "src-tauri/src/browser.rs"
-  ],
-  "summary": "How each social posts: by API or through its own upload page in a brand's signed-in app window, the post queue, and sign-in state per brand",
-  "terms": [
-   "posting",
-   "post",
-   "queue",
-   "upload",
-   "sign in"
-  ]
- },
- {
-  "id": "team-sync",
-  "menu": [
-   "Shared accounts"
-  ],
-  "notes": [],
-  "paths": [
-   "src/TeamSyncSettings.tsx",
-   "src/useTeamSync.ts",
-   "src/teamSyncService.ts",
-   "src/workspaceSync.ts",
-   "src-tauri/src/team_sync.rs",
-   "src-tauri/src/browser_sessions.rs"
-  ],
-  "summary": "Shared accounts: two copies of the app (Nate's and his partner's) share brands, accounts, secrets and sign-ins through encrypted Firestore",
-  "terms": [
-   "team sync",
-   "shared accounts",
-   "partner",
-   "firestore",
-   "sync"
-  ]
- },
- {
-  "id": "series",
-  "notes": [],
-  "paths": [
-   "src/SeriesPanel.tsx",
-   "src/series.ts",
-   "src/seriesWriter.ts",
-   "src/series.css",
-   "src-tauri/src/video_gen.rs",
-   "src-tauri/src/grok.rs"
-  ],
-  "summary": "Series: stories told across several videos on a brand's Series tab, written by Grok, with character pictures as video references",
-  "terms": [
-   "series",
-   "episode",
-   "character",
-   "story"
-  ]
- }
+  {
+    "id": "accounts",
+    "menu": [
+      "Brands",
+      "Details",
+      "Sign up",
+      "Profile"
+    ],
+    "notes": [
+      "Brands is the top-nav entry; Details, Sign up and Profile are the steps of the Create accounts wizard (CreateAccountWizard.tsx), whose sign-up pages are embedded by embedded.rs."
+    ],
+    "paths": [
+      "src/pages/AccountsPage.tsx",
+      "src/CreateAccountWizard.tsx",
+      "src/AccountDrawer.tsx",
+      "src/brands.ts",
+      "src/setupNeeds.ts",
+      "src/SetupTracker.tsx",
+      "src/SignIns.tsx",
+      "src-tauri/src/autofill.rs",
+      "src-tauri/src/account_passwords.rs",
+      "src-tauri/src/backup.rs",
+      "src-tauri/src/lib.rs",
+      "src/BrandAccounts.tsx",
+      "src/BrandProfiles.tsx",
+      "src/AccountCredentials.tsx",
+      "src/signupFlows.ts",
+      "src/brandStatus.ts",
+      "src-tauri/src/embedded.rs"
+    ],
+    "summary": "Brands and their per-social profiles: create, sign up, autofill, passwords, setup tracker",
+    "terms": [
+      "brand",
+      "account",
+      "profile",
+      "signup",
+      "password",
+      "autofill",
+      "setup"
+    ]
+  },
+  {
+    "id": "connections",
+    "menu": [
+      "Developer accounts"
+    ],
+    "notes": [
+      "Set up / Connect without an app opens DevAppSetupGuide: the developer site embedded via embed_setup_page next to numbered steps from devAppGuides.ts. Developer-app review results are read from the inbox (useReviewWatch) and shown by ReviewNotice."
+    ],
+    "paths": [
+      "src/Connections.tsx",
+      "src/profileConnections.ts",
+      "src/socialConnectService.ts",
+      "src/devAppsService.ts",
+      "src-tauri/src/social_connect.rs",
+      "src-tauri/src/x_integration.rs",
+      "src-tauri/src/dev_apps.rs",
+      "src/DevAppSetupGuide.tsx",
+      "src/devAppGuides.ts",
+      "src/setupService.ts",
+      "src-tauri/src/setup_pages.rs",
+      "src/DeveloperAccounts.tsx",
+      "src/appReviews.ts",
+      "src/ReviewNotice.tsx",
+      "src/useReviewWatch.ts",
+      "src/xService.ts"
+    ],
+    "summary": "Per-profile connections to YouTube, TikTok, X and Instagram, and the developer apps behind them",
+    "terms": [
+      "connect",
+      "youtube",
+      "tiktok",
+      "x",
+      "oauth",
+      "developer app",
+      "setup guide",
+      "app review"
+    ]
+  },
+  {
+    "id": "email",
+    "menu": [
+      "Inbox",
+      "Email inbox"
+    ],
+    "notes": [],
+    "paths": [
+      "src/InboxList.tsx",
+      "src/EmailSettings.tsx",
+      "src/GmailConnect.tsx",
+      "src/emailService.ts",
+      "src-tauri/src/email.rs",
+      "src-tauri/src/gmail_session.rs"
+    ],
+    "summary": "Read-only inbox for verification codes: IMAP or the user's Gmail sign-in",
+    "terms": [
+      "email",
+      "inbox",
+      "gmail",
+      "imap",
+      "code",
+      "verification"
+    ]
+  },
+  {
+    "id": "instagram",
+    "notes": [
+      "The Meta app is set up in the guided developer-app setup (DevAppSetupGuide.tsx, steps in devAppGuides.ts), which replaced InstagramAppSetup.tsx in 75522b4."
+    ],
+    "paths": [
+      "src-tauri/src/instagram.rs",
+      "src-tauri/src/instagram_login.rs",
+      "src/instagramService.ts",
+      "src/useBrandInstagram.ts",
+      "src/InstagramIdPrompt.tsx",
+      "src/DevAppSetupGuide.tsx",
+      "src/devAppGuides.ts"
+    ],
+    "summary": "Connect a brand's Instagram and publish photos/reels through Meta's API",
+    "terms": [
+      "instagram",
+      "meta",
+      "reel",
+      "publish",
+      "post"
+    ]
+  },
+  {
+    "id": "facebook",
+    "notes": [
+      "A brand's Facebook profile is its Page (no login of its own, it sits under Nate's Facebook). Connect reuses the Meta app and Login for Business configuration from instagram_login.rs; the configuration needs pages_show_list, pages_read_engagement, pages_manage_posts. Pages can't be created by API, so the wizard embeds facebook.com/pages/create filled in."
+    ],
+    "paths": [
+      "src-tauri/src/facebook.rs",
+      "src/facebookService.ts",
+      "src/useBrandFacebook.ts"
+    ],
+    "summary": "Connect a brand's Facebook Page and publish Reels to it through Meta's Graph API",
+    "terms": [
+      "facebook",
+      "page",
+      "reel",
+      "meta",
+      "publish"
+    ]
+  },
+  {
+    "id": "partner-review",
+    "menu": [
+      "Partner review"
+    ],
+    "notes": [],
+    "paths": [
+      "src-tauri/src/review.rs",
+      "src/reviewService.ts",
+      "src/partnerReview.ts",
+      "src/usePartnerReview.tsx",
+      "src/PartnerReviewControls.tsx",
+      "src/PartnerReviewSettings.tsx",
+      "website/"
+    ],
+    "summary": "Partner approves posts on the review site; the app posts approved ones",
+    "terms": [
+      "review",
+      "partner",
+      "approve",
+      "firebase"
+    ]
+  },
+  {
+    "id": "profile-images",
+    "menu": [
+      "Pictures"
+    ],
+    "notes": [],
+    "paths": [
+      "src/ProfileImageStudio.tsx",
+      "src/imageAiService.ts",
+      "src-tauri/src/grok_ai.rs",
+      "src/BrandPicture.tsx",
+      "src/brandImageService.ts",
+      "src-tauri/src/brand_images.rs",
+      "src/PictureSettings.tsx"
+    ],
+    "summary": "Brand and profile pictures and YouTube banners: made and refined with xAI Grok Imagine (the Grok video source key), stored by hash under brand-images/",
+    "terms": [
+      "image",
+      "picture",
+      "avatar",
+      "grok",
+      "xai",
+      "banner"
+    ]
+  },
+  {
+    "id": "updates",
+    "notes": [],
+    "paths": [
+      "src/AppUpdates.tsx",
+      "src/updateService.ts",
+      "src-tauri/src/updater.rs",
+      "src-tauri/src/hub.rs",
+      "scripts/tauri-build.mjs",
+      "hub-app.json"
+    ],
+    "summary": "Self-update from main and Ava's hub update contract",
+    "terms": [
+      "update",
+      "release",
+      "hub",
+      "ava",
+      "version",
+      "rollback"
+    ]
+  },
+  {
+    "id": "video-library",
+    "menu": [
+      "Video sources"
+    ],
+    "notes": [],
+    "paths": [
+      "src/VideoLibrary.tsx",
+      "src/VideoSources.tsx",
+      "src/useVideoGenerations.ts",
+      "src/postDetails.ts",
+      "src/videoProviders.ts",
+      "src/videoFileService.ts",
+      "src-tauri/src/video_gen.rs",
+      "src-tauri/src/video_sources.rs",
+      "src-tauri/src/video_files.rs",
+      "src-tauri/src/kling.rs",
+      "src-tauri/src/grok.rs",
+      "src/videoSourcesService.ts"
+    ],
+    "summary": "Brand video library: categories, AI generation (Kling, Grok), post details, local files",
+    "terms": [
+      "video",
+      "library",
+      "kling",
+      "grok",
+      "generate",
+      "category",
+      "caption"
+    ]
+  },
+  {
+    "id": "assistant-grok",
+    "menu": [
+      "Assistant"
+    ],
+    "notes": [
+      "Chat uses the xAI key of the Grok video source; settings keep only the model id (default grok-4.3)."
+    ],
+    "paths": [
+      "src/assistant/grokClient.ts",
+      "src/assistant/AssistantPanel.tsx",
+      "src/assistant/suggest.ts",
+      "src/assistant/postSuggest.ts",
+      "src/pages/SettingsPage.tsx",
+      "src-tauri/src/grok_ai.rs",
+      "src-tauri/src/video_sources.rs"
+    ],
+    "summary": "In-app assistant and Suggest buttons on xAI Grok chat completions with tool calling",
+    "terms": [
+      "assistant",
+      "chat",
+      "grok",
+      "xai",
+      "suggest",
+      "model"
+    ]
+  },
+  {
+    "id": "navigation",
+    "notes": [
+      "Each top-nav entry's menu label is owned by the feature behind it (overview, accounts, email, settings)."
+    ],
+    "paths": [
+      "src/App.tsx",
+      "src/model.ts",
+      "src/ui.tsx",
+      "src/main.tsx"
+    ],
+    "summary": "App shell: the side nav (Overview, Brands, Inbox, Settings, Updates), the views from VIEWS in model.ts, messages and the brand page routing",
+    "terms": [
+      "view",
+      "nav",
+      "page"
+    ]
+  },
+  {
+    "id": "overview",
+    "menu": [
+      "Overview"
+    ],
+    "notes": [],
+    "paths": [
+      "src/pages/OverviewPage.tsx"
+    ],
+    "screens": [
+      {
+        "name": "Overview",
+        "path": "src/pages/OverviewPage.tsx"
+      }
+    ],
+    "summary": "Overview page: whether the inbox and Grok are ready, and posts waiting for approval per brand",
+    "terms": [
+      "overview",
+      "dashboard"
+    ]
+  },
+  {
+    "id": "settings",
+    "menu": [
+      "Settings",
+      "Workspace"
+    ],
+    "notes": [
+      "Each section's menu label is owned by the feature behind it; Workspace (the business name) is this page's own."
+    ],
+    "paths": [
+      "src/pages/SettingsPage.tsx"
+    ],
+    "screens": [
+      {
+        "name": "Settings",
+        "path": "src/pages/SettingsPage.tsx"
+      }
+    ],
+    "summary": "Settings page: one scrolling page of section cards (workspace name, posting, developer accounts, email, partner review, shared accounts, video sources, pictures, assistant)",
+    "terms": [
+      "settings",
+      "workspace"
+    ]
+  },
+  {
+    "id": "posting",
+    "menu": [
+      "Posting"
+    ],
+    "notes": [],
+    "paths": [
+      "src/PostingSettings.tsx",
+      "src/postingMode.ts",
+      "src/postingService.ts",
+      "src/useBrowserPosting.ts",
+      "src/queueService.ts",
+      "src-tauri/src/posting.rs",
+      "src-tauri/src/queue.rs",
+      "src-tauri/src/sign_in_state.rs",
+      "src-tauri/src/browser.rs"
+    ],
+    "summary": "How each social posts: by API or through its own upload page in a brand's signed-in app window, the post queue, and sign-in state per brand",
+    "terms": [
+      "posting",
+      "post",
+      "queue",
+      "upload",
+      "sign in"
+    ]
+  },
+  {
+    "id": "team-sync",
+    "menu": [
+      "Shared accounts"
+    ],
+    "notes": [],
+    "paths": [
+      "src/TeamSyncSettings.tsx",
+      "src/useTeamSync.ts",
+      "src/teamSyncService.ts",
+      "src/workspaceSync.ts",
+      "src-tauri/src/team_sync.rs",
+      "src-tauri/src/browser_sessions.rs"
+    ],
+    "summary": "Shared accounts: two copies of the app (Nate's and his partner's) share brands, accounts, secrets and sign-ins through encrypted Firestore",
+    "terms": [
+      "team sync",
+      "shared accounts",
+      "partner",
+      "firestore",
+      "sync"
+    ]
+  },
+  {
+    "id": "series",
+    "notes": [],
+    "paths": [
+      "src/SeriesPanel.tsx",
+      "src/series.ts",
+      "src/seriesWriter.ts",
+      "src/series.css",
+      "src-tauri/src/video_gen.rs",
+      "src-tauri/src/grok.rs"
+    ],
+    "summary": "Series: stories told across several videos on a brand's Series tab, written by Grok, with character pictures as video references",
+    "terms": [
+      "series",
+      "episode",
+      "character",
+      "story"
+    ]
+  }
 ]

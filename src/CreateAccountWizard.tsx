@@ -19,7 +19,7 @@ const STEPS: { id: Step; label: string }[] = [{ id: 'details', label: 'Details' 
 type Outcome = 'created' | 'skipped';
 /** During sign-up the inbox checks often, so a new code is entered on the page within seconds. */
 const SIGNUP_INBOX_MS = 6_000;
-const SENDER_WORDS: Record<Platform, RegExp> = { instagram: /\binstagram\b/i, tiktok: /\btiktok\b/i, youtube: /\b(youtube|google)\b/i, x: /\bx(\.com)?\b|\btwitter\b/i };
+const SENDER_WORDS: Record<Platform, RegExp> = { instagram: /\binstagram\b/i, tiktok: /\btiktok\b/i, youtube: /\b(youtube|google)\b/i, x: /\bx(\.com)?\b|\btwitter\b/i, facebook: /\bfacebook\b|\bmeta\b/i };
 /** Whether an email looks like it came from this social, so its code goes to the right sign-up page. */
 export function isMailFrom(platform: Platform, mail: { from: string; subject: string }) { return SENDER_WORDS[platform].test(`${mail.from} ${mail.subject}`); }
 
@@ -166,7 +166,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
       // accounts share one new password of their own.
       const fresh = made.filter((_, index) => plans[index].mode === 'new');
       for (const item of made.filter((_, index) => plans[index].mode === 'attach')) await ensureSharedPassword(passwordGroup([...existing, ...made], item));
-      await ensureSharedPassword(fresh.filter((item) => item.platform !== 'youtube').map((item) => item.id));
+      // YouTube channels and Facebook Pages sit under your own Google or Facebook login, so they get no password of their own.
+      await ensureSharedPassword(fresh.filter((item) => item.platform !== 'youtube' && item.platform !== 'facebook').map((item) => item.id));
       setCurrent(0);
       setStep('signup');
       openSignup(made[0]);

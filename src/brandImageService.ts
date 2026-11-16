@@ -30,7 +30,7 @@ export const MASTER_SIZE = 1024;
 export const BANNER = { width: 2048, height: 1152, safeWidth: 1235, safeHeight: 338 };
 export const MAX_SHARED_BYTES = 550 * 1024;
 /** Square upload size per social: each shows it as a circle, at most at these sizes. */
-export const PROFILE_SIZES: Record<Platform, number> = { instagram: 1024, tiktok: 720, youtube: 800, x: 400 };
+export const PROFILE_SIZES: Record<Platform, number> = { instagram: 1024, tiktok: 720, youtube: 800, x: 400, facebook: 720 };
 
 /** The picture a profile uses: its own when it has one, otherwise the brand's. */
 export function pictureFileFor(account: Pick<Account, 'imageFile'>, brand?: Pick<Brand, 'image'>): string | undefined {

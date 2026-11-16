@@ -126,8 +126,15 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       note: `Posting windows won't sign in with your main Gmail. Give ${brand.name} its own ${name} email and password.` };
     if (postMode(account.platform) === 'api' && canConnect(account)) {
       const check = status.connections[account.id];
-      if (working && flow.target === account.id) return { tone: 'checking', text: 'Waiting for Meta…', note: 'Sign in and press Allow in the Connect Instagram window.' };
+      const facebook = account.platform === 'facebook';
+      if (working && flow.target === account.id) return { tone: 'checking', text: 'Waiting for Meta…', note: facebook ? 'Tick the brand\'s Page and press Continue in the Connect Facebook Page window.' : 'Sign in and press Allow in the Connect Instagram window.' };
       if (!check) return { tone: 'checking', text: 'Checking…' };
+      // A Page has a name, not a handle, and is picked by the brand's name or the saved Page ID.
+      if (facebook) {
+        if (check.state === 'ok') return { tone: 'ok', text: 'Ready' };
+        return { tone: 'todo', text: 'Not connected', action: { label: 'Connect', run: () => void connect(account) },
+          note: 'Connect picks the Page named like the brand. Its Meta login configuration needs the Page permissions (see Details).' };
+      }
       const as = normalizeHandle(check.username);
       if (check.state === 'ok' && as && account.handle && as.toLowerCase() !== normalizeHandle(account.handle).toLowerCase()) return { tone: 'problem', text: `Connected as @${as}`, action: { label: 'Reconnect', run: () => void connect(account) },
         note: `Meta connected @${as}, not @${normalizeHandle(account.handle)}, so posts would go to @${as}. Press Reconnect and pick @${normalizeHandle(account.handle)} in the Meta window. If it isn't listed, it isn't a Professional account linked to your Meta business yet.` };
@@ -176,7 +183,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <BrandMark platform={account.platform}/>
           <div className="social-row-title">
             <strong>{name}</strong>
-            <small>{account.handle ? `@${normalizeHandle(account.handle)}` : 'No username yet'}</small>
+            <small>{account.platform === 'facebook' ? (check?.state === 'ok' && check.username ? `Page: ${check.username}` : account.displayName || account.label || 'No Page yet') : account.handle ? `@${normalizeHandle(account.handle)}` : 'No username yet'}</small>
           </div>
           <span className="status-chip">{state.tone === 'checking' ? <Loader2 size={12} className="spin"/> : <span className="dot"/>}{state.text}</span>
           <span className="social-row-actions">
@@ -193,15 +200,16 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <button type="button" className="ghost-button small-button" onClick={() => setResetting((current) => ({ ...current, [account.id]: false }))}>Cancel</button>
         </div>}
         {expanded && <div className="social-row-details">
-          <dl className="profile-signin" aria-label={`${name} sign-in`}>
+          {account.platform === 'facebook' ? <p className="footnote">Facebook Pages have no login of their own: the Page sits under your own Facebook account, and the app posts Reels to it through Meta with the Page's own key, kept in Windows Credential Manager.</p>
+          : <dl className="profile-signin" aria-label={`${name} sign-in`}>
             {!sharesLogins(account.platform) && account.handle && <div><dt>Username</dt><dd><CopyValue value={account.handle} label={`${name} username`}/></dd></div>}
             <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${name} email`}/></dd></div>
             <div><dt>{account.platform === 'youtube' ? 'Google password' : 'Password'}</dt><dd><PasswordCell account={account}/></dd></div>
-          </dl>
+          </dl>}
           {account.platform === 'youtube' && <p className="footnote">YouTube signs in with your Google account. The window only fills the password saved here, so if Google says it's wrong, change it here to your real Google password.</p>}
           <div className="social-row-links">
             {live && account.handle && <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>}
-            {live && account.platform !== 'youtube' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
+            {live && account.platform !== 'youtube' && account.platform !== 'facebook' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
             <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => onEditAccount(account)}><Pencil size={14}/> Edit details</button>
             {live && check?.state === 'ok' && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void disconnect(account)}>Disconnect</button>}
             {!live && onAlreadyCreated && <button type="button" className="ghost-button small-button" disabled={disabled} aria-label="Mark it live" title="Made it on the social yourself? Mark it live" onClick={() => onAlreadyCreated(account)}><Check size={14}/> Mark it live</button>}

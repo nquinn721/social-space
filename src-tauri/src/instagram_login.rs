@@ -62,11 +62,11 @@ fn forget_pending(slot: &str) {
     }
 }
 
-struct MetaApp {
-    app_id: String,
-    app_secret: String,
+pub(crate) struct MetaApp {
+    pub(crate) app_id: String,
+    pub(crate) app_secret: String,
     /// Set for Unified login apps: the Facebook Login for Business configuration to approve.
-    config_id: Option<String>,
+    pub(crate) config_id: Option<String>,
 }
 
 #[cfg(windows)]
@@ -102,7 +102,7 @@ fn valid_config_id(value: &str) -> bool {
 }
 
 /// The Meta app is the "meta" developer app, set up once in Settings or on first Connect.
-fn load_app() -> Result<Option<MetaApp>, String> {
+pub(crate) fn load_app() -> Result<Option<MetaApp>, String> {
     let Some(app) = crate::dev_apps::get(crate::dev_apps::Provider::Meta)? else { return Ok(None) };
     Ok(Some(MetaApp { app_id: app.id, app_secret: app.secret, config_id: load_config_id()? }))
 }
@@ -135,7 +135,7 @@ pub fn save_instagram_app(app_id: String, app_secret: String, config_id: Option<
 
 /// Facebook Login for Business: the configuration decides the token type, assets and permissions,
 /// so no scope is sent. System-user configurations need override_default_response_type.
-fn unified_authorize_url(app_id: &str, config_id: &str, state: &str) -> Result<url::Url, String> {
+pub(crate) fn unified_authorize_url(app_id: &str, config_id: &str, state: &str) -> Result<url::Url, String> {
     // Same address and parameters as the "Login URL" Meta generates for the configuration.
     url::Url::parse_with_params(&format!("{FACEBOOK_DIALOG}/dialog/oauth"), &[
         ("client_id", app_id),
@@ -159,7 +159,7 @@ fn authorize_url(app_id: &str, state: &str) -> Result<url::Url, String> {
 }
 
 /// Reads Instagram's redirect: the code when approved, a reason when not, or None for any other address.
-fn redirect_result(url: &url::Url, state: &str) -> Option<Result<String, String>> {
+pub(crate) fn redirect_result(url: &url::Url, state: &str) -> Option<Result<String, String>> {
     let expected = url::Url::parse(REDIRECT_URI).ok()?;
     if url.scheme() != expected.scheme() || url.host_str() != expected.host_str() || url.path() != expected.path() {
         return None;
@@ -177,7 +177,7 @@ fn redirect_result(url: &url::Url, state: &str) -> Option<Result<String, String>
         .or(Some(Err("Instagram did not return an approval code.".into())))
 }
 
-fn random_state() -> Result<String, String> {
+pub(crate) fn random_state() -> Result<String, String> {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes).map_err(|_| "Could not start a secure sign-in.")?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
@@ -222,7 +222,7 @@ struct PageAccounts { #[serde(default)] data: Vec<PageWithIg> }
 #[derive(Deserialize)]
 struct PageWithIg { instagram_business_account: Option<IgAccount> }
 
-async fn unified_exchange(app: &MetaApp, code: &str) -> Result<String, String> {
+pub(crate) async fn unified_exchange(app: &MetaApp, code: &str) -> Result<String, String> {
     let http = reqwest::Client::builder().https_only(true).timeout(HTTP_TIMEOUT).build().map_err(|_| "Could not reach Meta.")?;
     let response = http.get(format!("{FACEBOOK_GRAPH}/{GRAPH_VERSION}/oauth/access_token")).query(&[
         ("client_id", app.app_id.as_str()),
@@ -254,7 +254,7 @@ fn choose_account(accounts: Vec<IgAccount>, wanted: Option<&str>) -> Result<IgAc
 }
 
 /// Meta's error text from a failed Graph call, without anything secret (tokens are never echoed).
-async fn meta_error(response: reqwest::Response) -> String {
+pub(crate) async fn meta_error(response: reqwest::Response) -> String {
     let status = response.status().as_u16();
     let message = response.json::<serde_json::Value>().await.ok()
         .and_then(|body| body.pointer("/error/message").and_then(|m| m.as_str()).map(str::to_owned))

@@ -12,6 +12,8 @@ export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number; explain: 
   youtube: { profilesPerLogin: 100, explain: 'YouTube channels live under one Google account as Brand Accounts.' },
   tiktok: { profilesPerLogin: 1, explain: 'TikTok needs a separate account with its own email for each profile.' },
   x: { profilesPerLogin: 1, explain: 'X needs a separate account with its own email for each profile.' },
+  // Pages have no login of their own: they all sit under your own Facebook account.
+  facebook: { profilesPerLogin: 100, explain: 'Facebook Pages live under your own Facebook account; each brand gets its own Page there.' },
 };
 
 /** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */
@@ -78,7 +80,7 @@ export function planPresence(accounts: Account[], platform: Platform, brandName:
     const roomy = logins.filter((login) => login.accounts.length < profilesPerLogin);
     const login = roomy.find((item) => emailKey(item.email) === emailKey(baseEmail)) ?? roomy[0];
     if (login) {
-      const count = platform === 'youtube' ? `${login.accounts.length} ${login.accounts.length === 1 ? 'channel' : 'channels'} there now` : `${login.accounts.length + 1} of ${profilesPerLogin} profiles`;
+      const count = platform === 'youtube' || platform === 'facebook' ? `${login.accounts.length} ${login.accounts.length === 1 ? (platform === 'youtube' ? 'channel' : 'Page') : (platform === 'youtube' ? 'channels' : 'Pages')} there now` : `${login.accounts.length + 1} of ${profilesPerLogin} profiles`;
       return { mode: 'attach', platform, email: login.email, login, reason: `Adds to your ${name} login ${login.email} (${count}).` };
     }
   }
@@ -143,7 +145,7 @@ export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
     .map((video) => video.seriesId && !seriesIds.has(video.seriesId) ? { ...video, seriesId: undefined, episode: undefined } : video);
   // Ticks of profiles that no longer exist are dropped; app-wide ticks ("x:app:plan") stay.
   const ids = new Set(accounts.map((account) => account.id));
-  const setup = Object.fromEntries(Object.entries(saved.setup ?? {}).filter(([key]) => /^(instagram|tiktok|youtube|x):/.test(key) || ids.has(key.split(':')[0])));
+  const setup = Object.fromEntries(Object.entries(saved.setup ?? {}).filter(([key]) => /^(instagram|tiktok|youtube|x|facebook):/.test(key) || ids.has(key.split(':')[0])));
   // Every other part (developer logins, anything added later) is kept as it is.
   const { setup: _setup, series: _series, ...rest } = saved;
   return { ...rest, businessName: saved.businessName ?? '', brands, accounts, channels: saved.channels ?? [], categories, videos, ...(Object.keys(setup).length ? { setup } : {}), ...(series.length ? { series } : {}) };
@@ -193,7 +195,7 @@ export function addsToLogin(all: Account[], account: Account): boolean {
 export function passwordGroup(all: Account[], account: Account): string[] {
   // A YouTube channel signs in with the main Google account: its password is Google's, typed by Nate,
   // never one the app makes up.
-  if (account.platform === 'youtube') return [];
+  if (account.platform === 'youtube' || account.platform === 'facebook') return [];
   const key = emailKey(account.signupEmail);
   if (sharesLogins(account.platform) && key) {
     const login = all.filter((item) => item.id !== account.id && item.platform === account.platform && emailKey(item.signupEmail) === key);

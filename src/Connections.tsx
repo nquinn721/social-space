@@ -70,7 +70,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
       const username = await connectProfile(account);
       setSetup(null); await profiles.refresh(); recheck();
       window.dispatchEvent(new Event(INSTAGRAM_CHANGED));
-      setNote(`${getPlatform(account.platform).name} connected as @${normalizeHandle(username)} for ${brandName(account)}.`);
+      setNote(account.platform === 'facebook' ? `Facebook connected to the Page ${username} for ${brandName(account)}.` : `${getPlatform(account.platform).name} connected as @${normalizeHandle(username)} for ${brandName(account)}.`);
     } catch (reason) {
       const text = errorText(reason);
       if (text === 'SETUP_NEEDED') setSetup({ provider: PROVIDER_OF[account.platform], retry: account });
@@ -79,7 +79,7 @@ export function useConnectFlow(accounts: Account[], brands: Brand[], developer: 
     } finally { setWorking(false); }
   }
   async function disconnect(account: Account) {
-    if (working || !window.confirm(`Disconnect ${getPlatform(account.platform).name} @${account.handle}? The app won't be able to post for it until you connect again.`)) return;
+    if (working || !window.confirm(`Disconnect ${getPlatform(account.platform).name} ${account.handle ? `@${account.handle}` : brandName(account)}? The app won't be able to post for it until you connect again.`)) return;
     setWorking(true); setNote(''); setTarget(account.id);
     try { await disconnectProfile(account); await profiles.refresh(); recheck(); window.dispatchEvent(new Event(INSTAGRAM_CHANGED)); }
     catch (reason) { setNote(errorText(reason)); } finally { setWorking(false); }
@@ -134,7 +134,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], ma
     { key: 'sources', icon: <span className="connection-icon"><Clapperboard size={16}/></span>, name: 'Video makers', what: 'Kling or Grok keys used to make AI videos.', connected: state.videoSources ? `${state.videoSources} ready` : null, go: () => onNavigate('settings', 'video-sources') },
   ];
   const appRows: { provider: Provider; name: string; what: string }[] = [
-    { provider: 'meta', name: 'Meta app (Instagram)', what: 'Every Instagram profile connects through it.' },
+    { provider: 'meta', name: 'Meta app (Instagram and Facebook)', what: 'Every Instagram profile and Facebook Page connects through it.' },
     { provider: 'x', name: 'X app', what: 'Every X profile connects through it.' },
     { provider: 'google', name: 'Google app (YouTube)', what: 'Every YouTube channel connects through it.' },
     { provider: 'tiktok', name: 'TikTok app', what: 'Every TikTok profile connects through it.' },
@@ -152,7 +152,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], ma
 
   return <section className="connections" aria-label="Connections">
     <div className="sign-ins-head">
-      <div><h2><Link2 size={16}/> What each social needs</h2><p>Instagram posts through Meta's API, so each profile connects once. TikTok, YouTube and X post through their own upload page in the brand's window, so they need the profile and its login, not an API connection.</p></div>
+      <div><h2><Link2 size={16}/> What each social needs</h2><p>Instagram and Facebook Page Reels post through Meta's API, so each profile or Page connects once. TikTok, YouTube and X post through their own upload page in the brand's window, so they need the profile and its login, not an API connection.</p></div>
       <button type="button" className="ghost-button small-button" disabled={loading || profiles.loading} onClick={() => { refresh(); void profiles.refresh(); recheck(); }}><RefreshCw size={14}/> Check again</button>
     </div>
 
@@ -187,7 +187,7 @@ export default function Connections({ onNavigate, accounts = [], brands = [], ma
 
     <div className="conn-columns">
       <div className="card conn-card" aria-label="Developer apps">
-        <div className="conn-card-head"><h3>Developer apps</h3><small>Instagram needs Meta's; the rest only for API posting later</small></div>
+        <div className="conn-card-head"><h3>Developer apps</h3><small>Instagram and Facebook need Meta's; the rest only for API posting later</small></div>
         {appRows.map((row) => <div className="conn-row" key={row.provider}>
           <BrandMark platform={SOCIAL_OF[row.provider]} small/>
           <div className="conn-text"><strong>{row.name}</strong></div>

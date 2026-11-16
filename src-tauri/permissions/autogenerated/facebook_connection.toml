@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-facebook-connection"
+description = "Enables the facebook_connection command without any pre-configured scope."
+commands.allow = ["facebook_connection"]
+
+[[permission]]
+identifier = "deny-facebook-connection"
+description = "Denies the facebook_connection command without any pre-configured scope."
+commands.deny = ["facebook_connection"]
