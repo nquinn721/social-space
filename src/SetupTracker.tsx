@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, ClipboardCheck, ExternalLink, TriangleAlert } from 'lucide-react';
 import type { DevProvider } from './devAppsService';
 import { openCount, platformName, setupNeeds, type Need, type SetupInputs } from './setupNeeds';
-import { openSetupPage } from './setupService';
+import { openNeedPage } from './setupService';
 import type { Account } from './model';
 import { BrandMark, errorText } from './ui';
 import './setup.css';
@@ -36,7 +36,7 @@ export default function SetupTracker({ onMark, onConnect, onSetupApp, onEditAcco
               {need.manual && need.markedAt && <small className="setup-marked">Ticked {dateText(need.markedAt)}</small>}
             </div>
             <span className="setup-actions">
-              {need.page && need.status !== 'done' && <button type="button" className="ghost-button small-button" onClick={() => openSetupPage(need.page!.id).catch((reason) => setNote(errorText(reason)))}><ExternalLink size={13}/> {need.page.label}</button>}
+              {need.page && need.status !== 'done' && <button type="button" className="ghost-button small-button" onClick={() => openNeedPage(need, inputs.accounts, inputs.developerLogins).catch((reason) => setNote(errorText(reason)))}><ExternalLink size={13}/> {need.page.label}</button>}
               {actionButton(need)}
               {need.manual && onMark && (need.status === 'done'
                 ? <button type="button" className="ghost-button small-button" disabled={working} onClick={() => onMark(need.id, false)}>Undo</button>

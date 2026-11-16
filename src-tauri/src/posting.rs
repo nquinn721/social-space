@@ -485,13 +485,37 @@ pub struct ProfileRequest {
     /// true: the default browser on this PC. false: a Social Space window signed in as the brand.
     #[serde(default)]
     in_browser: bool,
+    /// Which of the profile's pages to open: its public page (default) or its account settings.
+    #[serde(default)]
+    target: ProfileTarget,
+}
+
+/// A page of the brand's own profile that a window can open.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProfileTarget {
+    #[default]
+    Profile,
+    /// The account's settings, e.g. Instagram's "Account type and tools" to switch to a professional account.
+    Settings,
+}
+
+/// The settings page of a profile, signed in as the brand. Only Instagram needs one today.
+pub(crate) fn settings_url(platform: Platform) -> Option<&'static str> {
+    match platform {
+        Platform::Instagram => Some("https://www.instagram.com/accounts/edit/"),
+        _ => None,
+    }
 }
 
 /// Opens a brand profile's public page, to see the videos that are live: in a Social Space window
 /// that shares the brand's posting sign-in, or in the default browser.
 #[tauri::command]
 pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Result<(), String> {
-    let address = profile_url(request.platform, &request.handle).ok_or("This profile has no valid username yet. Add it under Edit details.")?;
+    let address = match request.target {
+        ProfileTarget::Profile => profile_url(request.platform, &request.handle).ok_or("This profile has no valid username yet. Add it under Edit details.")?,
+        ProfileTarget::Settings => settings_url(request.platform).ok_or("This social has no settings page to open here.")?.to_owned(),
+    };
     if request.email.len() > 320 {
         return Err("The account details are not valid.".into());
     }
@@ -1062,6 +1086,17 @@ mod profile_edit_tests {
             assert!(crate::browser::allowed_navigation(&page, false) && on_social(&page));
         }
         assert!(save_reset_password("nothing-pending".into()).is_err());
+    }
+
+    #[test]
+    fn instagram_settings_open_in_the_brand_window() {
+        let page: url::Url = settings_url(Platform::Instagram).unwrap().parse().unwrap();
+        assert!(crate::browser::allowed_navigation(&page, false) && on_social(&page));
+        assert!(settings_url(Platform::Tiktok).is_none());
+        let request: ProfileRequest = serde_json::from_value(serde_json::json!({ "platform": "instagram", "brandId": "b", "handle": "mia", "target": "settings" })).unwrap();
+        assert_eq!(request.target, ProfileTarget::Settings);
+        let request: ProfileRequest = serde_json::from_value(serde_json::json!({ "platform": "instagram", "brandId": "b", "handle": "mia" })).unwrap();
+        assert_eq!(request.target, ProfileTarget::Profile);
     }
 
     #[test]

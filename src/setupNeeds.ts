@@ -13,7 +13,7 @@ import { usesMainLogin } from './useBrowserPosting';
 /** How a saved connection is doing (from the check_*_connection commands). */
 export type ConnectionCheck = { state: 'none' | 'ok' | 'expired' | 'unchecked'; username: string; detail: string };
 /** Pages the tracker can open; the desktop app maps each to a fixed address. */
-export type SetupPage = 'meta-apps' | 'meta-business' | 'instagram-settings' | 'google-consent' | 'google-youtube-api' | 'google-quota'
+export type SetupPage = 'meta-apps' | 'meta-business' | 'meta-business-pages' | 'instagram-settings' | 'google-consent' | 'google-youtube-api' | 'google-quota'
   | 'youtube-audit' | 'youtube-verify' | 'tiktok-apps' | 'x-portal' | 'x-products'
   | 'tiktok-login' | 'google-project' | 'google-credentials' | 'google-new-client' | 'x-signup';
 export type NeedStatus = 'done' | 'todo' | 'problem' | 'checking';
@@ -34,7 +34,8 @@ export type Need = {
   optional?: boolean;
   /** Only matters once this social posts through its API instead of its upload page; not counted. */
   later?: boolean;
-  page?: { id: SetupPage; label: string };
+  /** brandWindow: opened in the profile's own brand window (signed in as it), not the app's shared one. */
+  page?: { id: SetupPage; label: string; brandWindow?: boolean };
   action?: NeedAction;
   /** When a manual step was ticked (ms). */
   markedAt?: number;
@@ -93,8 +94,8 @@ const APP_STEPS: Record<Platform, ManualStep[]> = {
 /** Account settings each profile needs on its social, which the app cannot see. */
 const PROFILE_STEPS: Partial<Record<Platform, ManualStep[]>> = {
   instagram: [
-    { key: 'professional', title: 'Professional account (Business or Creator)', why: 'Instagram only lets apps post for professional accounts. Switch in Instagram settings → Account type and tools.', page: { id: 'instagram-settings', label: 'Open Instagram' } },
-    { key: 'page', title: 'Linked to a Facebook Page or business portfolio', why: 'Meta only shares an Instagram account with the app when it is linked to a Facebook Page or business portfolio you manage. Without it Meta connects "no Instagram account".', page: { id: 'meta-business', label: 'Open business settings' } },
+    { key: 'page', title: 'Linked to the brand\'s Facebook Page in your business portfolio', why: 'Meta only offers an Instagram account to the app when it is a professional account linked to a Facebook Page in your business portfolio. In business settings → Pages: Add → Create a new Facebook Page named like the brand (if it has none), then pick the Page → Connect assets → Instagram account → "Create a new Instagram profile" for a new brand (it comes out professional and linked), or "Log into Instagram" for an account that exists. The same Page is where the brand\'s Facebook Reels go.', page: { id: 'meta-business-pages', label: 'Open Pages' } },
+    { key: 'professional', title: 'Professional account (Business)', why: 'Only for an Instagram account made outside the Page: switch it in its own window, More (☰) → Settings → Account type and tools → Switch to professional account → Business. A profile created from the Page already is one.', page: { id: 'instagram-settings', label: 'Open its settings', brandWindow: true } },
   ],
   youtube: [
     { key: 'verified', title: 'Channel verified by phone', why: 'Needed for custom thumbnails and videos over 15 minutes.', page: { id: 'youtube-verify', label: 'Open verification' }, optional: true },

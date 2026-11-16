@@ -8,6 +8,9 @@ pub(crate) fn page_url(page: &str) -> Option<&'static str> {
     Some(match page {
         "meta-apps" => "https://developers.facebook.com/apps/",
         "meta-business" => "https://business.facebook.com/settings",
+        // The business portfolio's Pages: Add → Create a new Facebook Page, then a Page's Connect assets →
+        // Instagram account → Create a new Instagram profile (or Log into Instagram for one that exists).
+        "meta-business-pages" => "https://business.facebook.com/latest/settings/pages",
         "instagram-settings" => "https://www.instagram.com/accounts/edit/",
         "google-consent" => "https://console.cloud.google.com/apis/credentials/consent",
         "google-youtube-api" => "https://console.cloud.google.com/apis/library/youtube.googleapis.com",
@@ -41,7 +44,7 @@ mod tests {
     fn only_known_https_pages_open() {
         assert_eq!(page_url("tiktok-apps"), Some("https://developers.tiktok.com/apps/"));
         assert_eq!(page_url("https://evil.example"), None);
-        for page in ["meta-apps", "meta-business", "instagram-settings", "google-consent", "google-youtube-api", "google-quota", "youtube-audit", "youtube-verify", "tiktok-apps", "x-portal", "x-products", "tiktok-login", "google-project", "google-credentials", "google-new-client", "x-signup"] {
+        for page in ["meta-apps", "meta-business", "meta-business-pages", "instagram-settings", "google-consent", "google-youtube-api", "google-quota", "youtube-audit", "youtube-verify", "tiktok-apps", "x-portal", "x-products", "tiktok-login", "google-project", "google-credentials", "google-new-client", "x-signup"] {
             assert!(page_url(page).unwrap().starts_with("https://"), "{page}");
         }
     }

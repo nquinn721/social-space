@@ -8,7 +8,7 @@ import { useConnectFlow } from './Connections';
 import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
 import { canConnect } from './profileConnections';
 import { setupNeeds, type Need } from './setupNeeds';
-import { openSetupPage } from './setupService';
+import { openNeedPage } from './setupService';
 import { PasswordCell } from './SignIns';
 import { postMode } from './postingMode';
 import { BrandMark, errorText } from './ui';
@@ -137,10 +137,11 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       }
       const as = normalizeHandle(check.username);
       if (check.state === 'ok' && as && account.handle && as.toLowerCase() !== normalizeHandle(account.handle).toLowerCase()) return { tone: 'problem', text: `Connected as @${as}`, action: { label: 'Reconnect', run: () => void connect(account) },
-        note: `Meta connected @${as}, not @${normalizeHandle(account.handle)}, so posts would go to @${as}. Press Reconnect and pick @${normalizeHandle(account.handle)} in the Meta window. If it isn't listed, it isn't a Professional account linked to your Meta business yet.` };
+        note: `Meta connected @${as}, not @${normalizeHandle(account.handle)}, so nothing posts here. Meta only offers an account that is Professional and linked to the brand's Facebook Page: do the steps below, then Reconnect and tick @${normalizeHandle(account.handle)}.` };
       if (check.state === 'ok') return { tone: 'ok', text: 'Ready' };
       if (check.state === 'expired' || check.state === 'unchecked') return { tone: 'problem', text: 'Connection ran out', action: { label: 'Reconnect', run: () => void connect(account) }, note: check.detail || undefined };
-      return { tone: 'todo', text: 'Not connected', action: { label: 'Connect', run: () => void connect(account) } };
+      return { tone: 'todo', text: 'Not connected', action: { label: 'Connect', run: () => void connect(account) },
+        note: account.platform === 'instagram' ? 'Meta only offers an Instagram account that is Professional and linked to the brand\'s Facebook Page. Do the steps below first.' : undefined };
     }
     const signIn = signIns[account.platform];
     const own = normalizeHandle(account.handle).toLowerCase();
@@ -152,12 +153,12 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
     return { tone: 'ok', text: 'Ready' };
   }
 
-  function stepRow(need: Need, who: string) {
+  function stepRow(need: Need, who: string, explain = false) {
     return <li key={need.id} className={`${need.status}${need.optional ? ' optional' : ''}`} aria-label={need.title}>
       <span className="check-circle">{need.status === 'problem' ? <TriangleAlert size={12} strokeWidth={3}/> : <Check size={13} strokeWidth={3}/>}</span>
-      <div title={need.why}><strong>{need.title.startsWith(who) ? need.title.slice(who.length) : need.title}</strong></div>
+      <div title={need.why}><strong>{need.title.startsWith(who) ? need.title.slice(who.length) : need.title}</strong>{explain && <small>{need.why}</small>}</div>
       <span className="setup-actions">
-        {need.page && <button type="button" className="ghost-button small-button" onClick={() => openSetupPage(need.page!.id).catch((reason) => setPageNote(errorText(reason)))}><ExternalLink size={13}/> {need.page.label}</button>}
+        {need.page && <button type="button" className="ghost-button small-button" onClick={() => openNeedPage(need, accounts, developerLogins).catch((reason) => setPageNote(errorText(reason)))}><ExternalLink size={13}/> {need.page.label}</button>}
         {onMark && <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => onMark(need.id, true)}><Check size={13}/> Done</button>}
       </span>
     </li>;
@@ -174,7 +175,11 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       const check = status.connections[account.id];
       const state = rowState(account);
       const who = `${brand.name}${account.handle ? ` (@${account.handle})` : ''}: `;
-      const steps = live && !(postMode(account.platform) === 'api' && check?.state === 'ok') ? needsOf(account).filter((need) => need.manual && need.status !== 'done' && !need.optional) : [];
+      // Connected to the profile's own account; a connection to another account still needs the steps.
+      const connectedHere = check?.state === 'ok' && (account.platform !== 'instagram' || !account.handle || normalizeHandle(check.username).toLowerCase() === normalizeHandle(account.handle).toLowerCase());
+      const steps = live && !(postMode(account.platform) === 'api' && connectedHere) ? needsOf(account).filter((need) => need.manual && need.status !== 'done' && !need.optional) : [];
+      // Instagram can't connect until its steps are done, so they show on the row itself.
+      const stepsOnRow = account.platform === 'instagram' && postMode('instagram') === 'api' && steps.length > 0;
       const appLeft = live ? appStepsLeft(account.platform) : 0;
       const expanded = Boolean(open[account.id]);
       const extra = warnings?.(account) ?? [];
@@ -193,6 +198,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           </span>
         </div>
         {[state.note, ...extra].filter(Boolean).map((text) => <p key={text} className="social-row-note"><TriangleAlert size={12}/> {text}</p>)}
+        {stepsOnRow && <ul className="setup-list profile-steps" aria-label={`${name} steps before connecting`}>{steps.map((need) => stepRow(need, who, true))}</ul>}
         {panelsHere(account) && <div className="social-row-panel">{flow.panels}</div>}
         {resetting[account.id] && <div className="social-row-reset" role="status">
           <span>Reset your {name} password in the window that opened (the email and a new password are filled in). Did it work?</span>
@@ -216,8 +222,8 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
             {!live && onRemoveAccount && <button type="button" className="ghost-button small-button danger-text" disabled={disabled} aria-label={`Delete ${name} profile`} onClick={() => onRemoveAccount(account)}><Trash2 size={14}/> Delete</button>}
           </div>
           {live && signIns[account.platform] && postMode(account.platform) === 'browser' && <p className="footnote" aria-label={`${name} window sign-in`}>{signInLine(name, account.handle, signIns[account.platform]).text}</p>}
-          {(steps.length > 0 || appLeft > 0) && <ul className="setup-list profile-steps" aria-label={`${name} steps left`}>
-            {steps.map((need) => stepRow(need, who))}
+          {((!stepsOnRow && steps.length > 0) || appLeft > 0) && <ul className="setup-list profile-steps" aria-label={`${name} steps left`}>
+            {!stepsOnRow && steps.map((need) => stepRow(need, who))}
             {appLeft > 0 && <li className="todo app-steps"><span className="check-circle"><Check size={13} strokeWidth={3}/></span>
               <div title="Shared by every brand, like app review. Done once in Setup."><strong>{appLeft} one-time {name} app {appLeft === 1 ? 'step' : 'steps'} open</strong></div>
               <span className="setup-actions">{onNavigate && <button type="button" className="ghost-button small-button" onClick={() => onNavigate('accounts', 'setup')}>Open Setup</button>}</span></li>}
