@@ -1,22 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { buildPrompt, buildRefinePrompt, generateProfileImage, STYLES, type GeneratedImage, type ImageStyle } from './imageAiService';
-import { geminiKeyStatus, generateGeminiImages } from './brandImageService';
 import { errorText } from './ui';
 import './imageStudio.css';
 
 const MAX_HISTORY = 8;
-/** Takes Gemini makes at once, to pick from. */
-export const GEMINI_TAKES = 4;
-type Engine = 'gemini' | 'grok';
-const ENGINE_NAME: Record<Engine, string> = { gemini: 'Gemini', grok: 'Grok' };
-const generating = (engine: Engine) => engine === 'gemini' ? `Making ${GEMINI_TAKES} takes with Gemini, about 10 to 30 seconds…` : 'Generating with Grok, about 10 to 20 seconds…';
-const refining = (engine: Engine) => `Refining with ${ENGINE_NAME[engine]}, about 10 to 20 seconds…`;
+const GENERATING = 'Generating with Grok, about 10 to 20 seconds…';
+const REFINING = 'Refining with Grok, about 10 to 20 seconds…';
 
-/** Gemini when its key is saved (Settings > Pictures), otherwise Grok. */
-async function engineInUse(): Promise<Engine> { return await geminiKeyStatus().catch(() => false) ? 'gemini' : 'grok'; }
-async function make(engine: Engine, prompt: string, sourcePath?: string): Promise<GeneratedImage[]> {
-  if (engine === 'gemini') return generateGeminiImages({ prompt, count: sourcePath ? 1 : GEMINI_TAKES, sourcePath });
+async function make(prompt: string, sourcePath?: string): Promise<GeneratedImage[]> {
   return [await generateProfileImage({ prompt, sourcePath })];
 }
 
@@ -38,7 +30,6 @@ export default function ProfileImageStudio({ suggestion = '', auto, disabled = f
   const [selected, setSelected] = useState(0);
   const [working, setWorking] = useState('');
   const [error, setError] = useState('');
-  const [engine, setEngine] = useState<Engine>('grok');
   const panel = useRef<HTMLElement>(null);
   const current = results[selected];
   const busy = Boolean(working) || disabled;
@@ -54,34 +45,32 @@ export default function ProfileImageStudio({ suggestion = '', auto, disabled = f
   }
   // With an auto idea: make the picture without waiting for a click.
   const makeAuto = async (idea: AutoImage) => {
-    const using = await engineInUse();
-    setEngine(using);
-    await run(generating(using), async () => {
+    await run(GENERATING, async () => {
       setDescription(idea.description); setStyle(idea.style);
       const prompt = buildPrompt(idea.description, idea.style);
-      const images = await make(using, prompt);
+      const images = await make(prompt);
       keep(images, prompt);
       onAutoUse?.(images[0].path);
     });
   };
-  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); void engineInUse().then(setEngine); }, []);
+  useEffect(() => { panel.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, []);
   useEffect(() => { if (auto?.description) void makeAuto(auto); }, [auto?.key]);
 
-  const generate = () => run(generating(engine), async () => {
+  const generate = () => run(GENERATING, async () => {
     const prompt = buildPrompt(description, style);
-    keep(await make(engine, prompt), prompt);
+    keep(await make(prompt), prompt);
   });
-  const refine = () => run(refining(engine), async () => {
+  const refine = () => run(REFINING, async () => {
     if (!current) return;
     const prompt = buildRefinePrompt(refinement, style);
-    keep(await make(engine, prompt, current.path), prompt);
+    keep(await make(prompt, current.path), prompt);
     setRefinement('');
   });
 
   return <section ref={panel} className="image-studio" aria-label="Generate a profile picture">
     <header className="studio-head">
-      <h4><Sparkles size={15}/> Generate with {ENGINE_NAME[engine]}</h4>
-      <span className="studio-sub">{engine === 'gemini' ? `Gemini from Google makes ${GEMINI_TAKES} takes to pick from.` : 'Grok Imagine from xAI, using your xAI key. Add a Gemini key under Settings > Pictures to use Gemini.'}</span>
+      <h4><Sparkles size={15}/> Generate with Grok</h4>
+      <span className="studio-sub">Grok Imagine from xAI, using the xAI key of your Grok video source.</span>
       <button type="button" className="icon-button" aria-label="Close image generator" disabled={Boolean(working)} onClick={onClose}><Close size={16}/></button>
     </header>
 

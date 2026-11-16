@@ -52,8 +52,6 @@ const SHARED_SERVICES: &[(&str, &[&str], bool)] = &[
     ("social-manager-developer-app", &["meta", "x", "tiktok", "google", "meta-production", "x-production", "tiktok-production", "google-production"], false),
     ("social-manager-meta-login-config", &["meta"], false),
     ("social-manager-email", &["primary"], false),
-    // The Gemini key for brand pictures.
-    (crate::gemini_ai::KEY_SERVICE, &[crate::gemini_ai::KEY_ENTRY], false),
     // API keys of the video sources (Kling, Grok), one per source id listed in video-sources.json.
     (VIDEO_SOURCE_SERVICE, &[], false),
 ];

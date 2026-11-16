@@ -1,0 +1,6 @@
+#!/bin/sh
+# repo-context kit gate: pushes and fast-forwards to main or master wait for the change check.
+# Installed by `repoctx-check.py install`; see .claude/context/ and the gate rule in AGENTS.md.
+PY=python3
+"$PY" -c "" 2>/dev/null || PY=python
+exec "$PY" "$(git rev-parse --show-toplevel)/.githooks/repoctx-check.py" hook pre-push "$@"
