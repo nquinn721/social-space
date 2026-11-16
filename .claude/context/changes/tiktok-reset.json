@@ -1,0 +1,15 @@
+{
+  "summary": "TikTok's password reset pages (/login/email/forget-password and friends) are no longer redirected to the email sign-in form, so Reset password and TikTok's own Forgot password link work in brand windows.",
+  "features": ["posting", "updates"],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    { "path": "src-tauri/src/browser.rs", "note": "email_login_page and EMAIL_LOGIN_SCRIPT skip forget/forgot/reset paths (is_password_reset)" },
+    { "path": "package.json", "note": "0.30.4" },
+    { "path": "package-lock.json", "note": "0.30.4" },
+    { "path": "hub-app.json", "note": "0.30.4" },
+    { "path": "src-tauri/tauri.conf.json", "note": "0.30.4" },
+    { "path": "src-tauri/Cargo.toml", "note": "0.30.4" },
+    { "path": "src-tauri/Cargo.lock", "note": "0.30.4" }
+  ]
+}
