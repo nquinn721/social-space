@@ -3,17 +3,20 @@ import { claimInstagramConnection, connectInstagramApp } from './instagramServic
 import { claimXConnection, connectX, disconnectX } from './xService';
 import { connectTiktok, connectYoutube, disconnectTiktok, disconnectYoutube, tiktokConnection, youtubeConnection } from './socialConnectService';
 import { disconnectInstagram } from './instagramService';
+import { connectFacebookPage, disconnectFacebook, facebookConnection } from './facebookService';
 import { normalizeHandle, type Account, type Platform } from './model';
 
 /** Socials whose profiles can connect for posting today. */
-export const CONNECTABLE: Platform[] = ['instagram', 'x', 'youtube', 'tiktok'];
+export const CONNECTABLE: Platform[] = ['instagram', 'x', 'youtube', 'tiktok', 'facebook'];
 export const canConnect = (account: Account) => account.status === 'active' && CONNECTABLE.includes(account.platform);
 /** Which developer app each social signs in through. */
-export const PROVIDER_OF: Record<Platform, 'meta' | 'x' | 'tiktok' | 'google'> = { instagram: 'meta', x: 'x', tiktok: 'tiktok', youtube: 'google' };
+export const PROVIDER_OF: Record<Platform, 'meta' | 'x' | 'tiktok' | 'google'> = { instagram: 'meta', x: 'x', tiktok: 'tiktok', youtube: 'google', facebook: 'meta' };
 
 /** The username this profile's own connection is signed in as, or null when it has none. */
 export async function profileConnection(account: Account): Promise<string | null> {
   if (!canConnect(account)) return null;
+  // A Facebook profile is a Page: its connection is the Page's name.
+  if (account.platform === 'facebook') return (await facebookConnection(account.id))?.name ?? null;
   const identity = account.platform === 'instagram' ? await claimInstagramConnection(account.id, normalizeHandle(account.handle))
     : account.platform === 'x' ? await claimXConnection(account.id, normalizeHandle(account.handle))
     : account.platform === 'youtube' ? await youtubeConnection(account.id)
@@ -29,6 +32,7 @@ export async function profileConnection(account: Account): Promise<string | null
  * social's developer app is saved.
  */
 export async function connectProfile(account: Account): Promise<string> {
+  if (account.platform === 'facebook') return (await connectFacebookPage(account.id, account.platformId, account.displayName || account.label)).name;
   if (account.platform === 'instagram') return (await connectInstagramApp(account.id, normalizeHandle(account.handle), account.platformId)).username;
   if (account.platform === 'x') return (await connectX('', account.id, account.handle)).username;
   if (account.platform === 'youtube') { const channel = await connectYoutube(account.id, account.signupEmail); return channel.username || channel.name; }
@@ -39,6 +43,7 @@ export async function connectProfile(account: Account): Promise<string> {
 /** Removes only this profile's connection; nothing changes on the social. */
 export async function disconnectProfile(account: Account): Promise<void> {
   if (account.platform === 'instagram') return disconnectInstagram(account.id);
+  if (account.platform === 'facebook') return disconnectFacebook(account.id);
   if (account.platform === 'x') return disconnectX(account.id);
   if (account.platform === 'youtube') return disconnectYoutube(account.id);
   return disconnectTiktok(account.id);

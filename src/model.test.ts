@@ -9,7 +9,7 @@ describe('workspace account details', () => {
     expect(normalizeHandle(' @ ')).toBe('');
   });
   it('covers each supported platform and formats counts', () => {
-    expect(PLATFORMS.map((platform) => platform.id)).toEqual(['instagram', 'tiktok', 'youtube', 'x']);
+    expect(PLATFORMS.map((platform) => platform.id)).toEqual(['instagram', 'tiktok', 'youtube', 'x', 'facebook']);
     expect(getPlatform('youtube').name).toBe('YouTube');
     expect(accountCountLabel(1)).toBe('1 account');
     expect(accountCountLabel(2)).toBe('2 accounts');

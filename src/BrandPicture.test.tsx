@@ -114,7 +114,7 @@ describe('picture sizes', () => {
     expect(pictures.pictureFileFor({ imageFile: 'own.jpg' }, { image: { file: 'brand.jpg' } })).toBe('own.jpg');
     expect(pictures.pictureFileFor({}, { image: { file: 'brand.jpg' } })).toBe('brand.jpg');
     expect(pictures.pictureFileFor({}, undefined)).toBeUndefined();
-    expect(pictures.PROFILE_SIZES).toEqual({ instagram: 1024, tiktok: 720, youtube: 800, x: 400 });
+    expect(pictures.PROFILE_SIZES).toEqual({ instagram: 1024, tiktok: 720, youtube: 800, x: 400, facebook: 720 });
     expect(pictures.dataUrlBytes('data:image/jpeg;base64,AAAA')).toBe(3);
     expect(pictures.bannerPrompt('Bunnies', '')).toMatch(/No text/);
   });

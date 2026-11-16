@@ -102,7 +102,7 @@ pub(crate) fn upload_url(platform: Platform) -> Option<&'static str> {
         Platform::Youtube => Some("https://www.youtube.com/upload"),
         Platform::X => Some("https://x.com/compose/post"),
         // Instagram posts through its API.
-        Platform::Instagram => None,
+        Platform::Instagram | Platform::Facebook => None,
     }
 }
 
@@ -150,7 +150,7 @@ fn is_upload_page(platform: Platform, url: &url::Url) -> bool {
         Platform::Tiktok => host.ends_with("tiktok.com") && url.path().starts_with("/tiktokstudio/upload"),
         Platform::Youtube => host == "studio.youtube.com" || (host.ends_with("youtube.com") && url.path().starts_with("/upload")),
         Platform::X => (host == "x.com" || host == "twitter.com") && !is_sign_in(url),
-        Platform::Instagram => false,
+        Platform::Instagram | Platform::Facebook => false,
     }
 }
 
@@ -279,6 +279,7 @@ fn build_window(
         Platform::Youtube => "YouTube",
         Platform::X => "X",
         Platform::Instagram => "Instagram",
+        Platform::Facebook => "Facebook",
     };
     let handle = &posting.request.handle;
     let verb = if posting.config_script.is_some() { "Post on" } else { "Profile on" };
@@ -465,6 +466,8 @@ pub(crate) fn profile_url(platform: Platform, handle: &str) -> Option<String> {
         Platform::Youtube => format!("https://www.youtube.com/@{handle}/videos"),
         Platform::X => format!("https://x.com/{handle}"),
         Platform::Instagram => format!("https://www.instagram.com/{handle}/"),
+        // A Page's username or its numeric ID.
+        Platform::Facebook => format!("https://www.facebook.com/{handle}"),
     })
 }
 
@@ -534,7 +537,8 @@ pub(crate) fn reset_url(platform: Platform) -> Option<&'static str> {
         Platform::Tiktok => Some("https://www.tiktok.com/login/email/forget-password"),
         Platform::X => Some("https://x.com/i/flow/password_reset"),
         Platform::Instagram => Some("https://www.instagram.com/accounts/password/reset/"),
-        Platform::Youtube => None,
+        // YouTube and Facebook Pages sit under your own Google or Facebook login, which the app never resets.
+        Platform::Youtube | Platform::Facebook => None,
     }
 }
 
@@ -964,6 +968,8 @@ pub(crate) fn profile_edit_url(platform: Platform, handle: &str) -> Option<Strin
         Platform::X => Some("https://x.com/settings/profile".into()),
         Platform::Youtube => Some("https://studio.youtube.com/".into()),
         Platform::Tiktok => profile_url(Platform::Tiktok, handle),
+        // The Page itself, where Edit opens its details.
+        Platform::Facebook => profile_url(Platform::Facebook, handle),
     }
 }
 
@@ -986,6 +992,7 @@ fn profile_edit_note(platform: Platform) -> &'static str {
         Platform::X => "Socialspace fills the picture, name, bio and website in Edit profile. Check them, then press Save yourself.",
         Platform::Tiktok => "Press Edit profile: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
         Platform::Youtube => "Open Customization, then Profile: the picture, name and description fill in. Keywords are under Settings, Channel. Press Publish or Save yourself.",
+        Platform::Facebook => "Press Edit on the Page: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
     }
 }
 

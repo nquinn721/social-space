@@ -1,5 +1,5 @@
 import type { Channel } from './channelModel';
-export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube';
+export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube' | 'facebook';
 export type View = 'overview' | 'accounts' | 'inbox' | 'updates' | 'settings';
 export const VIEWS: View[] = ['overview', 'accounts', 'inbox', 'updates', 'settings'];
 /** identity: where name and username are edited (Instagram's Accounts Center). */
@@ -17,7 +17,7 @@ export type Account = { id: string; platform: Platform; label: string; handle: s
 export type BrandImage = { file: string; banner?: string; prompt?: string };
 export type Brand = { id: string; name: string; notes: string; /** Used on every profile of the brand unless a profile has its own. */ image?: BrandImage };
 /** Profile description limits on each platform, used to keep drafts postable. */
-export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160 };
+export const BIO_LIMITS: Record<Platform, number> = { instagram: 150, tiktok: 80, youtube: 1000, x: 160, facebook: 101 };
 /** What a category's new posts start with: a short description and its usual hashtags. */
 export type PostDefaults = { caption: string; hashtags: string[] };
 /** A segment of a brand, e.g. "Bunny" inside "Animals". It has no accounts of its own: its videos post to the brand's profiles. */
@@ -67,6 +67,7 @@ export const PLATFORMS: { id: Platform; name: string; description: string; color
   { id: 'tiktok', name: 'TikTok', description: 'Short-form video', color: '#44dfd4', mark: '♪', postLabel: 'Open TikTok Studio' },
   { id: 'youtube', name: 'YouTube', description: 'Videos, shorts & channels', color: '#ff5e66', mark: '▶', postLabel: 'Open YouTube Studio' },
   { id: 'x', name: 'X', description: 'Posts & conversations', color: '#ececf1', mark: '𝕏', postLabel: 'Open X' },
+  { id: 'facebook', name: 'Facebook', description: 'Page Reels', color: '#4c8dff', mark: 'f', postLabel: 'Open Facebook' },
 ];
 export function getPlatform(id: Platform) { return PLATFORMS.find((platform) => platform.id === id)!; }
 export function accountCountLabel(count: number) { return `${count} ${count === 1 ? 'account' : 'accounts'}`; }

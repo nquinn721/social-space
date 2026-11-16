@@ -6,6 +6,7 @@ import { wrongLogin } from './useBrowserPosting';
 import { hasAccountPassword } from './profileService';
 import type { ConnectionCheck } from './setupNeeds';
 import type { BrandInstagram } from './useBrandInstagram';
+import { useBrandFacebook, type BrandFacebook } from './useBrandFacebook';
 import type { BrandSignIn } from './postingService';
 import { useSignIns } from './useSignIns';
 
@@ -14,7 +15,7 @@ import { useSignIns } from './useSignIns';
  * login it uses, whether Instagram is connected, whether the sign-in is saved. Every page reads this
  * instead of writing its own guesses, so the labels and the next step agree everywhere.
  *
- * Posting model: Instagram posts through the Graph API (needs its connection). TikTok, YouTube and X post
+ * Posting model: Instagram and Facebook (Page Reels) post through the Graph API (need their connection). TikTok, YouTube and X post
  * through their own upload page in a per-brand app window (needs the profile and its login). YouTube
  * channels live under the main Google account on purpose, so that is never a problem.
  */
@@ -65,6 +66,15 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
     if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${viaText(platform)}`, canPost: true };
     if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Instagram connection ran out.', action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
     return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect it through Meta so the app can post Reels for it.', action: { kind: 'connect', label: 'Connect Instagram', short: 'Connect' }, canPost: false };
+  }
+  if (platform === 'facebook') {
+    // A Facebook profile is the brand's Page. It has no login of its own (it sits under your Facebook account),
+    // so only its Page connection matters.
+    const check = inputs.connections?.[account.id];
+    if (!check) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking the Facebook Page connection.', canPost: false };
+    if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` to the Page ${check.username}` : ''}. ${viaText(platform)}`, canPost: true };
+    if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Facebook Page connection stopped working.', action: { kind: 'connect', label: 'Reconnect Facebook', short: 'Reconnect' }, canPost: false };
+    return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect the brand\'s Page through Meta so the app can post Reels to it.', action: { kind: 'connect', label: 'Connect Facebook Page', short: 'Connect' }, canPost: false };
   }
   // The brand window posts as whoever it is signed in as, so a window that isn't signed in comes first.
   // Posting still works: the window asks for the sign-in and fills it.
@@ -137,7 +147,7 @@ export function progressLabel(progress: VideoProgress): string {
  */
 export function useSavedPasswords(accounts: Account[]): Record<string, boolean | undefined> {
   const [passwords, setPasswords] = useState<Record<string, boolean | undefined>>({});
-  const ids = accounts.filter((account) => account.status === 'active' && account.platform !== 'youtube' && account.platform !== 'instagram').map((account) => account.id).join('|');
+  const ids = accounts.filter((account) => account.status === 'active' && account.platform !== 'youtube' && account.platform !== 'instagram' && account.platform !== 'facebook').map((account) => account.id).join('|');
   useEffect(() => {
     if (!ids || !isTauri()) return;
     let live = true;
@@ -157,9 +167,16 @@ export function instagramConnection(instagram: BrandInstagram | null): Record<st
   return { [instagram.accountId]: { state: 'ok', username: instagram.username, detail: '' } };
 }
 
-/** A brand's status on every social, with its Instagram connection and saved logins checked. */
+/** The brand's Facebook Page connection as a status input: nothing while checking. */
+export function facebookConnection(facebook: BrandFacebook | null): Record<string, ConnectionCheck | undefined> {
+  if (!facebook || facebook.connected === null) return {};
+  return { [facebook.accountId]: facebook.connected ? { state: 'ok', username: facebook.page, detail: '' } : { state: 'none', username: '', detail: '' } };
+}
+
+/** A brand's status on every social, with its Instagram and Facebook connections and saved logins checked. */
 export function useBrandStatuses(workspace: Workspace, brandId: string | undefined, instagram: BrandInstagram | null): SocialStatus[] {
   const passwords = useSavedPasswords(workspace.accounts.filter((account) => account.brandId === brandId));
   const signIns = useSignIns()[brandId ?? ''];
-  return useMemo(() => brandId ? brandStatuses(workspace, brandId, { connections: instagramConnection(instagram), passwords, signIns }) : [], [workspace, brandId, instagram, passwords, signIns]);
+  const facebook = useBrandFacebook(workspace, brandId);
+  return useMemo(() => brandId ? brandStatuses(workspace, brandId, { connections: { ...instagramConnection(instagram), ...facebookConnection(facebook) }, passwords, signIns }) : [], [workspace, brandId, instagram, facebook, passwords, signIns]);
 }

@@ -62,6 +62,7 @@ export const LIMITS: Record<Platform, { text: number; hashtags?: number; label: 
   tiktok: { text: 2200, label: 'TikTok caption' },
   youtube: { text: 5000, label: 'YouTube description' },
   x: { text: 280, label: 'X post' },
+  facebook: { text: 2200, label: 'Facebook Reel description' },
 };
 
 /** Problems that would stop a social from taking this video as it is, for the brand's socials only. */

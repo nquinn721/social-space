@@ -285,6 +285,12 @@
           "markdownDescription": "Enables the connect_email command without any pre-configured scope."
         },
         {
+          "description": "Enables the connect_facebook_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-connect-facebook-page",
+          "markdownDescription": "Enables the connect_facebook_page command without any pre-configured scope."
+        },
+        {
           "description": "Enables the connect_gmail_session command without any pre-configured scope.",
           "type": "string",
           "const": "allow-connect-gmail-session",
@@ -349,6 +355,12 @@
           "type": "string",
           "const": "allow-disconnect-email",
           "markdownDescription": "Enables the disconnect_email command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the disconnect_facebook command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-disconnect-facebook",
+          "markdownDescription": "Enables the disconnect_facebook command without any pre-configured scope."
         },
         {
           "description": "Enables the disconnect_instagram command without any pre-configured scope.",
@@ -427,6 +439,12 @@
           "type": "string",
           "const": "allow-export-sign-ins",
           "markdownDescription": "Enables the export_sign_ins command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the facebook_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-facebook-connection",
+          "markdownDescription": "Enables the facebook_connection command without any pre-configured scope."
         },
         {
           "description": "Enables the fill_site_form command without any pre-configured scope.",
@@ -555,6 +573,12 @@
           "markdownDescription": "Enables the load_workspace command without any pre-configured scope."
         },
         {
+          "description": "Enables the open_facebook_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-open-facebook-post",
+          "markdownDescription": "Enables the open_facebook_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_gmail_message command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-gmail-message",
@@ -673,6 +697,12 @@
           "type": "string",
           "const": "allow-preview-video-file",
           "markdownDescription": "Enables the preview_video_file command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the publish_facebook_reel_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-publish-facebook-reel-file",
+          "markdownDescription": "Enables the publish_facebook_reel_file command without any pre-configured scope."
         },
         {
           "description": "Enables the publish_instagram_photo command without any pre-configured scope.",
@@ -1011,6 +1041,12 @@
           "markdownDescription": "Denies the connect_email command without any pre-configured scope."
         },
         {
+          "description": "Denies the connect_facebook_page command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-connect-facebook-page",
+          "markdownDescription": "Denies the connect_facebook_page command without any pre-configured scope."
+        },
+        {
           "description": "Denies the connect_gmail_session command without any pre-configured scope.",
           "type": "string",
           "const": "deny-connect-gmail-session",
@@ -1075,6 +1111,12 @@
           "type": "string",
           "const": "deny-disconnect-email",
           "markdownDescription": "Denies the disconnect_email command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the disconnect_facebook command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-disconnect-facebook",
+          "markdownDescription": "Denies the disconnect_facebook command without any pre-configured scope."
         },
         {
           "description": "Denies the disconnect_instagram command without any pre-configured scope.",
@@ -1153,6 +1195,12 @@
           "type": "string",
           "const": "deny-export-sign-ins",
           "markdownDescription": "Denies the export_sign_ins command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the facebook_connection command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-facebook-connection",
+          "markdownDescription": "Denies the facebook_connection command without any pre-configured scope."
         },
         {
           "description": "Denies the fill_site_form command without any pre-configured scope.",
@@ -1281,6 +1329,12 @@
           "markdownDescription": "Denies the load_workspace command without any pre-configured scope."
         },
         {
+          "description": "Denies the open_facebook_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-open-facebook-post",
+          "markdownDescription": "Denies the open_facebook_post command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_gmail_message command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-gmail-message",
@@ -1399,6 +1453,12 @@
           "type": "string",
           "const": "deny-preview-video-file",
           "markdownDescription": "Denies the preview_video_file command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the publish_facebook_reel_file command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-publish-facebook-reel-file",
+          "markdownDescription": "Denies the publish_facebook_reel_file command without any pre-configured scope."
         },
         {
           "description": "Denies the publish_instagram_photo command without any pre-configured scope.",

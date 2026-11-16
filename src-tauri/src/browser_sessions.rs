@@ -141,6 +141,7 @@ pub(crate) fn social_sites(platform: crate::Platform) -> &'static [&'static str]
         crate::Platform::Youtube => &["youtube.com", "google.com"],
         crate::Platform::X => &["x.com", "twitter.com"],
         crate::Platform::Instagram => &["instagram.com", "facebook.com"],
+        crate::Platform::Facebook => &["facebook.com"],
     }
 }
 

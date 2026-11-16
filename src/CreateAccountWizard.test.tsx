@@ -32,10 +32,11 @@ describe('create account wizard', () => {
     const onSave = vi.fn(async (account: Account) => { saved.push(account); });
     const user = userEvent.setup();
     render(<CreateAccountWizard onSave={onSave} onClose={vi.fn()}/>);
-    for (const name of ['Instagram', 'TikTok', 'YouTube', 'X']) expect(screen.getByLabelText(name)).toBeChecked();
+    for (const name of ['Instagram', 'TikTok', 'YouTube', 'X', 'Facebook']) expect(screen.getByLabelText(name)).toBeChecked();
     expect(screen.getByLabelText('Sign-up email')).toHaveValue(DEFAULT_SIGNUP_EMAIL);
     expect(screen.getByText('0/80 (TikTok limit)')).toBeInTheDocument();
     await user.click(screen.getByLabelText('YouTube'));
+    await user.click(screen.getByLabelText('Facebook'));
     await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
     await user.type(screen.getByLabelText('Username you want optional'), '@softwings');
     await user.type(screen.getByLabelText(/Profile description/), 'Wings for little dreamers.');
@@ -80,7 +81,7 @@ describe('create account wizard', () => {
     expect(screen.getByLabelText('Account name')).toHaveValue('Flutter Finds');
     expect(screen.getByLabelText('Username you want optional')).toHaveValue('flutterfinds');
     expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
-    expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X']);
+    expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X', 'Facebook']);
     // The matching picture is made straight away and becomes the account's image.
     expect(await screen.findByText('profile-1.png')).toBeInTheDocument();
     expect(vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt).toBe('minimal modern logo mark, pastel butterfly logo mark, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon, no tiny details, no watermark');

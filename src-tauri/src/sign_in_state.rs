@@ -37,6 +37,7 @@ fn key(platform: Platform) -> &'static str {
         Platform::Youtube => "youtube",
         Platform::X => "x",
         Platform::Instagram => "instagram",
+        Platform::Facebook => "facebook",
     }
 }
 
@@ -52,6 +53,7 @@ fn signed_in_on(platform: Platform, cookies: &[(String, String, bool)]) -> bool 
         Platform::X => &[("auth_token", "x.com"), ("auth_token", "twitter.com")],
         Platform::Youtube => &[("SID", "google.com"), ("LOGIN_INFO", "youtube.com")],
         Platform::Instagram => &[("sessionid", "instagram.com")],
+        Platform::Facebook => &[("c_user", "facebook.com")],
     };
     cookies.iter().any(|(name, domain, has_value)| *has_value && wanted.iter().any(|(n, site)| name == n && on(domain, site)))
 }

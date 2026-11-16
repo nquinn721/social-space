@@ -56,7 +56,7 @@ export type SetupInputs = {
   developerLogins?: Workspace['developerLogins'];
 };
 
-export const PROVIDER_FOR: Record<Platform, DevProvider> = { instagram: 'meta', x: 'x', youtube: 'google', tiktok: 'tiktok' };
+export const PROVIDER_FOR: Record<Platform, DevProvider> = { instagram: 'meta', x: 'x', youtube: 'google', tiktok: 'tiktok', facebook: 'meta' };
 /** TikTok Sandbox client keys start with "sb"; production keys do not. */
 export const isTestingApp = (provider: DevProvider, id?: string | null) => provider === 'tiktok' && !!id && id.startsWith('sb');
 /** Developer-side steps that only matter once the app leaves its test mode; shown as later steps while testing. */
@@ -80,6 +80,9 @@ const APP_STEPS: Record<Platform, ManualStep[]> = {
   tiktok: [
     { key: 'review', title: 'App approved by TikTok', why: 'TikTok reviews the app (Login Kit and Content Posting API) before accounts other than its testers can connect.', page: { id: 'tiktok-apps', label: 'Open TikTok apps' } },
     { key: 'audit', title: 'Content Posting audit passed', why: 'Until TikTok audits the app, everything it posts is private (only the account can see it). After the audit, posts can be public.', page: { id: 'tiktok-apps', label: 'Open TikTok apps' } },
+  ],
+  facebook: [
+    { key: 'pages', title: 'Meta login configuration can post to Pages', why: 'Facebook Reels use the same Meta app as Instagram. Its Facebook Login for Business configuration needs the permissions pages_show_list, pages_read_engagement and pages_manage_posts, or Connect finds no Page. In Development mode it works for Pages you manage; no App Review is needed for them.', page: { id: 'meta-apps', label: 'Open Meta apps' } },
   ],
   x: [
     { key: 'auth', title: 'Read and write access turned on', why: 'In the app\'s User authentication settings: Native App, permissions Read and write, and the callback address the app shows. Without write access, posting fails.', page: { id: 'x-portal', label: 'Open X portal' } },
@@ -138,7 +141,8 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
           status: mainLogin ? 'problem' : 'done' });
       }
       // YouTube channels live under the main Google account, so there is no brand login to save there.
-      if (!(platform === 'youtube' && mainLogin)) {
+      // Facebook Pages have no login of their own either: they sit under your own Facebook account.
+      if (platform !== 'facebook' && !(platform === 'youtube' && mainLogin)) {
         const saved = passwords[account.id];
         needs.push({ id: `${account.id}:sign-in`, platform, accountId: account.id, title: `${who}username and password saved`, optional: !browser || platform === 'youtube',
           why: browser ? 'The posting window fills the sign-in from it. Kept in Windows Credential Manager and the encrypted backup.' : 'Kept in Windows Credential Manager and in the encrypted backup, so the sign-in is never lost.',
@@ -149,7 +153,7 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
       needs.push({
         id: `${account.id}:connected`, platform, accountId: account.id, title: `${who}connected for ${browser ? 'API posting' : 'posting'}`, manual: false, action: { kind: 'connect', account }, later: browser,
         why: !check ? 'Checking the connection…'
-          : check.state === 'ok' ? `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${check.detail || 'Renews by itself.'}`
+          : check.state === 'ok' ? `Connected${!check.username ? '' : platform === 'facebook' ? ` to the Page ${check.username}` : ` as @${check.username.replace(/^@/, '')}`}. ${check.detail || 'Renews by itself.'}`
           : check.state === 'none' ? `Connect it so the app can post as this ${name} profile.`
           : check.detail,
         status: !check ? 'checking' : check.state === 'ok' ? 'done' : check.state === 'none' ? 'todo' : 'problem',
