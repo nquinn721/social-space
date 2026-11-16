@@ -6,7 +6,6 @@ mod account_passwords;
 mod backup;
 mod brand_images;
 mod browser_sessions;
-mod gemini_ai;
 mod autofill;
 mod browser;
 mod email;
@@ -518,10 +517,7 @@ pub fn run() {
             grok_ai::grok_models,
             grok_ai::grok_chat,
             grok_ai::generate_profile_image,
-            gemini_ai::gemini_key_status,
-            gemini_ai::save_gemini_key,
-            gemini_ai::remove_gemini_key,
-            gemini_ai::generate_gemini_images,
+            grok_ai::generate_grok_images,
             brand_images::save_brand_image,
             brand_images::brand_image_path,
             brand_images::reveal_brand_image,

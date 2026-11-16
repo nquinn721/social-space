@@ -6,10 +6,12 @@ import BrandPicture from './BrandPicture';
 import ProfileImageStudio from './ProfileImageStudio';
 import * as pictures from './brandImageService';
 import * as posting from './postingService';
+import * as images from './imageAiService';
 import type { Account, Brand } from './model';
 
 vi.mock('./brandImageService', async (original) => ({ ...(await original<typeof import('./brandImageService')>()),
-  geminiKeyStatus: vi.fn(), generateGeminiImages: vi.fn(), keepSquare: vi.fn(), keepBanner: vi.fn(), keepFile: vi.fn(), profilePicturePath: vi.fn(), brandImagePreview: vi.fn(), revealBrandImage: vi.fn() }));
+  generatePictures: vi.fn(), keepSquare: vi.fn(), keepBanner: vi.fn(), keepFile: vi.fn(), profilePicturePath: vi.fn(), brandImagePreview: vi.fn(), revealBrandImage: vi.fn() }));
+vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), generateProfileImage: vi.fn() }));
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()), chooseImageFile: vi.fn() }));
 vi.mock('./postingService', async (original) => ({ ...(await original<typeof import('./postingService')>()), openProfileEditor: vi.fn() }));
 
@@ -19,8 +21,7 @@ const account = (platform: Account['platform'], extra: Partial<Account> = {}): A
 beforeEach(() => {
   vi.resetAllMocks();
   let made = 0;
-  vi.mocked(pictures.geminiKeyStatus).mockResolvedValue(true);
-  vi.mocked(pictures.generateGeminiImages).mockImplementation(async ({ count = 1 }) => Array.from({ length: count }, () => { made += 1; return { path: `C:\\pics\\gemini-${made}.png`, preview: `data:image/png;base64,${made}` }; }));
+  vi.mocked(pictures.generatePictures).mockImplementation(async ({ count = 1 }) => Array.from({ length: count }, () => { made += 1; return { path: `C:\\pics\\grok-${made}.png`, preview: `data:image/png;base64,${made}` }; }));
   vi.mocked(pictures.keepSquare).mockImplementation(async (preview) => `square-of-${preview.slice(-1)}.jpg`);
   vi.mocked(pictures.keepBanner).mockResolvedValue('banner.jpg');
   vi.mocked(pictures.brandImagePreview).mockImplementation(async (file) => `data:image/jpeg;base64,${file}`);
@@ -30,15 +31,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('brand picture', () => {
-  it('makes four takes with Gemini and keeps the chosen one as the brand picture', async () => {
+  it('makes four takes with Grok and keeps the chosen one as the brand picture', async () => {
     const onSaveImage = vi.fn().mockResolvedValue(true);
     const user = userEvent.setup();
     render(<BrandPicture brand={brand} accounts={[account('instagram')]} busy={false} onSaveImage={onSaveImage} onSaveAccountImage={vi.fn()}/>);
-    await user.click(screen.getByRole('button', { name: /Generate with Gemini/ }));
+    await user.click(screen.getByRole('button', { name: /Generate with Grok/ }));
     await user.click(await screen.findByRole('button', { name: /Make 4 takes/ }));
     expect(await screen.findAllByRole('button', { name: /^Take \d$/ })).toHaveLength(4);
-    expect(vi.mocked(pictures.generateGeminiImages).mock.calls[0][0]).toMatchObject({ count: 4, aspect: '1:1' });
-    expect(vi.mocked(pictures.generateGeminiImages).mock.calls[0][0].prompt).toContain('Bunnies');
+    expect(vi.mocked(pictures.generatePictures).mock.calls[0][0]).toMatchObject({ count: 4, aspect: '1:1' });
+    expect(vi.mocked(pictures.generatePictures).mock.calls[0][0].prompt).toContain('Bunnies');
     await user.click(screen.getByRole('button', { name: 'Take 2' }));
     await user.click(screen.getByRole('button', { name: /Use this picture/ }));
     await waitFor(() => expect(onSaveImage).toHaveBeenCalled());
@@ -68,7 +69,7 @@ describe('brand picture', () => {
     render(<BrandPicture brand={{ ...brand, image: { file: 'brand.jpg', prompt: 'bunny face' } }} accounts={[]} busy={false} onSaveImage={onSaveImage} onSaveAccountImage={vi.fn()}/>);
     await user.click(screen.getByRole('button', { name: /Make a banner/ }));
     await user.click(await screen.findByRole('button', { name: /Make 4 takes/ }));
-    expect(vi.mocked(pictures.generateGeminiImages).mock.calls[0][0]).toMatchObject({ aspect: '16:9' });
+    expect(vi.mocked(pictures.generatePictures).mock.calls[0][0]).toMatchObject({ aspect: '16:9' });
     await user.click(await screen.findByRole('button', { name: /Use this banner/ }));
     await waitFor(() => expect(onSaveImage).toHaveBeenCalledWith({ file: 'brand.jpg', prompt: 'bunny face', banner: 'banner.jpg' }, expect.any(String)));
   });
@@ -81,30 +82,30 @@ describe('brand picture', () => {
     expect(pictures.keepFile).toHaveBeenCalledWith('C:\\pics\\profile-1.jpg');
   });
 
-  it('asks for the Gemini key when none is saved', async () => {
-    vi.mocked(pictures.geminiKeyStatus).mockResolvedValue(false);
+  it('points to Video sources when there is no xAI key yet', async () => {
+    vi.mocked(pictures.generatePictures).mockRejectedValue(new Error('Add your xAI key under Settings > Video sources (Grok Imagine). The assistant and picture maker use the same key.'));
     const onNavigate = vi.fn();
     const user = userEvent.setup();
     render(<BrandPicture brand={brand} accounts={[]} busy={false} onSaveImage={vi.fn()} onSaveAccountImage={vi.fn()} onNavigate={onNavigate}/>);
-    await user.click(screen.getByRole('button', { name: /Generate with Gemini/ }));
-    await user.click(await screen.findByRole('button', { name: 'Open Settings' }));
-    expect(onNavigate).toHaveBeenCalledWith('settings', 'pictures');
-    expect(screen.getByRole('button', { name: /Make 4 takes/ })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Generate with Grok/ }));
+    await user.click(await screen.findByRole('button', { name: /Make 4 takes/ }));
+    await user.click(await screen.findByRole('button', { name: 'Open Video sources' }));
+    expect(onNavigate).toHaveBeenCalledWith('settings', 'video-sources');
   });
 });
 
-describe('profile picture maker with a Gemini key', () => {
-  it('makes four takes with Gemini to pick from', async () => {
+describe('profile picture maker', () => {
+  it('makes pictures with Grok only', async () => {
+    vi.mocked(images.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\profile-1.png', preview: 'data:image/png;base64,1' });
     const onUse = vi.fn();
     const user = userEvent.setup();
     render(<ProfileImageStudio onUse={onUse} onClose={vi.fn()}/>);
-    expect(await screen.findByText(/Generate with Gemini/)).toBeInTheDocument();
+    expect(screen.getByText(/Generate with Grok/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Describe the picture'), 'bunny');
     await user.click(screen.getByRole('button', { name: /^Generate$/ }));
-    expect(await screen.findAllByRole('button', { name: /^Picture \d$/ })).toHaveLength(4);
-    await user.click(screen.getByRole('button', { name: 'Picture 1' }));
-    await user.click(screen.getByRole('button', { name: /Use this picture/ }));
-    expect(onUse).toHaveBeenCalledWith('C:\\pics\\gemini-4.png');
+    await user.click(await screen.findByRole('button', { name: /Use this picture/ }));
+    expect(onUse).toHaveBeenCalledWith('C:\\pics\\profile-1.png');
+    expect(pictures.generatePictures).not.toHaveBeenCalled();
   });
 });
 

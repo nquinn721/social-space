@@ -5,7 +5,7 @@ import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
 import TeamSyncSettings from '../TeamSyncSettings';
-import GeminiKeySettings from '../GeminiKeySettings';
+import PictureSettings from '../PictureSettings';
 import DeveloperAccounts, { type ReviewProps } from '../DeveloperAccounts';
 import type { TeamSync } from '../useTeamSync';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
@@ -93,7 +93,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <p>AI video providers you generate with, each under its own name and API key. Keys are checked with the provider and stored in Windows Credential Manager.</p>
           <VideoSources/>
         </section>
-        <GeminiKeySettings/>
+        <PictureSettings/>
         <AssistantSettingsCard/>
         {updatesManagedBy && <section className="settings-card" id="updates"><h2><RotateCw size={17}/> Updates</h2><p className="footnote">Updates managed by {updatesManagedBy}.</p></section>}
         <div className="privacy-note"><ShieldCheck size={18}/><span>Your workspace is stored on this PC{teamSync?.status?.enabled ? ' and shared, encrypted, with your partner' : ''}. Passwords live in Windows Credential Manager and are only shown when you ask.</span></div>

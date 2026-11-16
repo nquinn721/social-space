@@ -2,22 +2,19 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import type { Account, Brand, Platform } from './model';
 import { loadImagePreview } from './profileService';
 
-/** A picture Gemini made, saved on this PC, with a data URL to show it. */
+/** A picture Grok made, saved on this PC, with a data URL to show it. */
 export type GeneratedImage = { path: string; preview: string };
 export type Aspect = '1:1' | '16:9';
 
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to use pictures.'); }
 
-export const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
-export async function geminiKeyStatus(): Promise<boolean> { if (!isTauri()) return false; return invoke('gemini_key_status'); }
-/** Checks the key with Google, then keeps it in Windows Credential Manager (shared with the partner's app). */
-export async function saveGeminiKey(key: string): Promise<void> { desktopOnly(); return invoke('save_gemini_key', { key }); }
-export async function removeGeminiKey(): Promise<void> { desktopOnly(); return invoke('remove_gemini_key'); }
-
-/** Makes `count` takes (1 to 4) with Gemini, or changes an earlier generated picture (`sourcePath`). */
-export async function generateGeminiImages(options: { prompt: string; count?: number; aspect?: Aspect; sourcePath?: string }): Promise<GeneratedImage[]> {
+/**
+ * Makes `count` takes (1 to 4) with Grok Imagine, using the xAI key of the Grok video source, or
+ * changes an earlier generated picture (`sourcePath`, always one take).
+ */
+export async function generatePictures(options: { prompt: string; count?: number; aspect?: Aspect; sourcePath?: string }): Promise<GeneratedImage[]> {
   desktopOnly();
-  return invoke('generate_gemini_images', { request: { prompt: options.prompt, count: options.count ?? 1, aspect: options.aspect ?? '1:1', sourcePath: options.sourcePath ?? null } });
+  return invoke('generate_grok_images', { request: { prompt: options.prompt, count: options.count ?? 1, aspect: options.aspect ?? '1:1', sourcePath: options.sourcePath ?? null } });
 }
 
 /** Saves a prepared JPG with the brand pictures and returns its file name (what the workspace stores). */

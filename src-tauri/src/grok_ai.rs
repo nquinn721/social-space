@@ -1,5 +1,5 @@
-//! The assistant's chat model and the profile picture maker, both through xAI's
-//! Grok API. They use the xAI key saved with a Grok video source, so the key
+//! The assistant's chat model and every picture the app makes (profile and brand
+//! pictures, YouTube banners), all through xAI's Grok API. They use the xAI key saved with a Grok video source, so the key
 //! stays in Windows Credential Manager and is never sent to the web view.
 //! Refining starts only from an earlier generated picture, never from an
 //! arbitrary photo, so the feature cannot be pointed at a real person's face.
@@ -23,6 +23,8 @@ const IMAGE_MODEL: &str = "grok-imagine-image-2.0";
 const IMAGE_FOLDER: &str = "profile-images";
 const MAX_PROMPT_CHARS: usize = 2_000;
 const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
+/// Takes one request can ask for, to pick from.
+const MAX_TAKES: usize = 4;
 const MAX_ERROR_CHARS: usize = 300;
 
 fn client(timeout: Duration) -> Result<reqwest::Client, String> {
@@ -136,6 +138,20 @@ pub struct ImageRequest {
     prompt: String,
     /// An earlier generated picture to change with the prompt.
     source_path: Option<String>,
+    /// Takes to make at once, 1 to 4 (default 1). A change of an earlier picture is always one take.
+    #[serde(default)]
+    count: Option<usize>,
+    /// "1:1" (default) or "16:9" for a YouTube banner.
+    #[serde(default)]
+    aspect: Option<String>,
+}
+
+fn aspect_of(value: Option<&str>) -> Result<&'static str, String> {
+    match value.unwrap_or("1:1") {
+        "1:1" => Ok("1:1"),
+        "16:9" => Ok("16:9"),
+        _ => Err("Pictures are square or 16:9.".into()),
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -181,40 +197,54 @@ pub(crate) fn clean_text(text: &str) -> String {
     text.chars().filter(|c| !c.is_control() || *c == '\n').take(MAX_PROMPT_CHARS).collect::<String>().trim().to_owned()
 }
 
-fn image_body(prompt: &str, source: Option<String>) -> Value {
-    let mut body = json!({ "model": IMAGE_MODEL, "prompt": prompt, "n": 1, "aspect_ratio": "1:1", "response_format": "b64_json" });
+fn image_body(prompt: &str, aspect: &str, count: usize, source: Option<String>) -> Value {
+    let mut body = json!({ "model": IMAGE_MODEL, "prompt": prompt, "n": count, "aspect_ratio": aspect, "response_format": "b64_json" });
     if let Some(data_url) = source {
         body["image"] = json!({ "url": data_url, "type": "image_url" });
     }
     body
 }
 
-/// Asks Grok Imagine for one square picture, changing `source` (a data URL) when given.
-async fn make_image(key: &str, prompt: &str, source: Option<String>) -> Result<Vec<u8>, String> {
+/// Asks Grok Imagine for `count` pictures, changing `source` (a data URL) when given. Takes that come
+/// back unreadable or held back are left out; with none left it fails.
+async fn make_images(key: &str, prompt: &str, aspect: &str, count: usize, source: Option<String>) -> Result<Vec<Vec<u8>>, String> {
     let endpoint = if source.is_some() { "images/edits" } else { "images/generations" };
     let response = client(IMAGE_TIMEOUT)?
         .post(format!("{API_BASE}/{endpoint}"))
         .bearer_auth(key)
-        .json(&image_body(prompt, source))
+        .json(&image_body(prompt, aspect, count, source))
         .send()
         .await
         .map_err(unreachable)?;
     let reply = read(response).await?;
-    let encoded = reply["data"][0]["b64_json"].as_str().ok_or("Grok did not return a picture. It may have been held back by moderation; try rewording.")?;
-    let bytes = base64::engine::general_purpose::STANDARD.decode(encoded.trim()).map_err(|_| "Grok sent a picture that could not be read.")?;
-    if image_kind(&bytes).is_none() || bytes.len() > MAX_IMAGE_BYTES {
-        return Err("Grok sent a picture that could not be read.".into());
+    let made = decode_images(&reply);
+    if made.is_empty() {
+        return Err("Grok did not return a picture. It may have been held back by moderation; try rewording.".into());
     }
-    Ok(bytes)
+    Ok(made)
 }
 
-/// Makes a square profile picture with Grok Imagine, or changes an earlier one.
+fn decode_images(reply: &Value) -> Vec<Vec<u8>> {
+    reply["data"].as_array().into_iter().flatten()
+        .filter_map(|item| item["b64_json"].as_str())
+        .filter_map(|encoded| base64::engine::general_purpose::STANDARD.decode(encoded.trim()).ok())
+        .filter(|bytes| image_kind(bytes).is_some() && bytes.len() <= MAX_IMAGE_BYTES)
+        .collect()
+}
+
+#[cfg(test)]
+async fn make_image(key: &str, prompt: &str, source: Option<String>) -> Result<Vec<u8>, String> {
+    Ok(make_images(key, prompt, "1:1", 1, source).await?.remove(0))
+}
+
+/// Makes pictures with Grok Imagine (1 to 4 takes, square or 16:9), or changes an earlier one.
 #[tauri::command]
-pub async fn generate_profile_image(app: AppHandle, sources: State<'_, SourcesLock>, request: ImageRequest) -> Result<GeneratedImage, String> {
+pub async fn generate_grok_images(app: AppHandle, sources: State<'_, SourcesLock>, request: ImageRequest) -> Result<Vec<GeneratedImage>, String> {
     let prompt = clean_text(&request.prompt);
     if prompt.is_empty() {
         return Err("Describe the picture first.".into());
     }
+    let aspect = aspect_of(request.aspect.as_deref())?;
     let folder = image_folder(&app)?;
     let source = match request.source_path.as_deref().filter(|path| !path.is_empty()) {
         Some(path) => {
@@ -224,16 +254,26 @@ pub async fn generate_profile_image(app: AppHandle, sources: State<'_, SourcesLo
         }
         None => None,
     };
-    let bytes = make_image(&xai_key(&app, &sources)?, &prompt, source).await?;
-    let (extension, mime) = image_kind(&bytes).ok_or("Grok sent a picture that could not be read.")?;
+    let count = if source.is_some() { 1 } else { request.count.unwrap_or(1).clamp(1, MAX_TAKES) };
+    let made = make_images(&xai_key(&app, &sources)?, &prompt, aspect, count, source).await?;
     std::fs::create_dir_all(&folder).map_err(|_| "Could not create the pictures folder.")?;
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|time| time.as_millis()).unwrap_or_default();
-    let path = folder.join(format!("profile-{stamp}.{extension}"));
-    std::fs::write(&path, &bytes).map_err(|_| "Could not save the picture.")?;
-    Ok(GeneratedImage {
-        path: path.to_string_lossy().into_owned(),
-        preview: format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes)),
-    })
+    made.into_iter().enumerate().map(|(index, bytes)| {
+        let (extension, mime) = image_kind(&bytes).ok_or("Grok sent a picture that could not be read.")?;
+        let path = folder.join(format!("grok-{stamp}-{index}.{extension}"));
+        std::fs::write(&path, &bytes).map_err(|_| "Could not save the picture.")?;
+        Ok(GeneratedImage {
+            path: path.to_string_lossy().into_owned(),
+            preview: format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes)),
+        })
+    }).collect()
+}
+
+/// Makes one square profile picture with Grok Imagine, or changes an earlier one.
+#[tauri::command]
+pub async fn generate_profile_image(app: AppHandle, sources: State<'_, SourcesLock>, request: ImageRequest) -> Result<GeneratedImage, String> {
+    let request = ImageRequest { count: Some(1), aspect: Some("1:1".into()), ..request };
+    generate_grok_images(app, sources, request).await?.into_iter().next().ok_or_else(|| "Grok did not return a picture.".into())
 }
 
 #[cfg(test)]
@@ -276,12 +316,31 @@ mod tests {
 
     #[test]
     fn builds_generate_and_edit_requests() {
-        let plain = image_body("a cat", None);
+        let plain = image_body("a cat", "1:1", 1, None);
         assert_eq!(plain["aspect_ratio"], "1:1");
+        assert_eq!(plain["n"], 1);
         assert_eq!(plain["response_format"], "b64_json");
         assert!(plain.get("image").is_none());
-        let edit = image_body("add a hat", Some("data:image/png;base64,AAAA".into()));
+        let edit = image_body("add a hat", "1:1", 1, Some("data:image/png;base64,AAAA".into()));
         assert_eq!(edit["image"]["url"], "data:image/png;base64,AAAA");
+        let banner = image_body("a meadow", "16:9", 4, None);
+        assert_eq!(banner["aspect_ratio"], "16:9");
+        assert_eq!(banner["n"], 4);
+    }
+
+    #[test]
+    fn pictures_are_square_or_wide() {
+        assert_eq!(aspect_of(None), Ok("1:1"));
+        assert_eq!(aspect_of(Some("16:9")), Ok("16:9"));
+        assert!(aspect_of(Some("9:16")).is_err());
+    }
+
+    #[test]
+    fn keeps_every_readable_take() {
+        let png = base64::engine::general_purpose::STANDARD.encode(b"\x89PNG\r\n rest");
+        let reply = json!({ "data": [{ "b64_json": png }, { "b64_json": "not base64!" }, { "url": "https://x" }, { "b64_json": base64::engine::general_purpose::STANDARD.encode(b"<html>") }, { "b64_json": png }] });
+        assert_eq!(decode_images(&reply).len(), 2);
+        assert!(decode_images(&json!({})).is_empty());
     }
 
     /// Calls xAI with the key saved in the installed app. Costs a few cents:

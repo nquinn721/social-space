@@ -159,20 +159,18 @@
    "src/ProfileImageStudio.tsx",
    "src/imageAiService.ts",
    "src-tauri/src/grok_ai.rs",
-   "src/GeminiKeySettings.tsx",
    "src/BrandPicture.tsx",
    "src/brandImageService.ts",
-   "src-tauri/src/gemini_ai.rs",
-   "src-tauri/src/brand_images.rs"
+   "src-tauri/src/brand_images.rs",
+   "src/PictureSettings.tsx"
   ],
-  "summary": "Brand and profile pictures: made and refined with xAI Grok Imagine or Gemini, stored by hash under brand-images/",
+  "summary": "Brand and profile pictures and YouTube banners: made and refined with xAI Grok Imagine (the Grok video source key), stored by hash under brand-images/",
   "terms": [
    "image",
    "picture",
    "avatar",
    "grok",
    "xai",
-   "gemini",
    "banner"
   ]
  },
