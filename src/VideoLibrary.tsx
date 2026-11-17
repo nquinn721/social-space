@@ -23,6 +23,7 @@ import { API_UPLOADS, postModeNote } from './postingMode';
 import { testModeOf, withPosted } from './appReviews';
 import { earlierPartMissing, videoPartLabel, waitingOnEarlierPart } from './series';
 import { batchPlan, preparationSignature, type BatchDestination } from './batchPosting';
+import { beginAttempt, clearAttempt, readAttempt, recordPublished } from './publishAttempt';
 import './library.css';
 import './series.css';
 
@@ -94,9 +95,18 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   const [stage, setStage] = useState<Stage | 'all'>('all');
   const [error, setError] = useState('');
   const [batchBusy, setBatchBusy] = useState(false);
+  const [, setAttemptRevision] = useState(0);
+  const refreshAttempts = () => setAttemptRevision((value) => value + 1);
   const batchGuard = useRef(false);
   const latestWorkspace = useRef(workspace);
   latestWorkspace.current = workspace;
+  useEffect(() => {
+    for (const video of workspace.videos ?? []) for (const platform of ['instagram', 'facebook'] as const) {
+      if (video.posted.includes(platform) && readAttempt(video.id, platform)?.state === 'posted') {
+        try { clearAttempt(video.id, platform); } catch { /* A leftover marker is safer than allowing a duplicate. */ }
+      }
+    }
+  }, [workspace.videos]);
   const generations = useVideoGenerations(workspace, onSave);
   const browser = useBrowserPosting(workspace, onSave);
   const latestBrowser = useRef(browser);
@@ -140,32 +150,55 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
     const nextCategories = saveDefaults ? categories.map((item) => item.id === draft.categoryId ? { ...item, defaults: { caption: draft.caption, hashtags: draft.details?.hashtags ?? [] } } : item) : categories;
     return save({ videos: latest.map((item) => item.id === draft.id ? withPosted({ ...draft, posted: item.posted, testPosts: item.testPosts }, posted ?? item.posted, workspace.setup) : item), categories: nextCategories }, message);
   }
-  /** Posts the video as a Reel on the brand's connected Instagram profile, then saves its details and marks it posted there. */
-  async function post(draft: Video, saveDefaults: boolean) {
-    if (!instagram || batchGuard.current) return;
-    let link: string | undefined;
-    try { link = (await publishVideoToInstagram(instagram, draft)).permalink; }
-    catch (reason) {
-      // Keep edits made in the Post panel even when Instagram refuses the video.
-      const saved = (workspace.videos ?? []).find((item) => item.id === draft.id);
-      if (saveDefaults || JSON.stringify(saved) !== JSON.stringify(draft)) await savePost(draft, saveDefaults, `Saved the post details of "${draft.title}".`);
-      throw reason;
-    }
-    const posted = link ? { ...draft, links: { ...draft.links, instagram: link } } : draft;
-    await savePost(posted, saveDefaults, `Posted "${draft.title}" to @${instagram.username} on Instagram.`, draft.posted.includes('instagram') ? draft.posted : [...draft.posted, 'instagram']);
+  /** Record a result against the latest workspace, keeping any unrelated edits made during upload. */
+  async function savePublished(draft: Video, original: Video, platform: 'instagram' | 'facebook', link?: string, defaults?: { value: VideoCategory['defaults'] }, message?: string) {
+    const current = latestWorkspace.current;
+    const video = current.videos?.find((item) => item.id === draft.id);
+    if (!video) return false;
+    const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+    const updated = { ...video,
+      caption: same(video.caption, original.caption) ? draft.caption : video.caption,
+      details: same(video.details, original.details) ? draft.details : video.details,
+      links: link ? { ...video.links, [platform]: link } : video.links,
+    };
+    const posted = video.posted.includes(platform) ? video.posted : [...video.posted, platform];
+    const categories = defaults && current.categories?.map((category) => category.id === draft.categoryId && same(category.defaults, defaults.value)
+      ? { ...category, defaults: { caption: draft.caption, hashtags: draft.details?.hashtags ?? [] } } : category);
+    return onSave({ ...current, videos: current.videos?.map((item) => item.id === draft.id ? withPosted(updated, posted, current.setup) : item), ...(categories ? { categories } : {}) }, message ?? `Recorded "${draft.title}" as posted on ${getPlatform(platform).name}.`);
   }
-  /** Posts the video as a Reel on the brand's connected Facebook Page, then saves its details and marks it posted there. */
-  async function postFacebook(draft: Video, saveDefaults: boolean) {
-    if (!facebook?.connected || batchGuard.current) return;
+  async function publish(draft: Video, platform: 'instagram' | 'facebook', saveDefaults: boolean, message: string, send: () => Promise<{ permalink?: string }>) {
+    if (batchGuard.current) throw new Error('Posting windows are already being prepared.');
+    const original = latestWorkspace.current.videos?.find((item) => item.id === draft.id);
+    if (!original || original.posted.includes(platform)) throw new Error('Review this video before posting again.');
+    const defaults = saveDefaults ? { value: latestWorkspace.current.categories?.find((category) => category.id === draft.categoryId)?.defaults } : undefined;
+    try { beginAttempt(draft.id, platform); }
+    catch { throw new Error('A previous attempt needs review, or this PC could not save a safety marker. Check the social before trying again.'); }
+    refreshAttempts();
     let link: string | undefined;
-    try { link = (await publishVideoToFacebook(facebook, draft)).permalink; }
-    catch (reason) {
-      const saved = (workspace.videos ?? []).find((item) => item.id === draft.id);
-      if (saveDefaults || JSON.stringify(saved) !== JSON.stringify(draft)) await savePost(draft, saveDefaults, `Saved the post details of "${draft.title}".`);
-      throw reason;
-    }
-    const posted = link ? { ...draft, links: { ...draft.links, facebook: link } } : draft;
-    await savePost(posted, saveDefaults, `Posted "${draft.title}" as a Reel on the Facebook Page ${facebook.page}.`, draft.posted.includes('facebook') ? draft.posted : [...draft.posted, 'facebook']);
+    try { link = (await send()).permalink; }
+    catch (reason) { throw new Error(`${errorText(reason)} ${getPlatform(platform).name} did not confirm the result. Check the social before trying again.`); }
+    try { recordPublished(draft.id, platform, link); } catch { /* The earlier pending marker still blocks another attempt. */ }
+    refreshAttempts();
+    let saved = false;
+    try { saved = !!(await savePublished(draft, original, platform, link, defaults, message)); } catch { /* The provider already succeeded; retain its marker. */ }
+    if (!saved) throw new Error(`Published on ${getPlatform(platform).name}, but Social Space could not save its status. Use Mark posted below; do not post again.`);
+  }
+  async function post(draft: Video, saveDefaults: boolean) {
+    if (!instagram) throw new Error('Connect Instagram first.');
+    await publish(draft, 'instagram', saveDefaults, `Posted "${draft.title}" to @${instagram.username} on Instagram.`, () => publishVideoToInstagram(instagram, draft));
+  }
+  async function postFacebook(draft: Video, saveDefaults: boolean) {
+    if (!facebook?.connected) throw new Error('Connect Facebook first.');
+    await publish(draft, 'facebook', saveDefaults, `Posted "${draft.title}" as a Reel on the Facebook Page ${facebook.page}.`, () => publishVideoToFacebook(facebook, draft));
+  }
+  async function resolveAttempt(video: Video, platform: 'instagram' | 'facebook', posted: boolean) {
+    const attempt = readAttempt(video.id, platform);
+    if (!attempt) return;
+    if (posted) {
+      recordPublished(video.id, platform, attempt.link);
+      if (!(await savePublished(video, video, platform, attempt.link))) throw new Error('Could not save the posted status. Try again.');
+    } else clearAttempt(video.id, platform);
+    refreshAttempts();
   }
   /** Opens manual publishing windows after checking the approved plan is still current. */
   async function preparePosts(video: Video, plan: BatchDestination[]) {
@@ -238,7 +271,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
             {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy || batchBusy} disabled={disabled || batchBusy} progress={generations.progress[video.id]}
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
               category={category} brandName={brand.name} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
-              instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix} onPreparePosts={preparePosts}
+              instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix} onPreparePosts={preparePosts} onResolveAttempt={resolveAttempt}
               part={videoPartLabel(workspace, video)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
           </ul>}
         </>}
@@ -294,6 +327,7 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; soci
   /** The brand's Facebook Page, and posting a Reel to it through the API. */
   facebook?: BrandFacebook | null; onPostFacebook?: (draft: Video, saveDefaults: boolean) => Promise<void>;
   onPreparePosts: (video: Video, plan: BatchDestination[]) => Promise<void>;
+  onResolveAttempt: (video: Video, platform: 'instagram' | 'facebook', posted: boolean) => Promise<void>;
   browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void;
   /** For a series episode: "Part 2 of 5", and why it can't go up on a social before an earlier part. */
   part?: string | null; waitingOn?: (platform: Platform) => string | null; earlierPart?: (platform: Platform) => number | null };
@@ -301,7 +335,7 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; soci
  * One video as a post: its picture and text on the left, and a tile for every social of the brand that
  * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
  */
-function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, onPreparePosts }: RowProps) {
+function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, onPreparePosts, onResolveAttempt }: RowProps) {
   const job = video.generation;
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
@@ -360,7 +394,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   }
   /** Posting to Instagram goes straight out through the API, after one confirmation. */
   async function approve(draft: Video, saveDefaults: boolean) {
-    if (!onPost || !instagram || working || busy || actionGuard.current) return false;
+    if (!onPost || !instagram || working || busy || actionGuard.current || readAttempt(draft.id, 'instagram')) return false;
     actionGuard.current = true; setConfirming(true);
     try {
     const order = waitingOn?.('instagram');
@@ -382,7 +416,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   }
   /** Posting a Reel to the brand's Facebook Page also goes straight out through the API, after one confirmation. */
   async function approveFacebook(draft: Video, saveDefaults: boolean) {
-    if (!onPostFacebook || !facebook?.connected || working || busy || actionGuard.current) return false;
+    if (!onPostFacebook || !facebook?.connected || working || busy || actionGuard.current || readAttempt(draft.id, 'facebook')) return false;
     actionGuard.current = true; setConfirming(true);
     try {
     const order = waitingOn?.('facebook');
@@ -421,6 +455,21 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     } finally { actionGuard.current = false; setWorking(false); }
   }
 
+  async function resolve(platform: 'instagram' | 'facebook', posted: boolean) {
+    if (actionGuard.current || busy || working) return;
+    actionGuard.current = true; setConfirming(true);
+    try {
+      const ok = await confirm({ title: posted ? `Mark as posted on ${getPlatform(platform).name}?` : `Try ${getPlatform(platform).name} again?`,
+        body: <p>{posted ? 'Confirm this video is already on the account.' : 'Only continue if you checked the account and this video is not there. Otherwise posting again could create a duplicate.'}</p>,
+        confirmLabel: posted ? 'Mark posted' : 'It is not there' });
+      if (!ok) return;
+      setWorking(true); setError('');
+      try { await onResolveAttempt(video, platform, posted); }
+      catch (reason) { setError(errorText(reason, 'Could not update the posting status.')); }
+      finally { setWorking(false); }
+    } finally { actionGuard.current = false; setConfirming(false); }
+  }
+
   function destination(platform: Platform) {
     const name = getPlatform(platform).name;
     const status = statusOf(platform);
@@ -435,6 +484,11 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       action = <>{platform === 'instagram' && instagramLink && <button type="button" className="dest-link" aria-label="View on Instagram" onClick={openPost}>View</button>}
         {platform === 'facebook' && facebookLink && <button type="button" className="dest-link" aria-label="View on Facebook" onClick={openReel}>View</button>}
         <button type="button" className="dest-link quiet" disabled={disabled} aria-label={`Mark as not posted on ${name}`} title={`Mark as not posted on ${name}`} onClick={() => void unmark(platform)}>Undo</button></>;
+    } else if ((platform === 'instagram' || platform === 'facebook') && readAttempt(video.id, platform)) {
+      const attempt = readAttempt(video.id, platform);
+      tone = 'problem'; line = attempt?.state === 'posted' ? 'Published · save status' : 'Check whether it posted';
+      action = <><button type="button" className="dest-button primary" disabled={busy || working || confirming} onClick={() => void resolve(platform, true)}>Mark posted</button>
+        {attempt?.state !== 'posted' && <button type="button" className="dest-link quiet" disabled={busy || working || confirming} onClick={() => void resolve(platform, false)}>Not posted</button>}</>;
     } else if (job) {
       tone = 'muted'; line = job.status === 'failed' ? 'No video to post' : 'Waits for the video';
     } else if (earlierPart?.(platform)) {
@@ -494,7 +548,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     {dialog}
     {error && !editing && <div className="error-message" role="alert">{error}</div>}
     {editing && onSavePost && <PostPanel video={video} category={category} brandName={brandName} socials={socials} busy={busy || working} disabled={disabled} instagram={instagram} onOpen={onOpen}
-      error={error} working={working} onSave={onSavePost} onApprove={onPost ? approve : undefined} facebookPage={facebook?.connected ? facebook.page : undefined} onApproveFacebook={facebookReady ? approveFacebook : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}
+      error={error || (readAttempt(video.id, 'instagram') || readAttempt(video.id, 'facebook') ? 'Close the editor and check the posting status before trying again.' : '')} working={working} onSave={onSavePost} onApprove={onPost && !readAttempt(video.id, 'instagram') ? approve : undefined} facebookPage={facebook?.connected ? facebook.page : undefined} onApproveFacebook={facebookReady && !readAttempt(video.id, 'facebook') ? approveFacebook : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}
       statuses={statuses} onFix={onFix} onPostOnPage={browser ? async (draft, platform, defaults) => { if (await postOnPage(draft, platform, defaults)) setEditing(false); } : undefined} marks={marks}/>}
     {playable && watching && <VideoPlayer path={video.mediaSource} title={video.title}/>}
   </li>;

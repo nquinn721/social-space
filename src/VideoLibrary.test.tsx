@@ -267,6 +267,38 @@ describe('approving a post', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), 'Posted "Carrot crunch" to @mia on Instagram.');
   });
 
+  it('keeps a published result for review when saving fails and blocks a duplicate after reopening', async () => {
+    connected();
+    vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1', permalink: 'https://www.instagram.com/reel/abc/' });
+    const { onSave, user, view, onOpen, onManageSources, onConnectInstagram } = setup(workspace);
+    onSave.mockResolvedValue(false);
+    await user.click(await screen.findByRole('button', { name: 'Post to Instagram' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Post to Instagram' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Published on Instagram');
+    expect(screen.getByRole('button', { name: 'Mark posted' })).toBeInTheDocument();
+    view.unmount();
+    render(<VideoLibrary workspace={workspace} loaded busy={false} onSave={onSave} onOpen={onOpen} onManageSources={onManageSources} onConnectInstagram={onConnectInstagram}/>);
+    expect(screen.queryByRole('button', { name: 'Post to Instagram' })).not.toBeInTheDocument();
+    onSave.mockResolvedValue(true);
+    await user.click(screen.getByRole('button', { name: 'Mark posted' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Mark posted' }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), expect.any(String));
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves other workspace edits made while a post is uploading', async () => {
+    connected();
+    let finish!: (value: { id: string }) => void;
+    vi.mocked(instagram.publishInstagramReelFile).mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const { onSave, user, view, onOpen, onManageSources, onConnectInstagram } = setup(workspace);
+    await user.click(await screen.findByRole('button', { name: 'Post to Instagram' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Post to Instagram' }));
+    const changed = { ...workspace, businessName: 'New name', videos: [{ ...fresh, caption: 'Edited while uploading' }] };
+    view.rerender(<VideoLibrary workspace={changed} loaded busy={false} onSave={onSave} onOpen={onOpen} onManageSources={onManageSources} onConnectInstagram={onConnectInstagram}/>);
+    await act(async () => finish({ id: 'reel-1' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ businessName: 'New name', videos: [expect.objectContaining({ caption: 'Edited while uploading', posted: ['instagram'] })] }), expect.any(String));
+  });
+
   it('opens the live post from a posted video', async () => {
     connected();
     const live: Video = { ...fresh, posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } };

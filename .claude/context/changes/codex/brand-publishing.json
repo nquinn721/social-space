@@ -118,11 +118,11 @@
     },
     {
       "path": "src/VideoLibrary.test.tsx",
-      "note": "Focused regression coverage."
+      "note": "Regression coverage for publishing result recovery and preserving concurrent workspace changes."
     },
     {
       "path": "src/VideoLibrary.tsx",
-      "note": "Prepare supported posting destinations, with per-platform review and account checks."
+      "note": "Prepare posting destinations and preserve ambiguous or successful Meta attempts for review when recording the result fails."
     },
     {
       "path": "src/batchPosting.test.ts",
@@ -211,6 +211,22 @@
     {
       "path": "src-tauri/src/queue.rs",
       "note": "Pass the queued Instagram identity to the guarded publish command and test identity validation."
+    },
+    {
+      "path": "src/publishAttempt.ts",
+      "note": "Keep local per-video Meta attempt markers so uncertain results require review before retrying."
+    },
+    {
+      "path": "src/publishAttempt.test.ts",
+      "note": "Regression coverage for pending, published, damaged, and inaccessible attempt markers."
+    },
+    {
+      "path": "src/library.css",
+      "note": "Keep social destination controls contained and readable on narrow cards."
+    },
+    {
+      "path": "src/libraryLayout.test.ts",
+      "note": "Check destination actions fit on Windows at multiple widths in Edge."
     }
   ]
 }
