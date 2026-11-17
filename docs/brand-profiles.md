@@ -20,13 +20,21 @@ saved bios differ, or after **Use a different bio per social**, each social gets
 | TikTok | `tiktok.com/@handle` | Press Edit profile; picture, name and bio fill in as it opens; press Save. |
 | YouTube | `studio.youtube.com` | Customization, Profile: name, description, picture. Keywords: Settings, Channel. |
 
-If the brand's window isn't signed in yet, its sign-in page fills first: TikTok and X with the brand's own
+If the brand's window isn't signed in yet, its sign-in page fills first: TikTok with the brand's own
 username and password, Instagram and YouTube with the parent login the profile or channel lives under (for
 example the main Instagram login or Google account). A signed-out TikTok window starts on TikTok's
 email-and-password sign-in and returns to the profile afterwards, since the profile page's own sign-in pop-up
 opens on the QR code. Each social's line on the Accounts tab shows that login (username, email, password) under Details, with
 **Reset password**: the social's forgot-password page in the brand window, the email and a new password filled
 in, saved only after **It worked, save it** (`open_password_reset` / `save_reset_password` in `posting.rs`).
+
+Each brand has its own persistent browser folder, shared by that brand's profile and posting windows. This lets
+different brands stay signed in to different accounts on the same social; the social may still expire a session
+or require sign-in again. The account row shows **Signed in** when a session was last detected. Open **View**
+to check it; the app refreshes the status while the window is open. On TikTok, a username seen on the page is
+compared with the saved profile. A Google session does not identify YouTube's selected channel: the saved brand
+channel and the channel selected in YouTube may differ, so check the upload window before publishing. X sign-in
+and profile editing are manual.
 
 The window keeps filling for 10 minutes as the editor opens or changes step. Back end: `open_profile_editor`
 in `src-tauri/src/posting.rs`, fill script `profile_edit_script` in `src-tauri/src/autofill.rs`.

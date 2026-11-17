@@ -77,6 +77,8 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
   const flow = useConnectFlow(accounts, [brand], { logins: developerLogins, onLogin: onDeveloperLogin });
   const { status, working, connect, disconnect } = flow;
   const [pageNote, setPageNote] = useState('');
+  const [opening, setOpening] = useState<Record<string, boolean>>({});
+  const openingNow = useRef(new Set<string>());
   const [open, setOpen] = useState<Record<string, boolean>>({});
   /** A password reset waiting for Nate to say it worked, per profile. */
   const [resetting, setResetting] = useState<Record<string, boolean>>({});
@@ -92,8 +94,18 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
 
   /** The profile's public page, in a Social Space window signed in as the brand or in the default browser. */
   async function viewProfile(account: Account, inBrowser: boolean) {
-    try { await openProfilePage({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: account.handle, inBrowser }); }
+    if (openingNow.current.has(account.id)) return;
+    openingNow.current.add(account.id);
+    setOpening((current) => ({ ...current, [account.id]: true }));
+    try {
+      await openProfilePage({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: account.handle, inBrowser });
+      if (!inBrowser) setPageNote(`${getPlatform(account.platform).name} opened in ${brand.name}'s saved browser session. Sign in if needed and leave the window open for a few seconds while Social Space checks it.`);
+    }
     catch (reason) { setPageNote(errorText(reason, `Could not open the ${getPlatform(account.platform).name} profile.`)); }
+    finally {
+      openingNow.current.delete(account.id);
+      setOpening((current) => ({ ...current, [account.id]: false }));
+    }
   }
   async function reset(account: Account) {
     setPageNote('');
@@ -151,9 +163,10 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
       note: `Open ${name} and sign in yourself.` };
     if (session === 'mismatch') return { tone: 'problem', text: `Signed in as @${signIn?.handle}`, action: { label: 'Fix sign-in', run: () => void viewProfile(account, false) },
       note: `The last check saw another account. Check the window and select @${normalizeHandle(account.handle)} before posting.` };
+    if (session === 'matched' || session === 'unverified') return { tone: 'ok', text: 'Signed in' };
     if (session === 'not-checked' && account.platform !== 'youtube' && status.passwords[account.id] === false) return { tone: 'todo', text: 'Login not saved', action: { label: 'Save login', run: () => onEditAccount(account) } };
-    return { tone: 'todo', text: session === 'not-checked' ? 'Not checked' : 'Session detected', action: { label: 'Check account', run: () => void viewProfile(account, false) },
-      note: account.platform === 'youtube' ? 'A Google session does not verify the selected YouTube channel. Check it before posting.' : `Check which ${name} account is selected before posting.` };
+    return { tone: 'todo', text: 'Not checked', action: { label: 'Check account', run: () => void viewProfile(account, false) },
+      note: `Open ${name} to check the saved sign-in.` };
 
   }
 
@@ -196,8 +209,8 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           </div>
           <span className="status-chip">{state.tone === 'checking' ? <Loader2 size={12} className="spin"/> : <span className="dot"/>}{state.text}</span>
           <span className="social-row-actions">
-            {state.action && <button type="button" className="primary-button small-button" disabled={disabled} onClick={state.action.run}>{state.action.label}</button>}
-            {live && account.handle && <button type="button" className="outline-button small-button" aria-label={`View ${name} profile`} title={`Opens @${normalizeHandle(account.handle)} on ${name} in a Social Space window signed in as ${brand.name}`} onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> View</button>}
+            {state.action && <button type="button" className="primary-button small-button" disabled={disabled || opening[account.id]} onClick={state.action.run}>{state.action.label}</button>}
+            {live && account.handle && <button type="button" className="outline-button small-button" disabled={opening[account.id]} aria-label={`View ${name} profile`} title={`Opens @${normalizeHandle(account.handle)} on ${name} in a Social Space window signed in as ${brand.name}`} onClick={() => void viewProfile(account, false)}><AppWindow size={14}/> View</button>}
             <button type="button" className="ghost-button small-button" aria-expanded={expanded} aria-label={`${name} details`} onClick={() => setOpen((current) => ({ ...current, [account.id]: !expanded }))}>Details <ChevronDown size={14} className={expanded ? 'flip' : ''}/></button>
           </span>
         </div>
@@ -219,7 +232,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           {account.platform === 'x' && <p className="footnote">X sign-in, profile changes, and password resets are done manually on X. After changing your password, save it here with Edit details.</p>}
           {account.platform === 'youtube' && <p className="footnote">YouTube signs in with your Google account. The window only fills the password saved here, so if Google says it's wrong, change it here to your real Google password.</p>}
           <div className="social-row-links">
-            {live && account.handle && <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>}
+            {live && account.handle && <button type="button" className="ghost-button small-button" disabled={opening[account.id]} onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>}
             {live && account.platform !== 'youtube' && account.platform !== 'facebook' && account.platform !== 'x' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
             <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => onEditAccount(account)}><Pencil size={14}/> Edit details</button>
             {live && check?.state === 'ok' && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void disconnect(account)}>Disconnect</button>}

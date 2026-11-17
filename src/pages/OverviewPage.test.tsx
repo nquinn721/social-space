@@ -13,12 +13,12 @@ vi.mock('../useSignIns', () => ({ useSignIns: () => ({ b: { tiktok: { signedIn: 
 
 afterEach(cleanup);
 
-it('shows the observed browser session as unverified and needing attention on the overview', async () => {
+it('does not flag an observed signed-in browser session as needing attention', async () => {
   const workspace: Workspace = {
     businessName: 'Bunny', brands: [{ id: 'b', name: 'Bunny', notes: '' }], channels: [],
     accounts: [{ id: 't', brandId: 'b', platform: 'tiktok', label: 'Bunny', handle: 'bunny', status: 'active', notes: '', signupEmail: 'owner+bunny@gmail.com' }],
   };
   render(<OverviewPage workspace={workspace} loaded onNavigate={vi.fn()} onCreateAccounts={vi.fn()} onAddAccount={vi.fn()} onOpenAssistant={vi.fn()}/>);
-  expect(screen.getByRole('button', { name: /Bunny · TikTok.*session was detected/i })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Open Bunny' })).toHaveTextContent('Session detected');
+  expect(screen.queryByRole('button', { name: /Bunny · TikTok/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Open Bunny' })).toHaveTextContent('Ready on all 1');
 });

@@ -29,8 +29,6 @@ pub struct SignIn {
 
 type Brands = BTreeMap<String, BTreeMap<String, SignIn>>;
 
-const PLATFORMS: [Platform; 4] = [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram];
-
 fn key(platform: Platform) -> &'static str {
     match platform {
         Platform::Tiktok => "tiktok",
@@ -72,7 +70,14 @@ const HANDLE_SCRIPT: &str = r#"(() => { try {
   if (/(^|\.)tiktok\.com$/.test(host)) {
     const data = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
     if (data) { try { const user = JSON.parse(data.textContent)['__DEFAULT_SCOPE__']['webapp.app-context'].user; if (user && user.uniqueId) return user.uniqueId; } catch (e) {} }
-    return href('a[data-e2e="nav-profile"]').replace(/^\/@/, '').split(/[/?]/)[0];
+    const nav = href('a[data-e2e="nav-profile"]').replace(/^\/@/, '').split(/[/?]/)[0];
+    if (nav) return nav;
+    // A public profile URL alone identifies the profile being viewed, not the signed-in user.
+    // Only use it when TikTok also shows the owner-only Edit profile control.
+    const ownProfile = [...document.querySelectorAll('button, a[role="button"]')]
+      .some((button) => button.textContent.trim().toLowerCase() === 'edit profile');
+    const match = location.pathname.match(/^\/@([a-zA-Z0-9._-]+)\/?$/);
+    return ownProfile && match ? match[1] : '';
   }
   return '';
 } catch (e) { return ''; } })()"#;
@@ -89,24 +94,14 @@ fn read(path: &PathBuf) -> Brands {
     std::fs::read(path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default()
 }
 
-/// The new state of every social for one brand. A handle read now wins; one read before is kept while
-/// the same social stays signed in.
-fn updated(previous: Option<&BTreeMap<String, SignIn>>, cookies: &[(String, String, bool)], platform: Platform, page_handle: Option<String>, now: u64) -> BTreeMap<String, SignIn> {
-    PLATFORMS
-        .iter()
-        .map(|&each| {
-            let signed_in = signed_in_on(each, cookies);
-            let before = previous.and_then(|map| map.get(key(each)));
-            let handle = if !signed_in {
-                None
-            } else if each == platform && page_handle.is_some() {
-                page_handle.clone()
-            } else {
-                before.filter(|state| state.signed_in).and_then(|state| state.handle.clone())
-            };
-            (key(each).to_string(), SignIn { signed_in, handle, checked_at: now })
-        })
-        .collect()
+/// Update only the social being viewed. Another social's stale cookie must not undo a sign-out
+/// observed on its login page. Only a handle seen on this check is retained for the current social.
+fn updated(previous: Option<&BTreeMap<String, SignIn>>, cookies: &[(String, String, bool)], platform: Platform, page_handle: Option<String>, login_page: bool, now: u64) -> BTreeMap<String, SignIn> {
+    let mut next = previous.cloned().unwrap_or_default();
+    let signed_in = signed_in_on(platform, cookies) && !login_page;
+    let handle = if signed_in { page_handle } else { None };
+    next.insert(key(platform).to_string(), SignIn { signed_in, handle, checked_at: now });
+    next
 }
 
 /// Whether two states differ in anything but when they were checked.
@@ -118,6 +113,19 @@ fn changed(a: Option<&BTreeMap<String, SignIn>>, b: &BTreeMap<String, SignIn>) -
 /// The username the window's page shows as signed in. Must run off the main thread.
 fn may_read_page_handle(url: &url::Url) -> bool {
     !crate::browser::is_x_site(url)
+}
+
+/// An explicit login page is stronger evidence than an old, still-present session cookie.
+fn is_login_page(platform: Platform, url: &url::Url) -> bool {
+    let host = url.host_str().unwrap_or("").trim_start_matches("www.");
+    let path = url.path();
+    match platform {
+        Platform::Tiktok => on(host, "tiktok.com") && path.starts_with("/login"),
+        Platform::X => (on(host, "x.com") || on(host, "twitter.com")) && (path == "/login" || path.starts_with("/i/flow/login")),
+        Platform::Youtube => host == "accounts.google.com" && (path.starts_with("/signin") || path.starts_with("/v3/signin")),
+        Platform::Instagram => on(host, "instagram.com") && path.starts_with("/accounts/login"),
+        Platform::Facebook => on(host, "facebook.com") && path.starts_with("/login"),
+    }
 }
 
 fn page_handle(window: &WebviewWindow) -> Option<String> {
@@ -136,10 +144,11 @@ pub fn check(app: &AppHandle, window: &WebviewWindow, brand: &str, platform: Pla
     let Ok(cookies) = window.cookies() else { return };
     let cookies: Vec<(String, String, bool)> = cookies.iter().map(|c| (c.name().to_string(), c.domain().unwrap_or("").to_string(), !c.value().is_empty())).collect();
     let handle = page_handle(window);
+    let login_page = window.url().ok().is_some_and(|url| is_login_page(platform, &url));
     let Some(path) = state_path(app) else { return };
     let Ok(_guard) = FILE_LOCK.lock() else { return };
     let mut all = read(&path);
-    let next = updated(all.get(brand), &cookies, platform, handle, now_ms());
+    let next = updated(all.get(brand), &cookies, platform, handle, login_page, now_ms());
     let notify = changed(all.get(brand), &next);
     all.insert(brand.to_string(), next);
     let Ok(bytes) = serde_json::to_vec_pretty(&all) else { return };
@@ -187,16 +196,34 @@ mod tests {
     #[test]
     fn keeps_a_handle_only_while_signed_in() {
         let signed = jar(&[("sessionid", ".tiktok.com")]);
-        let first = updated(None, &signed, Platform::Tiktok, Some("animals".into()), 1);
+        let first = updated(None, &signed, Platform::Tiktok, Some("animals".into()), false, 1);
         assert_eq!(first["tiktok"].handle.as_deref(), Some("animals"));
-        assert!(!first["x"].signed_in);
+        assert!(!first.contains_key("x"));
         // Another window (X) doesn't read TikTok's name: the one read before stays.
-        let again = updated(Some(&first), &signed, Platform::X, None, 2);
+        let again = updated(Some(&first), &signed, Platform::X, None, false, 2);
         assert_eq!(again["tiktok"].handle.as_deref(), Some("animals"));
-        assert!(!changed(Some(&first), &again));
-        let out = updated(Some(&again), &[], Platform::Tiktok, None, 3);
+        assert!(!again["x"].signed_in);
+        let unknown = updated(Some(&again), &signed, Platform::Tiktok, None, false, 3);
+        assert_eq!(unknown["tiktok"].handle, None);
+        assert!(changed(Some(&again), &unknown));
+        let out = updated(Some(&again), &[], Platform::Tiktok, None, false, 3);
         assert!(!out["tiktok"].signed_in && out["tiktok"].handle.is_none());
         assert!(changed(Some(&again), &out));
+    }
+
+    #[test]
+    fn login_page_marks_only_that_social_signed_out_even_with_a_stale_cookie() {
+        let cookies = jar(&[("sessionid", ".tiktok.com"), ("SID", ".google.com")]);
+        let prior = updated(None, &cookies, Platform::Youtube, None, false, 0);
+        let state = updated(Some(&prior), &cookies, Platform::Tiktok, None, true, 1);
+        assert!(!state["tiktok"].signed_in);
+        assert!(state["youtube"].signed_in);
+        let other_check = updated(Some(&state), &cookies, Platform::Youtube, None, false, 2);
+        assert!(!other_check["tiktok"].signed_in);
+        assert!(is_login_page(Platform::Tiktok, &"https://www.tiktok.com/login/phone-or-email/email".parse().unwrap()));
+        assert!(is_login_page(Platform::Youtube, &"https://accounts.google.com/v3/signin/identifier".parse().unwrap()));
+        assert!(!is_login_page(Platform::Youtube, &"https://accounts.google.com/o/oauth2/auth".parse().unwrap()));
+        assert!(!is_login_page(Platform::Tiktok, &"https://example.com/login".parse().unwrap()));
     }
 
     #[test]
