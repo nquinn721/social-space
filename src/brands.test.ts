@@ -29,15 +29,16 @@ describe('brand model', () => {
     expect('series' in migrateWorkspace({ ...saved, series: [] })).toBe(false);
   });
 
-  it('adds Instagram and YouTube profiles to an existing login that has room', () => {
+  it('plans a fresh Instagram account and a YouTube channel under the existing Google login', () => {
     const existing = [account('1', 'instagram', 'MassageMentor'), account('2', 'youtube', 'MassageMentor')];
     const instagram = planPresence(existing, 'instagram', 'Massage With Mia', BASE);
-    expect(instagram).toMatchObject({ mode: 'attach', email: BASE });
-    expect(instagram.reason).toContain('2 of 4');
+    expect(instagram).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
+    expect(instagram.reason).toContain('separate Instagram account');
     expect(planPresence(existing, 'youtube', 'Massage With Mia', BASE)).toMatchObject({ mode: 'attach', email: BASE });
+    expect(planPresence([], 'youtube', 'First brand', BASE)).toMatchObject({ mode: 'attach', email: BASE });
   });
 
-  it('starts a new Instagram login once four profiles share one', () => {
+  it('starts a new Instagram account even when old accounts share a login', () => {
     const full = ['a', 'b', 'c', 'd'].map((id) => account(id, 'instagram', `Brand ${id}`));
     expect(planPresence(full, 'instagram', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
   });
@@ -59,6 +60,11 @@ describe('brand model', () => {
   it('counts Gmail aliases and dots as the same YouTube account', () => {
     const channels = Array.from({ length: 100 }, (_, n) => account(String(n), 'youtube', `Channel ${n}`, n % 2 ? 'soft.wings25+brand@gmail.com' : BASE));
     expect(planPresence(channels, 'youtube', 'New brand', BASE)).toMatchObject({ mode: 'new', email: '' });
+  });
+
+  it('does not silently switch a YouTube channel to a different saved Google login', () => {
+    const existing = [account('old', 'youtube', 'Old brand', 'other@gmail.com')];
+    expect(planPresence(existing, 'youtube', 'New brand', BASE)).toMatchObject({ mode: 'new', email: BASE });
   });
 
   it('gives TikTok and X their own unused email per account', () => {
@@ -105,12 +111,12 @@ describe('brand model', () => {
     expect(loginText(workspace.accounts[2], workspace)).toBe('Its own TikTok account, signed up with softwings25+mia@gmail.com.');
   });
 
-  it('moves profiles not created yet off the old default birthday, but keeps live ones', () => {
+  it('does not guess new birthdays or change saved birthdays', () => {
     const planned = { ...account('1', 'tiktok', 'Mia'), birthday: '1995-06-15' };
     const live = { ...account('2', 'instagram', 'Mia'), status: 'active' as const, birthday: '1995-06-15' };
     const migrated = migrateWorkspace({ accounts: [planned, live] });
-    expect(DEFAULT_SIGNUP_BIRTHDAY).toBe('1983-06-05');
-    expect(migrated.accounts.map((item) => item.birthday)).toEqual(['1983-06-05', '1995-06-15']);
+    expect(DEFAULT_SIGNUP_BIRTHDAY).toBe('');
+    expect(migrated.accounts.map((item) => item.birthday)).toEqual(['1995-06-15', '1995-06-15']);
   });
 
   it('gives profiles not created yet the new brand name as username and email tag', () => {

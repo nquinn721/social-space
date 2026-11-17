@@ -5,7 +5,8 @@
       "Brands",
       "Details",
       "Sign up",
-      "Profile"
+      "Profile",
+      "Find your idea"
     ],
     "notes": [
       "Brands is the top-nav entry; Details, Sign up and Profile are the steps of the Create accounts wizard (CreateAccountWizard.tsx), whose sign-up pages are embedded by embedded.rs."
@@ -29,7 +30,22 @@
       "src/brandStatus.ts",
       "src-tauri/src/embedded.rs",
       "src/BrandCard.tsx",
-      "src/browserSession.ts"
+      "src/browserSession.ts",
+      "src/deletionSafety.ts",
+      "src/profileService.ts",
+      "src/App.tsx",
+      "docs/signup-flows.md",
+      "src/IdeaSuggestionsModal.tsx",
+      "src/ideaSuggestions.css",
+      "src/useBrandIdeas.ts",
+      "src/assistant/brandIdeas.ts",
+      "src/styles.css"
+    ],
+    "screens": [
+      {
+        "name": "Find your idea",
+        "path": "src/IdeaSuggestionsModal.tsx"
+      }
     ],
     "summary": "Brands and their per-social profiles: create, sign up, autofill, passwords, setup tracker",
     "terms": [
@@ -260,6 +276,8 @@
       "src/assistant/grokClient.ts",
       "src/assistant/AssistantPanel.tsx",
       "src/assistant/suggest.ts",
+      "src/assistant/brandIdeas.ts",
+      "src/useBrandIdeas.ts",
       "src/assistant/postSuggest.ts",
       "src/pages/SettingsPage.tsx",
       "src-tauri/src/grok_ai.rs",
@@ -359,7 +377,8 @@
       "src/VideoLibrary.tsx",
       "src/batchPosting.ts",
       "src/browserSession.ts",
-      "src-tauri/src/embedded.rs"
+      "src-tauri/src/embedded.rs",
+      "src/deletionSafety.ts"
     ],
     "summary": "How each social posts: by API or through its own upload page in a brand's signed-in app window, the post queue, and sign-in state per brand",
     "terms": [

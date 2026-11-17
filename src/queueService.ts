@@ -8,5 +8,5 @@ function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app t
 export async function listQueue(): Promise<QueueJob[]> { desktopOnly(); return invoke('list_queue'); }
 export async function addQueueJob(job: QueueInput): Promise<QueueJob> { desktopOnly(); return invoke('add_queue_job', { job }); }
 export async function completeQueueJob(id: string): Promise<QueueJob> { desktopOnly(); return invoke('complete_queue_job', { id }); }
-export async function deleteQueueJob(id: string): Promise<void> { desktopOnly(); return invoke('delete_queue_job', { id }); }
+export async function deleteQueueJob(id: string, onlyUnstarted = false): Promise<void> { desktopOnly(); return invoke('delete_queue_job', { id, onlyUnstarted }); }
 export async function chooseVideoFile(): Promise<string | null> { desktopOnly(); return invoke('choose_video_file'); }

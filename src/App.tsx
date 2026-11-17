@@ -7,7 +7,10 @@ import AssistantPanel from './assistant/AssistantPanel';
 import OverviewPage from './pages/OverviewPage';
 import AccountsPage from './pages/AccountsPage';
 import SettingsPage from './pages/SettingsPage';
-import { deleteAccountPassword } from './profileService';
+import { deleteAccountPassword, hasAccountPassword } from './profileService';
+import { isTauri } from '@tauri-apps/api/core';
+import { deleteQueueJob, listQueue } from './queueService';
+import { prepareProfileRemoval, removedProfileIds } from './deletionSafety';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Check, ChevronRight, Home, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
@@ -53,6 +56,7 @@ function App() {
   const updatesManaged = Boolean(updates.managedBy);
   const updateWaiting = !updatesManaged && (hasUpdate(updates.status) || updates.progress?.state === 'running');
   const workspaceRef = useRef(workspace);
+  const removingProfile = useRef(false);
   workspaceRef.current = workspace;
 
   useEffect(() => { loadWorkspace().then((data) => { setWorkspace(data); setBusinessName(data.businessName); setLoaded(true); }).catch(() => showError('Could not load your workspace. Restart the app and try again.')); }, []);
@@ -148,19 +152,57 @@ function App() {
       ? renamedProfile(account, old, name) : account);
     return persist({ ...workspace, brands: workspace.brands.map((item) => item.id === brand.id ? { ...item, name } : item), accounts }, `Renamed ${old} to ${name}. To change a username on a social, open that profile and use Fill profile.`);
   }
+  /** Verify and cancel the profile's pending queue items before removing its local details. */
+  async function prepareRemoval(current: Workspace, ids: Set<string>, description: string): Promise<number | null> {
+    return prepareProfileRemoval(current, ids, description, {
+      list: () => isTauri() ? listQueue() : Promise.resolve([]),
+      hasPassword: (id) => isTauri() ? hasAccountPassword(id) : Promise.resolve(false),
+      cancel: (id, onlyUnstarted) => deleteQueueJob(id, onlyUnstarted),
+      confirm: (message) => window.confirm(message),
+      isCurrent: () => workspaceRef.current === current,
+    });
+  }
   async function removeBrand(brand: Brand) {
-    const profiles = workspace.accounts.filter((account) => account.brandId === brand.id);
-    const live = profiles.filter((account) => account.status === 'active');
-    const warning = live.length ? ` Its ${live.length} live ${live.length === 1 ? 'profile stays' : 'profiles stay'} on the socials, but the saved username and password here are deleted too.` : '';
-    if (!window.confirm(`Delete ${brand.name} and its ${profiles.length} ${profiles.length === 1 ? 'profile' : 'profiles'} from the app?${warning}`)) return;
-    const ids = new Set(profiles.map((account) => account.id));
-    if (await persist({ ...workspace, brands: workspace.brands.filter((item) => item.id !== brand.id), accounts: workspace.accounts.filter((account) => !ids.has(account.id)), categories: (workspace.categories ?? []).filter((category) => category.brandId !== brand.id), videos: (workspace.videos ?? []).filter((video) => video.brandId !== brand.id), series: (workspace.series ?? []).filter((series) => series.brandId !== brand.id), channels: workspace.channels.map((channel) => channel.accountId && ids.has(channel.accountId) ? { ...channel, accountId: null } : channel) }, `Deleted ${brand.name}.`)) {
-      for (const id of ids) void deleteAccountPassword(id).catch(() => undefined);
-    }
+    if (removingProfile.current || busy || !loaded) return;
+    removingProfile.current = true; setBusy(true); setMessage('');
+    let canceled = 0;
+    try {
+      const current = workspaceRef.current;
+      const profiles = current.accounts.filter((account) => account.brandId === brand.id);
+      const ids = new Set(profiles.map((account) => account.id));
+      const prepared = await prepareRemoval(current, ids, `Remove ${brand.name}, its profiles, linked channels, videos and series from Social Space? Video files remain on this PC.`);
+      if (prepared === null) return;
+      canceled = prepared;
+      const saved = await commit({ ...current, brands: current.brands.filter((item) => item.id !== brand.id), accounts: current.accounts.filter((account) => !ids.has(account.id)), categories: (current.categories ?? []).filter((category) => category.brandId !== brand.id), videos: (current.videos ?? []).filter((video) => video.brandId !== brand.id), series: (current.series ?? []).filter((series) => series.brandId !== brand.id), channels: current.channels.filter((channel) => !channel.accountId || !ids.has(channel.accountId)) });
+      const removedIds = removedProfileIds(ids, saved, workspaceRef.current);
+      const results = isTauri() ? await Promise.allSettled(removedIds.map((id) => deleteAccountPassword(id))) : [];
+      if (results.some((result) => result.status === 'rejected')) showError('Brand removed, but some saved passwords could not be removed from Windows Credential Manager.');
+      else if (removedIds.length !== ids.size) showError('Some profiles changed while removing the brand, so their saved passwords were kept. Review the workspace.');
+      else showMessage(`Removed ${brand.name} from Social Space.`);
+    } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the brand.'}${canceled ? ` ${canceled} queued ${canceled === 1 ? 'post was' : 'posts were'} already cancelled.` : ''}`); }
+    finally { removingProfile.current = false; setBusy(false); }
   }
   async function removeAccount(account: Account) {
-    if (!window.confirm(`Delete the ${getPlatform(account.platform).name} profile of ${account.label} from the app? ${account.status === 'active' ? 'The account stays on the social, but its saved password here is deleted.' : 'Nothing exists on the social yet, so nothing is lost there.'}`)) return;
-    if (await persist({ ...workspace, accounts: workspace.accounts.filter((item) => item.id !== account.id), channels: workspace.channels.map((channel) => channel.accountId === account.id ? { ...channel, accountId: null } : channel) }, `Deleted the ${getPlatform(account.platform).name} profile of ${account.label}.`)) { setShowAccount(false); setEditingAccount(null); void deleteAccountPassword(account.id).catch(() => undefined); }
+    if (removingProfile.current || busy || !loaded) return;
+    removingProfile.current = true; setBusy(true); setMessage('');
+    let canceled = 0;
+    try {
+      const current = workspaceRef.current;
+      const ids = new Set([account.id]);
+      const prepared = await prepareRemoval(current, ids, `Remove the ${getPlatform(account.platform).name} profile of ${account.label} and its linked channels from Social Space?`);
+      if (prepared === null) return;
+      canceled = prepared;
+      const saved = await commit({ ...current, accounts: current.accounts.filter((item) => item.id !== account.id), channels: current.channels.filter((channel) => channel.accountId !== account.id) });
+      if (!removedProfileIds(ids, saved, workspaceRef.current).length) {
+        showError('The profile changed while removing it, so its saved password was kept. Review the workspace.');
+        return;
+      }
+      setShowAccount(false); setEditingAccount(null);
+      const password = isTauri() ? await Promise.allSettled([deleteAccountPassword(account.id)]) : [];
+      if (password.some((result) => result.status === 'rejected')) showError('Profile removed, but its saved password could not be removed from Windows Credential Manager.');
+      else showMessage(`Removed the ${getPlatform(account.platform).name} profile from Social Space.`);
+    } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the profile.'}${canceled ? ` ${canceled} queued ${canceled === 1 ? 'post was' : 'posts were'} already cancelled.` : ''}`); }
+    finally { removingProfile.current = false; setBusy(false); }
   }
   const addAccount = () => { setEditingAccount(null); setShowAccount(true); };
   const editAccount = (account: Account) => { setEditingAccount(account); setShowAccount(true); };

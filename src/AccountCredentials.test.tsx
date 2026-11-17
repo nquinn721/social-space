@@ -20,6 +20,7 @@ describe('account credentials', () => {
     render(<AccountCredentials account={account}/>);
     expect(screen.getByText('softwings25@gmail.com')).toBeInTheDocument();
     expect(screen.getByText('@softwings')).toBeInTheDocument();
+    expect(screen.getByText(/Updating the saved copy here does not change the password on the social/)).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Show password' }));
     expect(await screen.findByText(sample)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Hide password' }));
@@ -35,11 +36,11 @@ describe('account credentials', () => {
     expect(profile.setAccountPassword).toHaveBeenCalledWith('a1', sample);
     expect(await screen.findByRole('button', { name: 'Show password' })).toBeInTheDocument();
   });
-  it('changes a saved password', async () => {
+  it('updates the saved copy of a password', async () => {
     vi.mocked(profile.hasAccountPassword).mockResolvedValue(true);
     const user = userEvent.setup();
     render(<AccountCredentials account={account}/>);
-    await user.click(await screen.findByRole('button', { name: 'Change password' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit saved password' }));
     await user.type(screen.getByLabelText('Save a password'), sample);
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(profile.setAccountPassword).toHaveBeenCalledWith('a1', sample);

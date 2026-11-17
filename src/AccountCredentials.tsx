@@ -32,13 +32,14 @@ export default function AccountCredentials({ account }: { account: Account }) {
   const row = (label: string, value: string | undefined) => <div className="credential-row"><span>{label}</span><code>{value || '—'}</code>{value && <button type="button" className="icon-button" aria-label={`Copy ${label.toLowerCase()}`} onClick={() => void copy(label, value)}><Copy size={15}/></button>}</div>;
   return <section className="credentials" aria-label="Sign-in details">
     <h3><KeyRound size={15}/> Sign-in details</h3>
+    <p className="footnote">Passwords are saved on this PC. Updating the saved copy here does not change the password on the social.</p>
     {row('Email', account.signupEmail)}
     {row('Username', account.handle ? `@${account.handle}` : '')}
     <div className="credential-row"><span>Password</span>
       {hasPassword && !changing ? <><code>{visible ? password : '••••••••••••••••'}</code>
         <button type="button" className="icon-button" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => void toggle()}>{visible ? <EyeOff size={15}/> : <Eye size={15}/>}</button>
         <button type="button" className="icon-button" aria-label="Copy password" onClick={() => void copy('Password', load)}><Copy size={15}/></button>
-        <button type="button" className="icon-button" aria-label="Change password" onClick={() => setChanging(true)}><Pencil size={15}/></button></>
+        <button type="button" className="icon-button" aria-label="Edit saved password" title="Edit the saved copy" onClick={() => setChanging(true)}><Pencil size={15}/></button></>
       : hasPassword === false || changing ? <><input type="password" aria-label="Save a password" placeholder={changing ? 'New password' : 'Not saved. Enter one to keep it here'} value={draft} onChange={(event) => setDraft(event.target.value)}/><button type="button" className="outline-button" disabled={!draft} onClick={() => void save()}>Save</button></>
       : <code>…</code>}
     </div>

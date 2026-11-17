@@ -19,10 +19,15 @@ describe('sign-ins', () => {
     vi.mocked(profile.revealAccountPassword).mockResolvedValue(secret);
     const user = userEvent.setup();
     render(<SignIns workspace={workspace} busy={false} onEdit={vi.fn()} onRestore={vi.fn()}/>);
+    expect(screen.getByText(/no JSON file is needed/)).toBeInTheDocument();
+    expect(screen.getByText(/If it was changed on the social, update the saved copy here/)).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'All sign-ins' });
     expect(within(table).getByText('softwings')).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: 'Show password for Instagram @softwings' }));
     expect(await screen.findByText(secret)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit saved password for Instagram @softwings' }));
+    expect(screen.getAllByText(/It does not change the password on the social/)).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
     await user.type(await screen.findByLabelText('New password for TikTok @massagewithmia'), secret);
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(profile.setAccountPassword).toHaveBeenCalledWith('tt', secret);

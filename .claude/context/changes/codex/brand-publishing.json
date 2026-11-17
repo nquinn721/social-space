@@ -1,15 +1,18 @@
 {
-  "summary": "Prepare posting across a brand’s social accounts while distinguishing saved browser sessions from verified connections, and support manual X workflows.",
+  "summary": "Prepare brand publishing and simplify fresh account setup with a selectable idea picker while protecting saved sign-ins and reviewing local profile removal.",
   "features": [
     "accounts",
+    "assistant-grok",
     "connections",
     "facebook",
     "instagram",
+    "navigation",
     "overview",
     "partner-review",
     "posting",
     "profile-images",
-    "video-library"
+    "video-library",
+    "updates"
   ],
   "changes": [
     {
@@ -19,22 +22,67 @@
     {
       "old": "Fill profile on X",
       "new": "Edit X profile manually"
+    },
+    {
+      "old": "Change password",
+      "new": "Edit saved password"
+    },
+    {
+      "old": "one strong shared password",
+      "new": "separate saved passwords for new social accounts"
+    },
+    {
+      "old": "shared Instagram login for new brands",
+      "new": "separate Instagram account per brand"
+    },
+    {
+      "old": "default sign-up birthday",
+      "new": "birthday entered by the user"
     }
   ],
   "kept": [
     {
       "term": "Ready",
       "reason": "Still used for verified API connections and other unrelated ready states."
+    },
+    {
+      "term": "Suggest",
+      "path": "src/CreateAccountWizard.tsx",
+      "reason": "Suggest remains the action that opens the idea picker."
     }
   ],
   "spots": [
+    {
+      "path": "package.json",
+      "note": "Bump the application version for the release."
+    },
+    {
+      "path": "package-lock.json",
+      "note": "Keep the package lock version in step with the app."
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "Set the desktop bundle version for the release."
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "Set the Rust package version for the release."
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "note": "Keep the Rust lockfile package version in step."
+    },
+    {
+      "path": "hub-app.json",
+      "note": "Set the version advertised to Ava."
+    },
     {
       "path": ".claude/context/features.json",
       "note": "Map account status and posting components to their features."
     },
     {
       "path": "src-tauri/src/autofill.rs",
-      "note": "Restrict automated form filling on X."
+      "note": "Restrict X automation and scope Facebook Page and YouTube channel name filling away from login fields."
     },
     {
       "path": "src-tauri/src/browser.rs",
@@ -102,11 +150,11 @@
     },
     {
       "path": "src/CreateAccountWizard.test.tsx",
-      "note": "Focused regression coverage."
+      "note": "Cover independent passwords, Page and channel sign-in handling, and preserved existing credentials."
     },
     {
       "path": "src/CreateAccountWizard.tsx",
-      "note": "Offer manual X signup and clarify address suggestions."
+      "note": "Prepare independent brand account credentials, shared-login Page and channel flows and safe form autofill."
     },
     {
       "path": "src/PostingSettings.test.tsx",
@@ -142,11 +190,11 @@
     },
     {
       "path": "src/brands.test.ts",
-      "note": "Focused regression coverage."
+      "note": "Cover independent account planning and Google channel capacity."
     },
     {
       "path": "src/brands.ts",
-      "note": "Apply local Instagram profile allocation preferences and YouTube channel cap."
+      "note": "Plan separate Instagram, TikTok and X accounts and a Google-owned YouTube channel."
     },
     {
       "path": "src/browserSession.ts",
@@ -170,7 +218,7 @@
     },
     {
       "path": "src/signupFlows.ts",
-      "note": "Provide manual steps for X signup."
+      "note": "Describe safe manual steps and supported Page and channel name filling."
     },
     {
       "path": "src/useBrowserPosting.ts",
@@ -210,7 +258,7 @@
     },
     {
       "path": "src-tauri/src/queue.rs",
-      "note": "Pass the queued Instagram identity to the guarded publish command and test identity validation."
+      "note": "Pin scheduled identities, review orphaned channels and guard cancellation against live or uncertain posts."
     },
     {
       "path": "src/publishAttempt.ts",
@@ -227,6 +275,94 @@
     {
       "path": "src/libraryLayout.test.ts",
       "note": "Check destination actions fit on Windows at multiple widths in Edge."
+    },
+    {
+      "path": "src/App.tsx",
+      "note": "Confirm local-only brand and profile removal, preserve uncertain queue items, and delete saved passwords only after review."
+    },
+    {
+      "path": "src/deletionSafety.ts",
+      "note": "Plan safe local profile removal, including pending queue and saved-password confirmations."
+    },
+    {
+      "path": "src/deletionSafety.test.ts",
+      "note": "Cover local removal confirmation, ambiguous posts and interrupted queue cancellation."
+    },
+    {
+      "path": "src/queueService.ts",
+      "note": "Support canceling only queue entries that have not begun publishing."
+    },
+    {
+      "path": "src/queueService.test.ts",
+      "note": "Cover cancellation service arguments and default behavior."
+    },
+    {
+      "path": "docs/signup-flows.md",
+      "note": "Document per-brand account setup, user sign-in steps and supported form filling."
+    },
+    {
+      "path": "src-tauri/src/account_passwords.rs",
+      "note": "Serialize credential writes in-process and preserve an existing password when preparing sign-up."
+    },
+    {
+      "path": "src/AccountCredentials.tsx",
+      "note": "Explain access to the saved password and distinguish it from the online account password."
+    },
+    {
+      "path": "src/AccountCredentials.test.tsx",
+      "note": "Cover saved-password reveal and clear labeling of local edits."
+    },
+    {
+      "path": "src/SignIns.tsx",
+      "note": "Explain how to reveal or copy saved credentials without an export and label local password edits."
+    },
+    {
+      "path": "src/SignIns.test.tsx",
+      "note": "Cover password discoverability, copying and local-edit guidance."
+    },
+    {
+      "path": "src/pages/AccountsPage.tsx",
+      "note": "Use the wizard when opening a planned sign-up and surface an alternate Google account when needed."
+    },
+    {
+      "path": "src/pages/AccountsPage.test.tsx",
+      "note": "Cover adding a social with the revised account planning flow."
+    },
+    {
+      "path": "src/profileService.ts",
+      "note": "Add scoped Page and channel name form fields."
+    },
+    {
+      "path": "src/autofillPageFields.test.ts",
+      "note": "Verify scoped Page and channel name filling does not target login fields."
+    },
+    {
+      "path": "src/IdeaSuggestionsModal.tsx",
+      "note": "Show accessible idea choices with individual and whole-list rerolls."
+    },
+    {
+      "path": "src/IdeaSuggestionsModal.test.tsx",
+      "note": "Verify selection, rerolls, loading, errors and keyboard focus in the idea picker."
+    },
+    {
+      "path": "src/ideaSuggestions.css",
+      "note": "Style the responsive idea picker in the existing dark theme."
+    },
+    {
+      "path": "src/assistant/brandIdeas.ts",
+      "note": "Generate and validate brand idea suggestions."
+    },
+    {
+      "path": "src/assistant/brandIdeas.test.ts",
+      "note": "Cover brand idea generation and provider error handling."
+    },
+    {
+      "path": "src/useBrandIdeas.ts",
+      "note": "Coordinate idea picker loading, rerolls and stale responses."
+    },
+    {
+      "path": "src/styles.css",
+      "note": "Fit the wizard idea input and both actions at smaller widths."
     }
   ]
 }
