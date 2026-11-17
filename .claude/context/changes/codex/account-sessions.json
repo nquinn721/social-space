@@ -1,0 +1,75 @@
+{
+  "summary": "Show saved browser sessions as signed in, refresh sign-in status while windows are open, and identify TikTok's own profile without mistaking another public profile for the signed-in account.",
+  "features": [
+    "accounts",
+    "overview",
+    "posting",
+    "updates"
+  ],
+  "changes": [
+    {
+      "old": "Session detected",
+      "new": "Signed in"
+    }
+  ],
+  "kept": [
+    {
+      "term": "Session detected",
+      "path": "src/libraryLayout.test.ts",
+      "reason": "Historical static layout fixture; the text is not a live account status."
+    }
+  ],
+  "spots": [
+    {
+      "path": "docs/brand-profiles.md"
+    },
+    {
+      "path": "src-tauri/src/posting.rs"
+    },
+    {
+      "path": "src-tauri/src/sign_in_state.rs"
+    },
+    {
+      "path": "src/BrandAccounts.tsx"
+    },
+    {
+      "path": "src/BrandAccounts.test.tsx"
+    },
+    {
+      "path": "src/brandStatus.ts"
+    },
+    {
+      "path": "src/brandStatus.test.ts"
+    },
+    {
+      "path": "src/pages/OverviewPage.test.tsx"
+    },
+    {
+      "path": "src/tiktokIdentity.test.ts"
+    },
+    {
+      "path": "package.json",
+      "note": "Release version 0.31.1"
+    },
+    {
+      "path": "package-lock.json",
+      "note": "Release version 0.31.1"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "Release version 0.31.1"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "Release version 0.31.1"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "Release version 0.31.1"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "note": "Release version 0.31.1"
+    }
+  ]
+}

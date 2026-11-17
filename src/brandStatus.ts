@@ -91,18 +91,16 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
   if (session === 'mismatch') {
     return { ...base, kind: 'sign-in', tone: 'problem', label: 'Wrong account', detail: `The last check found @${signIn?.handle}, not @${account.handle}. Check the account in the ${name} window before posting.`, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: false };
   }
+  if (session === 'matched' || session === 'unverified') {
+    const detail = platform === 'youtube'
+      ? `Google was signed in at the last check. ${account.handle ? `This brand's saved channel is @${account.handle.replace(/^@/, '')}. ` : ''}The selected YouTube channel has not been verified.`
+      : session === 'matched' ? `Last seen as @${signIn?.handle}. The session may expire or change.` : `A ${name} sign-in was detected at the last check; its username was not available.`;
+    return { ...base, kind: 'ready', tone: 'ok', label: 'Signed in', detail, canPost: true };
+  }
   if (session === 'not-checked' && platform === 'tiktok' && inputs.passwords && inputs.passwords[account.id] === false) {
     return { ...base, kind: 'no-password', tone: 'todo', label: 'Login not saved', detail: 'The window can only fill the sign-in after its username and password are saved.', action: { kind: 'save-login', label: 'Save its login', short: 'Save login' }, canPost: true };
   }
-  const label = session === 'not-checked' ? 'Not checked' : 'Session detected';
-  const detail = session === 'not-checked'
-    ? `Open ${name} to check which account is signed in before posting.`
-    : platform === 'youtube'
-      ? 'A Google session was detected, but the selected YouTube channel is not verified. Check the channel before posting.'
-      : session === 'matched'
-        ? `The last check saw @${signIn?.handle}. Check the current account before posting.`
-        : `A ${name} session was detected, but its account could not be verified. Check it before posting.`;
-  return { ...base, kind: 'verify-session', tone: 'todo', label, detail, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: true };
+  return { ...base, kind: 'verify-session', tone: 'todo', label: 'Not checked', detail: `Open ${name} to check the sign-in.`, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: true };
 
 }
 

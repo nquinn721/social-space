@@ -36,16 +36,16 @@ describe('brand status', () => {
     const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' }), account('y', 'youtube')]);
     const signIns = { tiktok: { signedIn: false, checkedAt: 0 }, youtube: { signedIn: true, checkedAt: 0 } };
     expect(socialStatus(ws, 'b', 'tiktok', { signIns })).toMatchObject({ kind: 'sign-in', tone: 'todo', action: { kind: 'sign-in' }, canPost: true });
-    expect(socialStatus(ws, 'b', 'youtube', { signIns })).toMatchObject({ kind: 'verify-session', label: 'Session detected', canPost: true });
-    expect(socialStatus(ws, 'b', 'youtube', { signIns }).detail).toContain('channel is not verified');
+    expect(socialStatus(ws, 'b', 'youtube', { signIns })).toMatchObject({ kind: 'ready', label: 'Signed in', canPost: true });
+    expect(socialStatus(ws, 'b', 'youtube', { signIns }).detail).toContain('selected YouTube channel has not been verified');
   });
   it('blocks a last-seen browser account mismatch and does not treat matching or unknown cookies as proof', () => {
     const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' })]);
     const signIn = (handle?: string) => ({ tiktok: { signedIn: true, checkedAt: 1, handle } });
     expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('other') })).toMatchObject({ label: 'Wrong account', canPost: false, tone: 'problem' });
-    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') })).toMatchObject({ kind: 'verify-session', label: 'Session detected', canPost: true });
-    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn() }).detail).toContain('could not be verified');
-    expect(needsAttention(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') }))).toBe(true);
+    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') })).toMatchObject({ kind: 'ready', label: 'Signed in', canPost: true });
+    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn() }).detail).toContain('username was not available');
+    expect(needsAttention(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') }))).toBe(false);
     expect(needsAttention(socialStatus(ws, 'b', 'instagram'))).toBe(false);
   });
   it('tells a missing profile from one not created yet, and a missing saved login', () => {

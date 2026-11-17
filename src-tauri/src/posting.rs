@@ -408,7 +408,9 @@ pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result
 /// How often an open brand window's sign-in is saved for the other PC.
 const SESSION_SAVE_EVERY: Duration = Duration::from_secs(20);
 /// When a new brand window's sign-in is first checked, once its page had time to load.
-const SIGN_IN_FIRST_CHECK: Duration = Duration::from_secs(8);
+const SIGN_IN_FIRST_CHECK: Duration = Duration::from_secs(4);
+/// Refresh the visible status promptly after someone finishes signing in.
+const SIGN_IN_CHECK_EVERY: Duration = Duration::from_secs(5);
 
 /// Opens a brand window: first on a blank page, so the other PC's newer sign-in (if any) is put into
 /// the brand's folder before the social loads, then on `url`. While the window is open its sign-in is
@@ -420,18 +422,16 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
     let window = build_window(app, blank, dir, posting.clone(), None)?;
     let (task_app, task_window) = (app.clone(), window.clone());
     tauri::async_runtime::spawn(async move {
-        if !may_automate(platform) {
-            let _ = task_window.navigate(url);
-            return;
-        }
         // WebView2 cookies must be handled off the main thread.
-        let (restore_app, restore_window, restore_brand) = (task_app.clone(), task_window.clone(), brand.clone());
-        let shared = tauri::async_runtime::spawn_blocking(move || {
-            // A social this PC's folder is already signed in to keeps its own sign-in.
-            let here: Vec<Platform> = [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram].into_iter()
-                .filter(|social| crate::sign_in_state::known_signed_in(&restore_app, &restore_brand, *social)).collect();
-            crate::browser_sessions::restore(&restore_app, &restore_window, &restore_brand, &here)
-        }).await.unwrap_or(false);
+        let shared = if may_automate(platform) {
+            let (restore_app, restore_window, restore_brand) = (task_app.clone(), task_window.clone(), brand.clone());
+            tauri::async_runtime::spawn_blocking(move || {
+                // A social this PC's folder is already signed in to keeps its own sign-in.
+                let here: Vec<Platform> = [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram].into_iter()
+                    .filter(|social| crate::sign_in_state::known_signed_in(&restore_app, &restore_brand, *social)).collect();
+                crate::browser_sessions::restore(&restore_app, &restore_window, &restore_brand, &here)
+            }).await.unwrap_or(false)
+        } else { false };
         posting.shared_session.store(shared, Ordering::Relaxed);
         if task_window.navigate(url).is_err() {
             return;
@@ -446,12 +446,15 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
             return;
         }
         check(task_app.clone(), task_window.clone(), brand.clone()).await;
+        let mut last_save = tokio::time::Instant::now();
         loop {
-            tokio::time::sleep(SESSION_SAVE_EVERY).await;
+            tokio::time::sleep(SIGN_IN_CHECK_EVERY).await;
             if task_window.url().is_err() {
                 return;
             }
             check(task_app.clone(), task_window.clone(), brand.clone()).await;
+            if !may_automate(platform) || last_save.elapsed() < SESSION_SAVE_EVERY { continue; }
+            last_save = tokio::time::Instant::now();
             // Only a signed-in window is shared with the other PC.
             let (save_app, save_window, save_brand) = (task_app.clone(), task_window.clone(), brand.clone());
             let _ = tauri::async_runtime::spawn_blocking(move || {

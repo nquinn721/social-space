@@ -70,7 +70,7 @@ describe('brand accounts', () => {
 
     const tiktok = screen.getByRole('listitem', { name: 'TikTok profile' });
     // TikTok posts through its upload page in the brand's window: ready without an API connection.
-    expect(within(tiktok).getByText('Ready')).toBeInTheDocument();
+    expect(within(tiktok).getByText('Not checked')).toBeInTheDocument();
     expect(within(tiktok).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Add YouTube/ }));
@@ -89,7 +89,7 @@ describe('brand accounts', () => {
     await user.click(within(tiktok).getByRole('button', { name: 'Sign in' }));
     expect(openProfilePage).toHaveBeenLastCalledWith(expect.objectContaining({ platform: 'tiktok', accountId: 'tt', inBrowser: false }));
     expect(within(screen.getByRole('listitem', { name: 'X profile' })).getByText('Signed in as @softwings25')).toBeInTheDocument();
-    expect(within(screen.getByRole('listitem', { name: 'YouTube profile' })).getByText('Ready')).toBeInTheDocument();
+    expect(within(screen.getByRole('listitem', { name: 'YouTube profile' })).getByText('Not checked')).toBeInTheDocument();
     signIns.value = {};
   });
 
@@ -118,9 +118,22 @@ describe('brand accounts', () => {
   });
 
   it('words each sign-in state', () => {
-    expect(signInLine('TikTok', 'animals', { signedIn: true, handle: 'Animals', checkedAt: 0 }).tone).toBe('ok');
-    expect(signInLine('YouTube', 'animals', { signedIn: true, checkedAt: 0 }).text).toMatch(/^Signed in to YouTube/);
+    expect(signInLine('TikTok', 'animals', { signedIn: true, handle: 'Animals', checkedAt: 0 }).text).toMatch(/last check saw @Animals/);
+    expect(signInLine('YouTube', 'animals', { signedIn: true, checkedAt: 0 }).text).toMatch(/channel was not verified/);
     expect(signInLine('X', '@animals', { signedIn: true, handle: 'other', checkedAt: 0 }).tone).toBe('warning');
     expect(signInLine('X', 'animals', undefined).tone).toBe('unknown');
+  });
+
+  it('shows the last observed TikTok account and explains the saved window', async () => {
+    status.connections = {};
+    signIns.value = { b1: { tiktok: { signedIn: true, handle: 'softwings', checkedAt: 1 } } };
+    const tt = { ...profile('tt', 'tiktok'), signupEmail: 'softwings25+softwings@gmail.com' };
+    render(<BrandAccounts brand={brand} accounts={[tt]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
+    const row = screen.getByRole('listitem', { name: 'TikTok profile' });
+    expect(await within(row).findByText('Signed in')).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Check account' })).not.toBeInTheDocument();
+    await userEvent.setup().click(within(row).getByRole('button', { name: 'View TikTok profile' }));
+    expect(await screen.findByText(/saved browser session/)).toBeInTheDocument();
+    signIns.value = {};
   });
 });
