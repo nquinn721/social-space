@@ -84,8 +84,8 @@ pub(crate) fn validate_prompt(prompt: &str, aspect_ratio: &str, duration: u8) ->
     if prompt.trim().is_empty() || prompt.chars().count() > MAX_PROMPT_CHARS {
         return Err("Enter a prompt of up to 3,072 characters.".into());
     }
-    if !matches!(aspect_ratio, "16:9" | "9:16" | "1:1") || !(3..=15).contains(&duration) {
-        return Err("Choose a supported aspect ratio and a duration from 3 to 15 seconds.".into());
+    if !matches!(aspect_ratio, "16:9" | "9:16" | "1:1") || !(1..=15).contains(&duration) {
+        return Err("Choose a supported aspect ratio and a duration from 1 to 15 seconds.".into());
     }
     Ok(())
 }

@@ -24,6 +24,8 @@ import { testModeOf, withPosted } from './appReviews';
 import { earlierPartMissing, videoPartLabel, waitingOnEarlierPart } from './series';
 import { batchPlan, preparationSignature, type BatchDestination } from './batchPosting';
 import { beginAttempt, clearAttempt, readAttempt, recordPublished } from './publishAttempt';
+import VideoIdeasDialog from './VideoIdeasDialog';
+import { useVideoIdeas } from './useVideoIdeas';
 import './library.css';
 import './series.css';
 
@@ -259,7 +261,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
               <button type="button" className="outline-button" aria-expanded={panel === 'add'} onClick={() => setPanel(panel === 'add' ? null : 'add')}><Plus size={15}/> Add a file</button>
             </div>
           </div>
-          {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
+          {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} brandNotes={[brand.notes, ...workspace.accounts.filter((account) => account.brandId === brand.id).map((account) => account.bio ?? '')].filter(Boolean).join('\n').slice(0, 3000)} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
           {panel === 'add' && <AddVideo key={category.id} brandId={brand.id} category={category} disabled={disabled} onSave={(video) => save({ videos: [...videos, video] }, `Added "${video.title}" to ${category.name}.`)} onClose={() => setPanel(null)}/>}
           {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Accounts.</p>}
           {inCategory.length > 0 && <div className="segmented library-stages" role="group" aria-label="Stage">
@@ -776,8 +778,8 @@ function AddVideo({ brandId, category, disabled, onSave, onClose }: AddProps) {
   </form>;
 }
 
-type MakeProps = { brandName: string; category: VideoCategory; disabled: boolean; onMake: ReturnType<typeof useVideoGenerations>['make']; onClose: () => void; onManageSources?: () => void };
-function MakeVideo({ brandName, category, disabled, onMake, onClose, onManageSources }: MakeProps) {
+type MakeProps = { brandName: string; brandNotes: string; category: VideoCategory; disabled: boolean; onMake: ReturnType<typeof useVideoGenerations>['make']; onClose: () => void; onManageSources?: () => void };
+function MakeVideo({ brandName, brandNotes, category, disabled, onMake, onClose, onManageSources }: MakeProps) {
   const [state, setState] = useState<SourcesState | null>(null);
   const [loadError, setLoadError] = useState('');
   const [sourceId, setSourceId] = useState('');
@@ -787,20 +789,31 @@ function MakeVideo({ brandName, category, disabled, onMake, onClose, onManageSou
   const [duration, setDuration] = useState<number | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [sending, setSending] = useState(false);
+  const sendingGuard = useRef(false);
   const [error, setError] = useState('');
+  const [multiScene, setMultiScene] = useState(false);
+  const [ideaNotice, setIdeaNotice] = useState('');
   useEffect(() => { listVideoSources().then(setState).catch((reason) => setLoadError(isTauri() ? errorText(reason, 'Could not load video sources.') : DESKTOP_ONLY)); }, []);
 
   const usable = state?.sources.filter((source) => source.status !== 'rejected') ?? [];
   const source = usable.find((item) => item.id === sourceId) ?? usable.find((item) => item.id === state?.active) ?? usable[0];
   const provider = source ? PROVIDERS[source.provider] : null;
+  const ideas = useVideoIdeas({ brand: brandName, notes: brandNotes, category: category.name, durations: provider?.durations ?? [] });
+  useEffect(() => { ideas.reset(); setMultiScene(false); setIdeaNotice(''); }, [source?.id]); // Reset choices when the supported clip lengths change.
   const seconds = provider && duration !== null && provider.durations.includes(duration) ? duration : provider?.defaultDuration ?? 5;
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!source || !prompt.trim() || sending || disabled) return;
+    if (!source || !prompt.trim() || sendingGuard.current || disabled) return;
+    sendingGuard.current = true;
     setSending(true); setError('');
-    try { if (await onMake({ category, brandName, prompt: prompt.trim(), title, sourceId: source.id, aspectRatio, duration: seconds })) onClose(); }
+    try {
+      if (await onMake({ category, brandName, prompt: prompt.trim(), title, sourceId: source.id, aspectRatio, duration: seconds })) {
+        if (multiScene) { setPrompt(''); setTitle(''); setIdeaNotice('Clip started. Open the ideas again to choose the next scene.'); }
+        else onClose();
+      }
+    }
     catch (reason) { setError(errorText(reason, 'The video could not be started. Please try again.')); }
-    finally { setSending(false); }
+    finally { sendingGuard.current = false; setSending(false); }
   }
 
   if (loadError) return <div className="card library-panel"><div className="error-message" role="alert">{loadError}</div></div>;
@@ -813,6 +826,8 @@ function MakeVideo({ brandName, category, disabled, onMake, onClose, onManageSou
   return <form className={`card library-panel provider-${provider.id}`} onSubmit={(event) => void submit(event)} aria-label={`Make a video for ${category.name}`}>
     <label htmlFor="make-prompt">Describe the video</label>
     <textarea id="make-prompt" required autoFocus maxLength={2500} rows={3} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="What happens in the video? Describe the scene, style and mood."/>
+    <button type="button" className="outline-button small-button video-suggest-button" disabled={disabled || sending || ideas.loading !== null} onClick={ideas.start}><Sparkles size={14}/> {ideas.ideas.length ? 'View video ideas' : 'Suggest video prompts'}</button>
+    {ideaNotice && <p className="library-hint" role="status">{ideaNotice}</p>}
     <div className="library-make-row">
       <div><label htmlFor="make-source">Made with</label>
         <select id="make-source" value={source.id} onChange={(event) => setSourceId(event.target.value)}>{usable.map((item) => <option key={item.id} value={item.id}>{item.name} · {PROVIDERS[item.provider].name}</option>)}</select></div>
@@ -826,5 +841,6 @@ function MakeVideo({ brandName, category, disabled, onMake, onClose, onManageSou
     <p className="library-hint">Uses {provider.model}, billed by {provider.name}. It takes a few minutes and is saved into {category.name} when ready.</p>
     {error && <div className="error-message" role="alert">{error}</div>}
     <div className="library-panel-buttons"><button type="button" className="ghost-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={disabled || sending || !prompt.trim()}>{sending ? <Loader2 size={15} className="spin"/> : <Sparkles size={15}/>} Make video</button></div>
+    {ideas.open && <VideoIdeasDialog ideas={ideas.ideas} loading={ideas.loading} error={ideas.error} onSelect={(idea, scene) => { setPrompt(scene.prompt); setTitle(idea.scenes.length > 1 ? `${idea.title}: Scene ${idea.scenes.indexOf(scene) + 1}` : idea.title); setDuration(scene.seconds); setMultiScene(idea.scenes.length > 1); setIdeaNotice(''); ideas.close(); }} onReroll={ideas.reroll} onRerollAll={ideas.rerollAll} onClose={ideas.close}/>}
   </form>;
 }

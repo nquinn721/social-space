@@ -62,6 +62,7 @@ pub async fn generate_video(
     let _guard = GenerateGuard::acquire(&lock)?;
     crate::kling::validate_prompt(&prompt, &aspect_ratio, duration)?;
     let source = crate::video_sources::resolve(&app, &sources, source_id.as_deref())?;
+    validate_provider_duration(source.provider, duration)?;
     let key = crate::video_sources::read_source_key(&source.id)?;
     let references = reference_pictures(&app, &references.unwrap_or_default())?;
     let task = match source.provider {
@@ -73,6 +74,11 @@ pub async fn generate_video(
 }
 
 const KLING_NO_REFERENCES: &str = "Kling can't take character pictures here. Use a Grok video source for this series, or make the clip without pictures.";
+
+fn validate_provider_duration(provider: VideoProvider, duration: u8) -> Result<(), String> {
+    if provider == VideoProvider::Kling && duration < 3 { return Err("Kling videos must be at least 3 seconds.".into()); }
+    Ok(())
+}
 
 /// Series character pictures (brand picture file names) as data URLs for a video source.
 fn reference_pictures(app: &AppHandle, files: &[String]) -> Result<Vec<String>, String> {
@@ -210,6 +216,14 @@ pub async fn save_generated_video(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grok_accepts_one_second_but_kling_keeps_its_minimum() {
+        assert!(crate::kling::validate_prompt("A short clip", "9:16", 1).is_ok());
+        assert!(validate_provider_duration(VideoProvider::Grok, 1).is_ok());
+        assert!(validate_provider_duration(VideoProvider::Kling, 1).is_err());
+        assert!(validate_provider_duration(VideoProvider::Kling, 3).is_ok());
+    }
 
     #[test]
     fn safe_name_strips_path_characters_and_reserved_names() {

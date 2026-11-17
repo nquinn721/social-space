@@ -8,6 +8,8 @@ export const MAX_REFERENCE_SECONDS = 10;
 export const MAX_VIDEO_PROMPT = 3_000;
 export const MIN_EPISODES = 2;
 export const MAX_EPISODES = 12;
+/** A new story starts small; an existing story can grow over time. */
+export const MAX_STORY_PARTS = 100;
 export const DEFAULT_EPISODES = 4;
 export const DEFAULT_SECONDS = 10;
 

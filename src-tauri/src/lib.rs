@@ -719,12 +719,13 @@ mod tests {
     fn series_round_trip_and_episodes_need_their_series() {
         let json = serde_json::json!({"businessName": "", "accounts": [], "brands": [{"id": "b", "name": "Mia"}],
             "categories": [{"id": "c", "brandId": "b", "name": "Stories"}],
-            "series": [{"id": "s", "brandId": "b", "title": "The Lost Key", "bible": "A rabbit looks for a key.", "characters": [{"id": "k", "name": "Pip", "imageFile": "x.jpg"}], "episodes": [{"id": "e1", "number": 1, "summary": "Pip loses the key."}]}],
+            "series": [{"id": "s", "brandId": "b", "title": "The Lost Key", "bible": "A rabbit looks for a key.", "story": "Pip loses a key and finds it in the meadow.", "characters": [{"id": "k", "name": "Pip", "imageFile": "x.jpg"}], "episodes": [{"id": "e1", "number": 1, "summary": "Pip loses the key."}]}],
             "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Part 1", "seriesId": "s", "episode": 1}]});
         let mut workspace: Workspace = serde_json::from_value(json).unwrap();
         assert!(validate_workspace(&workspace).is_ok());
         let saved = serde_json::to_value(&workspace).unwrap();
         assert_eq!(saved["series"][0]["episodes"][0]["summary"], "Pip loses the key.");
+        assert_eq!(saved["series"][0]["story"], "Pip loses a key and finds it in the meadow.");
         assert_eq!(saved["series"][0]["characters"][0]["imageFile"], "x.jpg");
         assert_eq!(saved["videos"][0]["seriesId"], "s");
         assert_eq!(saved["videos"][0]["episode"], 1);

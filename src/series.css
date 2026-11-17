@@ -26,4 +26,19 @@
 .series-episode-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .series-part { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-text); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; }
 .series-script { white-space: pre-wrap; }
+.series-plan-preview { margin-top: 18px; padding: 18px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface-2); }
+.series-plan-preview h3, .series-plan-preview h4 { margin: 0 0 10px; }
+.series-plan-preview p, .series-plan-preview li { font-size: 13px; line-height: 1.6; color: var(--text-2); }
+.series-plan-preview ol { padding-left: 20px; }
+.series-parts-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 22px 0 10px; }
+.series-parts-head h3 { margin: 0; }
+.series-continuation { display: grid; gap: 5px; margin-bottom: 12px; font-size: 13px; }
+.series-continuation input { width: 100%; }
+.series-episode-editor { display: grid; gap: 10px; margin-top: 16px; padding: 16px; background: var(--surface-2); border-radius: 12px; }
+.series-episode-editor fieldset { display: grid; gap: 10px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.series-episode-editor label { display: grid; gap: 5px; font-size: 13px; }
+.series-episode-editor textarea, .series-episode-editor input { width: 100%; }
+.series-linked-videos { margin-top: 14px; font-size: 12px; }
+.series-linked-videos ul { padding: 0; margin: 6px 0 0; list-style: none; }
+.series-linked-videos li { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-2); padding: 5px 0; }
 .series-badge { font-size: 11.5px; font-weight: 600; color: var(--accent-text); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; white-space: nowrap; }

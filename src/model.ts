@@ -53,6 +53,8 @@ export type Series = {
   id: string; brandId: string; categoryId: string; title: string; premise: string;
   /** The story bible: world, tone, rules and where the story is going. Every script is written from it. */
   bible: string;
+  /** The complete editable narrative behind the series, absent on older series. */
+  story?: string;
   /** The visual look every clip shares, e.g. "soft pastel 3D animation". */
   style?: string;
   characters: SeriesCharacter[]; episodes: SeriesEpisode[];

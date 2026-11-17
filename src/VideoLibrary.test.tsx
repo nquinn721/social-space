@@ -6,6 +6,8 @@ import VideoLibrary, { categoryProgress } from './VideoLibrary';
 import { titleFromPrompt } from './useVideoGenerations';
 import type { Account, Video, Workspace } from './model';
 import * as sources from './videoSourcesService';
+import * as videoIdeas from './assistant/videoIdeas';
+vi.mock('./assistant/videoIdeas', async (original) => ({ ...(await original<typeof import('./assistant/videoIdeas')>()), suggestVideoIdeas: vi.fn() }));
 
 vi.mock('./queueService', () => ({ chooseVideoFile: vi.fn() }));
 vi.mock('./videoFileService', async (actual) => ({
@@ -165,6 +167,29 @@ describe('video library', () => {
     await user.click(screen.getByRole('button', { name: 'Make video' }));
     expect(mocked.generateVideo).toHaveBeenCalledWith('k1', 'A white rabbit hops through a sunny garden', '9:16', 5, undefined);
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [bunny, expect.objectContaining({ title: 'A white rabbit hops through a sunny garden', categoryId: 'rabbit', generation: expect.objectContaining({ taskId: 'task-1', sourceId: 'k1', status: 'working' }) })] }), expect.stringContaining('Main Kling is making'));
+  });
+
+  it('lets the user reroll suggestions and use a complete scene without starting a video', async () => {
+    mocked.listVideoSources.mockResolvedValue({ active: 'k1', sources: [kling] });
+    mocked.generateVideo.mockResolvedValue({ id: 'task-idea', status: 'submitted', message: null, videoUrl: null, sourceId: 'k1', sourceName: 'Main Kling', provider: 'kling' });
+    const ideas = Array.from({ length: 5 }, (_, index) => ({ title: `Idea ${index + 1}`, description: 'A short story.', scenes: [{ prompt: `First scene ${index}`, seconds: 5 }, { prompt: `Second scene ${index}`, seconds: 10 }] }));
+    vi.mocked(videoIdeas.suggestVideoIdeas).mockResolvedValueOnce(ideas).mockResolvedValueOnce([{ title: 'Fresh idea', description: 'Something new.', scenes: [{ prompt: 'A new prompt', seconds: 5 }] }]);
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: /Make a video/ }));
+    await user.click(await screen.findByRole('button', { name: 'Suggest video prompts' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Video ideas for your brand' });
+    expect(within(dialog).getAllByText(/separate clips/)).toHaveLength(5);
+    await user.click(within(dialog).getByRole('button', { name: 'Reroll video idea 1' }));
+    expect(await within(dialog).findByText('Fresh idea')).toBeInTheDocument();
+    await user.click(within(dialog).getAllByRole('button', { name: 'Use scene 2' })[0]);
+    expect(screen.getByLabelText('Describe the video')).toHaveValue('Second scene 1');
+    expect(screen.getByLabelText('Length')).toHaveValue('10');
+    expect(mocked.generateVideo).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Make video' }));
+    expect(await screen.findByText(/Clip started/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'View video ideas' }));
+    expect(await screen.findByRole('dialog', { name: 'Video ideas for your brand' })).toHaveTextContent('Second scene 1');
+    expect(videoIdeas.suggestVideoIdeas).toHaveBeenCalledTimes(2);
   });
 
   it('points to Video sources when none is connected', async () => {
