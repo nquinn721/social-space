@@ -220,6 +220,7 @@
       "src-tauri/src/updater.rs",
       "src-tauri/src/hub.rs",
       "scripts/tauri-build.mjs",
+      ".github/workflows/release.yml",
       "hub-app.json"
     ],
     "summary": "Self-update from main and Ava's hub update contract",

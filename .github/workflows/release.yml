@@ -50,4 +50,4 @@ jobs:
           $manifest = @{ commit = $commit; version = $version; installer = $installer; sha256 = $sha; releasedAt = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
           $manifest | ConvertTo-Json | Set-Content socialspace-update.json -Encoding utf8NoBOM
           $notes = "Social Space $version from main ($short). Install it once; after that the app updates itself from these releases."
-          gh release create "v$version-$short" $installer socialspace-update.json --target $commit --title "Social Space $version ($short)" --notes $notes --latest
+          gh release create "v$version-$short" $installer socialspace-update.json --target $commit --title "Social Space $version ($short)" --notes $notes --generate-notes --latest

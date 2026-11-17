@@ -16,6 +16,10 @@
   ],
   "changes": [
     {
+      "old": "generic GitHub release notes",
+      "new": "generated change list in GitHub release notes"
+    },
+    {
       "old": "Ready",
       "new": "Session detected for unverified browser sessions"
     },
@@ -52,6 +56,10 @@
     }
   ],
   "spots": [
+    {
+      "path": ".github/workflows/release.yml",
+      "note": "Include GitHub-generated change notes with each release."
+    },
     {
       "path": "package.json",
       "note": "Bump the application version for the release."
