@@ -44,7 +44,7 @@ async function postTo(platform: Platform, video: Video, workspace: Workspace): P
     if (!identity) return { status: 'failed', error: 'Instagram is not connected for this brand.', at };
     if (identity.login === 'instagram') return { status: 'failed', error: 'This Instagram sign-in cannot upload videos from the PC. Connect it through Facebook.', at };
     const handle = normalizeHandle(account.handle);
-    const published = await publishVideoToInstagram({ accountId: account.id, handle, username: identity.username, connected: true, canUploadFiles: true }, video);
+    const published = await publishVideoToInstagram({ accountId: account.id, handle, username: identity.username, providerId: identity.id, connected: true, canUploadFiles: true }, video);
     return { status: 'posted', url: published.permalink, at: Date.now() };
   } catch (reason) {
     return { status: 'failed', error: errorText(reason, 'Instagram did not publish this video.'), at: Date.now() };

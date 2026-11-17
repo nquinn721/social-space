@@ -4,10 +4,8 @@ import VideoLibrary from '../VideoLibrary';
 import SeriesPanel from '../SeriesPanel';
 import type { OpenBrand } from '../App';
 import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type BrandImage, type Platform, type PlatformAction, type View, type Workspace } from '../model';
-import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, passwordGroup, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
+import { emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 
-const uniqueById = (list: Account[]) => [...new Map(list.map((item) => [item.id, item])).values()];
-import { ensureSharedPassword } from '../profileService';
 import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
 import { useBrandInstagram } from '../useBrandInstagram';
 import { brandStatuses, brandSummary, chipLabel, useBrandStatuses, type SocialStatus } from '../brandStatus';
@@ -119,10 +117,9 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   const [adding, setAdding] = useState(false);
   /** A chip on the brand page that connects or signs in one social: the Accounts tab acts on it. */
   const [accountRequest, setAccountRequest] = useState<AccountRequest | undefined>();
-  /** The new profile shares the brand's password, so every social signs in the same way. */
-  async function startSignUp(account: Account, siblings: Account[]) {
+  /** The wizard prepares each account's password and reports errors before opening sign-up. */
+  function startSignUp(account: Account) {
     if (!onSignUp) return;
-    await ensureSharedPassword(passwordGroup(uniqueById([...all, ...siblings]), account)).catch(() => undefined);
     onSignUp([account]);
   }
   /** One click: saves the brand's profile on this social, then opens its sign-up page filled in. */
@@ -133,14 +130,18 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       const { brand, accounts } = group;
       const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
       const base = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
-      // TikTok and X need their own email per account: the brand's plus-address reaches the same inbox.
+      // New independent social accounts use a brand-specific plus-address when supported.
       const plan = planPresence(all, platform, brand.name, sharesLogins(platform) ? base : plusAddress(base, emailTag(brand.name)));
-      // New profiles take the brand's name as their username, and the current sign-up birthday.
+      if (!plan.email) {
+        onCreateAccounts([platform], { brandId: brand.id, label: brand.name, handle: emailTag(brand.name), signupEmail: base, displayName: lead?.displayName, bio: lead?.bio, website: lead?.website, imagePath: lead?.imagePath });
+        return;
+      }
+      // New profiles take the brand's name as their username; birthday is entered by the user.
       const account: Account = { ...createAccount(platform, brand.name, emailTag(brand.name), 'planned', ''), brandId: brand.id,
-        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath, birthday: DEFAULT_SIGNUP_BIRTHDAY };
+        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath };
       const saved = await onSave({ ...workspace, accounts: [...workspace.accounts, account] }, `${getPlatform(platform).name} profile added to ${brand.name}.`);
       if (saved === false) return;
-      await startSignUp(account, accounts);
+      startSignUp(account);
     } finally { setAdding(false); }
   }
 
@@ -175,7 +176,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       const kind = status.action?.kind;
       if (kind === 'connect' && status.platform === 'facebook' && !status.account && onSave) void attachFacebook(open);
       else if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
-      else if (kind === 'finish-signup' && status.account && onSignUp) void startSignUp(status.account, accounts);
+      else if (kind === 'finish-signup' && status.account && onSignUp) startSignUp(status.account);
       else {
         showBrandTab('accounts');
         if (kind === 'connect' || kind === 'sign-in') setAccountRequest({ platform: status.platform, kind, at: Date.now() });
@@ -216,7 +217,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
         instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
       <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
-        onSignUp={onSignUp ? (account) => void startSignUp(account, accounts) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
+        onSignUp={onSignUp ? (account) => startSignUp(account) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
         addHint={(platform) => planPresence(all, platform, brand.name, baseEmail).reason} warnings={(account) => issues.filter((issue) => issue.accountId === account.id).map((issue) => issue.text)} request={accountRequest}/>
       {onSave && <BrandProfiles key={brand.id} brand={brand} accounts={accounts} busy={busy || !loaded} developerLogins={developerLogins} onSave={saveProfiles}/>}

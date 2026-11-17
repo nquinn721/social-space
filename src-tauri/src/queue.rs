@@ -275,6 +275,9 @@ pub fn add_queue_job(app: AppHandle, job: NewQueueJob) -> Result<QueueJob, Strin
         workspace.channels.iter().find(|channel| channel.id == job.channel_id).and_then(|channel| channel.account_id.clone())
     };
     let instagram_account_id = if job.mode == QueueMode::Automatic {
+        if profile.is_none() {
+            return Err("Link this Instagram channel to its saved account before scheduling automatic posting.".into());
+        }
         let (id, username) = instagram_identity(profile)?;
         if normalize_handle(&job.channel_handle) != normalize_handle(&username) {
             return Err(format!(
@@ -323,19 +326,17 @@ pub fn complete_queue_job(app: AppHandle, id: String) -> Result<QueueJob, String
         Ok(job.clone())
     })
 }
+fn remove_job(jobs: &mut Vec<QueueJob>, id: &str, only_unstarted: bool) -> Result<(), String> {
+    let index = jobs.iter().position(|job| job.input.id == id).ok_or("Queue item not found.")?;
+    if jobs[index].status == QueueStatus::Publishing || (only_unstarted && jobs[index].status == QueueStatus::NeedsReview) {
+        return Err("This post is publishing or needs review. Check the social before removing its queue record.".into());
+    }
+    jobs.remove(index);
+    Ok(())
+}
 #[tauri::command]
-pub fn delete_queue_job(app: AppHandle, id: String) -> Result<(), String> {
-    transaction(&root(&app)?, |jobs| {
-        let index = jobs
-            .iter()
-            .position(|job| job.input.id == id)
-            .ok_or("Queue item not found.")?;
-        if jobs[index].status == QueueStatus::Publishing {
-            return Err("This item is being published. Wait for it to finish.".into());
-        }
-        jobs.remove(index);
-        Ok(())
-    })
+pub fn delete_queue_job(app: AppHandle, id: String, only_unstarted: Option<bool>) -> Result<(), String> {
+    transaction(&root(&app)?, |jobs| remove_job(jobs, &id, only_unstarted.unwrap_or(false)))
 }
 
 fn take_due(dir: &Path, now: u64) -> Result<Option<QueueJob>, String> {
@@ -395,10 +396,21 @@ fn finish(dir: &Path, id: &str, result: Result<(), String>) -> Result<(), String
         Ok(())
     })
 }
-/// The app profile whose Instagram connection posts this item: the account linked to its channel.
-fn profile_for(dir: &Path, item: &QueueJob) -> Option<String> {
-    let workspace = crate::read_workspace(&dir.join(crate::WORKSPACE_FILE)).ok()?;
-    workspace.channels.iter().find(|channel| channel.id == item.input.channel_id)?.account_id.clone()
+/// Refuse an orphaned or changed channel instead of silently falling back to the primary profile.
+fn profile_from_workspace(workspace: &crate::Workspace, item: &QueueJob) -> Result<Option<String>, String> {
+    verify_channel_snapshot(&item.input, workspace)?;
+    let channel = workspace.channels.iter().find(|channel| channel.id == item.input.channel_id)
+        .ok_or("The selected channel no longer exists. Review this item.")?;
+    let id = channel.account_id.as_ref().ok_or("The channel is no longer linked to a saved account. Review this item.")?;
+    if !workspace.accounts.iter().any(|account| &account.id == id && account.platform == channel.platform) {
+        return Err("The channel's saved account no longer exists. Review this item.".into());
+    }
+    Ok(channel.account_id.clone())
+}
+fn profile_for(dir: &Path, item: &QueueJob) -> Result<Option<String>, String> {
+    let workspace = crate::read_workspace(&dir.join(crate::WORKSPACE_FILE))
+        .map_err(|_| "Could not read the workspace before publishing. Review this item.")?;
+    profile_from_workspace(&workspace, item)
 }
 fn run_once(dir: &Path) -> Result<(), String> {
     let Some(_publisher) = try_publisher_lock(&dir.join(PUBLISH_LOCK))? else {
@@ -408,7 +420,7 @@ fn run_once(dir: &Path) -> Result<(), String> {
         return Ok(());
     };
     let result = (|| {
-        let profile = profile_for(dir, &item);
+        let profile = profile_for(dir, &item)?;
         let (id, username) = instagram_identity(profile.clone())?;
         if !matches_identity(&item, &id, &username) {
             return Err("Connected Instagram account changed. Reconnect the correct account and review this item.".into());
@@ -417,6 +429,7 @@ fn run_once(dir: &Path) -> Result<(), String> {
             item.input.media_source.clone(),
             item.input.caption.clone(),
             profile,
+            item.instagram_account_id.clone(),
         ))
         .map(|_| ())
     })();
@@ -474,10 +487,18 @@ mod tests {
             }],
         };
         assert!(verify_channel_snapshot(&job.input, &workspace).is_ok());
+        assert!(profile_from_workspace(&workspace, &job).is_err());
+        workspace.channels[0].account_id = Some("removed-account".into());
+        assert!(profile_from_workspace(&workspace, &job).is_err());
+        workspace.accounts.push(serde_json::from_value(serde_json::json!({ "id": "account-1", "platform": "instagram", "label": "Studio", "handle": "studio", "status": "active", "notes": "" })).unwrap());
+        workspace.channels[0].account_id = Some("account-1".into());
+        assert_eq!(profile_from_workspace(&workspace, &job).unwrap(), Some("account-1".into()));
         workspace.channels[0].handle = "@someone_else".into();
         assert!(verify_channel_snapshot(&job.input, &workspace).is_err());
+        assert!(profile_from_workspace(&workspace, &job).is_err());
         workspace.channels.clear();
         assert!(verify_channel_snapshot(&job.input, &workspace).is_err());
+        assert!(profile_from_workspace(&workspace, &job).is_err());
     }
     #[test]
     fn automatic_posts_require_instagram_and_public_video_url() {
@@ -491,10 +512,26 @@ mod tests {
     }
     #[test]
     fn identity_is_pinned_and_handles_are_normalized() {
-        let job = item(QueueMode::Automatic, QueuePlatform::Instagram, 100);
+        let mut job = item(QueueMode::Automatic, QueuePlatform::Instagram, 100);
         assert!(matches_identity(&job, "42", "Studio"));
         assert!(!matches_identity(&job, "43", "studio"));
         assert!(!matches_identity(&job, "42", "other"));
+        job.instagram_account_id = None;
+        assert!(!matches_identity(&job, "42", "studio"));
+    }
+    #[test]
+    fn cancellation_checks_status_at_the_time_of_removal() {
+        let mut jobs = vec![item(QueueMode::Automatic, QueuePlatform::Instagram, 100)];
+        jobs[0].status = QueueStatus::Publishing;
+        assert!(remove_job(&mut jobs, "job-1", true).is_err());
+        jobs[0].status = QueueStatus::NeedsReview;
+        assert!(remove_job(&mut jobs, "job-1", true).is_err());
+        assert_eq!(jobs.len(), 1);
+        assert!(remove_job(&mut jobs, "job-1", false).is_ok());
+        jobs.push(item(QueueMode::Automatic, QueuePlatform::Instagram, 100));
+        jobs[0].status = QueueStatus::Scheduled;
+        assert!(remove_job(&mut jobs, "job-1", true).is_ok());
+        assert!(jobs.is_empty());
     }
     #[test]
     fn queue_claims_once_and_recovers_interrupted_posts_as_review() {

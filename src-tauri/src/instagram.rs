@@ -13,7 +13,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     path::Path,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{atomic::{AtomicBool, Ordering}, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use url::{Host, Url};
@@ -36,6 +36,7 @@ const VIDEO_EXTENSIONS: &[&str] = &["mp4", "mov"];
 const REFRESH_AFTER_SECS: u64 = 7 * 24 * 60 * 60;
 const INSTAGRAM_TOKEN_PREFIX: &str = "IG";
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+static CREDENTIAL_WRITE: Mutex<()> = Mutex::new(());
 
 struct Guard;
 impl Guard {
@@ -77,7 +78,7 @@ impl LoginKind {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 struct Credential {
     id: String,
     username: String,
@@ -149,11 +150,34 @@ fn load(slot: &str) -> Result<Option<Credential>, String> {
     }
 }
 fn save(slot: &str, value: &Credential) -> Result<(), String> {
+    let _lock = CREDENTIAL_WRITE.lock().map_err(|_| "Could not access secure credential storage.")?;
+    save_unlocked(slot, value)
+}
+fn save_unlocked(slot: &str, value: &Credential) -> Result<(), String> {
     let value =
         serde_json::to_string(value).map_err(|_| "Could not encode Instagram credentials.")?;
     entry(slot)?
         .set_password(&value)
         .map_err(|_| "Could not save Instagram credentials in secure storage.".into())
+}
+fn delete(slot: &str) -> Result<(), String> {
+    let _lock = CREDENTIAL_WRITE.lock().map_err(|_| "Could not access secure credential storage.")?;
+    match entry(slot)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err("Could not remove Instagram credentials from secure storage.".into()),
+    }
+}
+
+// The comparison and write occur under the same lock as connection saves, so a token
+// refresh cannot replace credentials saved while its network request was in flight.
+fn replace_if_unchanged<T: PartialEq>(original: &T, current: Option<T>, replace: impl FnOnce() -> Result<(), String>) -> Result<bool, String> {
+    if current.as_ref() != Some(original) { return Ok(false); }
+    replace()?;
+    Ok(true)
+}
+fn save_refreshed(slot: &str, original: &Credential, refreshed: &Credential) -> Result<bool, String> {
+    let _lock = CREDENTIAL_WRITE.lock().map_err(|_| "Could not access secure credential storage.")?;
+    replace_if_unchanged(original, load(slot)?, || save_unlocked(slot, refreshed))
 }
 fn client_with(timeout: Duration) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
@@ -299,39 +323,50 @@ async fn verify(
 
 /// Keeps an Instagram-login token alive. A failed refresh is not fatal: the old token still works
 /// until it expires, and the next post tries again.
-async fn refresh_if_due(slot: &str, mut credential: Credential) -> Credential {
+async fn refresh_if_due(slot: &str, mut credential: Credential) -> Result<Credential, String> {
     if credential.kind != LoginKind::Instagram
         || now_secs().saturating_sub(credential.refreshed_at) < REFRESH_AFTER_SECS
     {
-        return credential;
+        return Ok(credential);
     }
-    let Ok(http) = client() else { return credential };
+    let original = credential.clone();
+    let Ok(http) = client() else { return Ok(credential) };
     let response = http
         .get(format!("{INSTAGRAM_HOST}/refresh_access_token"))
         .query(&[("grant_type", "ig_refresh_token"), ("access_token", credential.access_token.as_str())])
         .send()
         .await;
-    let Ok(response) = response else { return credential };
+    let Ok(response) = response else { return Ok(credential) };
     if let Ok(token) = result::<RefreshedToken>(response, "token refresh").await {
         if valid_token(&token.access_token) {
             credential.access_token = token.access_token;
             credential.refreshed_at = now_secs();
-            let _ = save(slot, &credential);
+            if !save_refreshed(slot, &original, &credential)? {
+                return Err("The connected Instagram account changed during token refresh. Review the destination and try again.".into());
+            }
         }
     }
-    credential
+    Ok(credential)
 }
 
-async fn ready_credential(slot: &str, needs_file_upload: bool) -> Result<Credential, String> {
+fn check_publishing_identity(expected: Option<&str>, actual: &str) -> Result<(), String> {
+    match expected {
+        Some(id) if valid_id(id) && id == actual => Ok(()),
+        _ => Err("The connected Instagram account changed or could not be verified. Review the destination and try again.".into()),
+    }
+}
+
+async fn ready_credential(slot: &str, needs_file_upload: bool, expected_id: Option<&str>) -> Result<Credential, String> {
     let credential =
         load(slot)?.ok_or("Connect this Instagram profile before publishing.")?;
     if !valid_id(&credential.id) {
         return Err("Saved Instagram account ID is invalid. Reconnect your account.".into());
     }
+    check_publishing_identity(expected_id, &credential.id)?;
     if needs_file_upload && credential.kind != LoginKind::Facebook {
         return Err("Posting a video file from this PC needs a Facebook Page token. With an Instagram token, post a Reel from a public link instead.".into());
     }
-    Ok(refresh_if_due(slot, credential).await)
+    refresh_if_due(slot, credential).await
 }
 
 async fn create_container(
@@ -424,10 +459,10 @@ pub async fn open_instagram_post(app: tauri::AppHandle, url: String) -> Result<(
     crate::browser::open_remote(&app, url.trim(), false)
 }
 
-async fn publish_from_url(slot: &str, media: (&str, &str), media_type: Option<&str>, caption: &str) -> Result<InstagramPost, String> {
+async fn publish_from_url(slot: &str, media: (&str, &str), media_type: Option<&str>, caption: &str, expected_id: Option<&str>) -> Result<InstagramPost, String> {
     validate_media_url(media.1)?;
     validate_caption(caption)?;
-    let credential = ready_credential(slot, false).await?;
+    let credential = ready_credential(slot, false, expected_id).await?;
     let http = client()?;
     let mut params = vec![media, ("caption", caption)];
     if let Some(media_type) = media_type {
@@ -480,10 +515,7 @@ pub fn instagram_connection(profile: Option<String>) -> Result<Option<InstagramC
 #[tauri::command]
 pub fn disconnect_instagram(profile: Option<String>) -> Result<(), String> {
     let _guard = Guard::acquire()?;
-    match entry(&slot(profile.as_deref())?)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(_) => Err("Could not remove Instagram credentials from secure storage.".into()),
-    }
+    delete(&slot(profile.as_deref())?)
 }
 
 #[tauri::command]
@@ -491,9 +523,10 @@ pub async fn publish_instagram_reel(
     video_url: String,
     caption: String,
     profile: Option<String>,
+    expected_id: Option<String>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
-    publish_from_url(&slot(profile.as_deref())?, ("video_url", video_url.trim()), Some("REELS"), &caption).await
+    publish_from_url(&slot(profile.as_deref())?, ("video_url", video_url.trim()), Some("REELS"), &caption, expected_id.as_deref()).await
 }
 
 /// Posts one photo. Meta downloads it from the link, and it must be a JPEG.
@@ -502,9 +535,10 @@ pub async fn publish_instagram_photo(
     image_url: String,
     caption: String,
     profile: Option<String>,
+    expected_id: Option<String>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
-    publish_from_url(&slot(profile.as_deref())?, ("image_url", image_url.trim()), None, &caption).await
+    publish_from_url(&slot(profile.as_deref())?, ("image_url", image_url.trim()), None, &caption, expected_id.as_deref()).await
 }
 
 /// The Reel container's form fields. cover_ms picks the cover as that moment of the video
@@ -528,6 +562,7 @@ pub async fn publish_instagram_reel_file(
     profile: Option<String>,
     cover_ms: Option<u64>,
     share_to_feed: Option<bool>,
+    expected_id: Option<String>,
 ) -> Result<InstagramPost, String> {
     let _guard = Guard::acquire()?;
     let slot = slot(profile.as_deref())?;
@@ -537,7 +572,7 @@ pub async fn publish_instagram_reel_file(
         .map_err(|_| "Could not open that video file.")?
         .len();
     validate_video_file(&file, size)?;
-    let credential = ready_credential(&slot, true).await?;
+    let credential = ready_credential(&slot, true, expected_id.as_deref()).await?;
     let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(file))
         .await
         .map_err(|_| "Could not read that video file.")?
@@ -575,7 +610,7 @@ pub fn claim_instagram_connection(profile: String, username: String) -> Result<O
     match load(KEYRING_ENTRY)? {
         Some(old) if !wanted.is_empty() && old.username.to_lowercase() == wanted => {
             save(&target, &old)?;
-            let _ = entry(KEYRING_ENTRY)?.delete_credential();
+            let _ = delete(KEYRING_ENTRY);
             Ok(Some(InstagramConnection { id: old.id, username: old.username, login: old.kind }))
         }
         _ => Ok(None),
@@ -603,6 +638,31 @@ pub async fn choose_instagram_video() -> Result<Option<String>, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn token_refresh_does_not_overwrite_a_reconnection_or_disconnection() {
+        let original = super::Credential { id: "123".into(), username: "old".into(), access_token: "IGold".into(), kind: super::LoginKind::Instagram, refreshed_at: 1 };
+        let mut reconnected = original.clone();
+        reconnected.id = "456".into();
+        let mut saved = false;
+        assert_eq!(super::replace_if_unchanged(&original, Some(reconnected), || { saved = true; Ok(()) }), Ok(false));
+        assert!(!saved);
+        let mut new_token = original.clone();
+        new_token.access_token = "IGnew".into();
+        assert_eq!(super::replace_if_unchanged(&original, Some(new_token), || { saved = true; Ok(()) }), Ok(false));
+        assert!(!saved);
+        assert_eq!(super::replace_if_unchanged(&original, None, || { saved = true; Ok(()) }), Ok(false));
+        assert!(!saved);
+        assert_eq!(super::replace_if_unchanged(&original, Some(original.clone()), || { saved = true; Ok(()) }), Ok(true));
+        assert!(saved);
+    }
+
+    #[test]
+    fn publishing_requires_the_confirmed_instagram_id() {
+        assert!(super::check_publishing_identity(Some("123"), "123").is_ok());
+        for expected in [None, Some(""), Some("abc"), Some("456")] {
+            assert!(super::check_publishing_identity(expected, "123").is_err());
+        }
+    }
     use super::*;
     #[test]
     fn only_instagram_post_links_can_be_opened() {

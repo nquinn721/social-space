@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
-import { addsToLogin, DEFAULT_SIGNUP_BIRTHDAY, emailTag, passwordGroup, planPresence } from './brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
-import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureSharedPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds } from './profileService';
+import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureAccountPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds, type FormFields } from './profileService';
 import InboxList from './InboxList';
 import { ADD_PROFILE_FLOWS, SIGNUP_FLOWS } from './signupFlows';
 import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
+import IdeaSuggestionsModal from './IdeaSuggestionsModal';
+import { useBrandIdeas } from './useBrandIdeas';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
 
 /** All new accounts verify through this inbox unless changed in the form. */
@@ -27,6 +29,14 @@ export function isMailFrom(platform: Platform, mail: { from: string; subject: st
 export function sharedBioLimit(platforms: Platform[]) {
   const limits = platforms.map((platform) => ({ platform, limit: BIO_LIMITS[platform] }));
   return limits.reduce((tightest, item) => item.limit < tightest.limit ? item : tightest, limits[0] ?? { platform: 'youtube' as Platform, limit: BIO_LIMITS.youtube });
+}
+
+/** Existing Google and Facebook sign-ins must never receive brand login details. */
+export function wizardFormFields(account: Account, verificationCode?: string): FormFields {
+  const name = account.displayName || account.label;
+  if (account.platform === 'youtube') return { channelName: name };
+  if (account.platform === 'facebook') return { pageName: name };
+  return formFieldsFor(account, verificationCode);
 }
 
 /** A page to show in the wizard's site area. nonce makes "Reopen" load it again. */
@@ -61,22 +71,24 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [website, setWebsite] = useState(prefill?.website ?? '');
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
-  const [autoImage, setAutoImage] = useState<AutoImage>();
-  const [birthday, setBirthday] = useState(prefill?.birthday || DEFAULT_SIGNUP_BIRTHDAY);
+  const [birthday, setBirthday] = useState(prefill?.birthday ?? DEFAULT_SIGNUP_BIRTHDAY);
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const [accounts, setAccounts] = useState<Account[]>(resume ?? []);
   const [current, setCurrent] = useState(0);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
   const [windowId, setWindowId] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
+  const [revealedPassword, setRevealedPassword] = useState<{ accountId: string; value: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
   const [error, setError] = useState('');
+  const [fillError, setFillError] = useState('');
+  const [fillingForm, setFillingForm] = useState(false);
   const [note, setNote] = useState('');
   /** The newest emailed code, shown bottom right to copy. */
   const [code, setCode] = useState<{ value: string; copied: boolean } | null>(null);
   const preview = useImagePreview(imagePath);
+  const brandIdeas = useBrandIdeas(idea);
   const ordered = PLATFORMS.map((platform) => platform.id).filter((id) => chosen.includes(id));
   const tightest = sharedBioLimit(ordered);
   // Left blank, the username and display name come from the account name, e.g. Massage With Mia → @massagewithmia.
@@ -87,14 +99,18 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const bioLength = bio.trim().length;
   const bioTooLong = bioLength > tightest.limit;
   const account = accounts[current];
+  const currentAccountId = useRef<string | undefined>(account?.id);
+  currentAccountId.current = account?.id;
+  const showPass = Boolean(account && revealedPassword && revealedPassword.accountId === account.id);
+  const password = showPass ? revealedPassword!.value : '';
   const name = account ? getPlatform(account.platform).name : '';
   const steps = account ? (addsProfile(account) && ADD_PROFILE_FLOWS[account.platform]) || SIGNUP_FLOWS[account.platform] : [];
   const stepIndex = STEPS.findIndex((item) => item.id === step);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy && step === 'details') onClose(); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy && !brandIdeas.open && step === 'details') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [busy, step, onClose]);
+  }, [busy, step, onClose, brandIdeas.open]);
 
   // The sign-up page is a real browser view placed over the site area of the wizard.
   useEffect(() => {
@@ -107,7 +123,11 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         const id = await embedPlatformPage(page.account.platform, page.action, boundsOf(element));
         if (cancelled) return;
         setWindowId(id);
-        await fillSiteForm(id, formFieldsFor(page.account), page.action === 'create'
+        if (page.account.platform === 'x') return;
+        const existingLogin = page.account.platform === 'youtube' || page.account.platform === 'facebook';
+        await fillSiteForm(id, wizardFormFields(page.account), existingLogin
+          ? { accountId: page.account.id, includePassword: false, keepFilling: true }
+          : page.action === 'create'
           ? { accountId: page.account.id, includePassword: true, keepFilling: true }
           : page.action === 'addProfile' ? { accountId: page.account.id, includePassword: false, keepFilling: true }
           : { imagePath: page.imagePath, accountId: page.account.id, includePassword: 'ifSaved', keepFilling: true });
@@ -128,19 +148,33 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   // Saved accounts that are not created yet go straight to their first sign-up page.
   useEffect(() => {
     if (!resume?.length) return;
-    void run(async () => { for (const item of resume) await ensureSharedPassword(passwordGroup([...existing, ...resume], item)); openSignup(resume[0]); });
+    void run(async () => {
+      for (const item of resume) {
+        if (item.platform === 'youtube' || item.platform === 'facebook') continue;
+        if (item.platform === 'instagram' && item.signupEmail?.trim() && existing.some((other) => other.id !== item.id && other.platform === 'instagram' && other.signupEmail?.trim().toLowerCase() === item.signupEmail?.trim().toLowerCase())) {
+          throw new Error('This planned Instagram account uses another account’s sign-up email. Edit its email before creating a separate account.');
+        }
+        await ensureAccountPassword(item.id);
+      }
+      openSignup(resume[0]);
+    });
   }, []);
 
   async function run(action: () => Promise<void>) {
-    if (busy) return;
+    if (running.current) return;
+    running.current = true;
     setBusy(true); setError(''); setNote('');
-    try { await action(); } catch (reason) { setError(errorText(reason)); } finally { setBusy(false); }
+    try { await action(); } catch (reason) { setError(errorText(reason)); } finally { running.current = false; setBusy(false); }
   }
-  const suggest = () => run(async () => {
-    const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
-    setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
-    setAutoImage({ description: suggestion.imagePrompt || `${suggestion.name}, ${idea.trim()}`, style: suggestion.imageStyle, key: Date.now() });
-    setNote('Suggested by Grok, and a matching profile picture is on its way. Edit anything you like.');
+  const fillForm = () => run(async () => {
+    setFillError('');
+    setFillingForm(true);
+    try {
+      const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
+      setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
+      setNote('Form filled. Review and edit the details before continuing.');
+    } catch (reason) { setFillError(errorText(reason, 'Could not fill the form. Try again.')); }
+    finally { setFillingForm(false); }
   });
   // Optional: a separate Gmail for the brand. Plus-addresses are simpler, since their codes reach the connected inbox.
   const makeGmail = () => run(async () => {
@@ -152,22 +186,19 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   function toggle(platform: Platform) { setChosen((list) => list.includes(platform) ? list.filter((item) => item !== platform) : [...list, platform]); }
   const pickImage = () => run(async () => { const path = await chooseImageFile(); if (path) setImagePath(path); });
   // A brand added to an existing login gets that social's "add a profile" page, never its sign-up page.
-  function addsProfile(target: Account) { return addsToLogin([...existing, ...accounts.filter((item) => !existing.some((known) => known.id === item.id))], target); }
+  function addsProfile(target: Account) { return target.platform === 'youtube'; }
   function openSignup(target: Account) { setPage((last) => ({ account: target, action: addsProfile(target) ? 'addProfile' : 'create', nonce: (last?.nonce ?? 0) + 1 })); }
 
   function start(event: FormEvent) {
     event.preventDefault();
-    if (!label.trim() || !ordered.length || bioTooLong) return;
+    if (!label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong || plans.some((plan) => !plan.email)) return;
     void run(async () => {
-      const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, shownHandle, 'planned', ''), displayName: shownName, bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, birthday, ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
+      const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, shownHandle, 'planned', ''), displayName: shownName, bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, ...(birthday ? { birthday } : {}), ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
       for (const item of made) await onSave(item);
       setAccounts(made);
-      // Profiles added to a shared login (Instagram, YouTube) use that login's password; the brand's new
-      // accounts share one new password of their own.
+      // Each new brand account gets its own saved password. Existing Google and Facebook logins manage channels and Pages.
       const fresh = made.filter((_, index) => plans[index].mode === 'new');
-      for (const item of made.filter((_, index) => plans[index].mode === 'attach')) await ensureSharedPassword(passwordGroup([...existing, ...made], item));
-      // YouTube channels and Facebook Pages sit under your own Google or Facebook login, so they get no password of their own.
-      await ensureSharedPassword(fresh.filter((item) => item.platform !== 'youtube' && item.platform !== 'facebook').map((item) => item.id));
+      for (const item of fresh.filter((item) => item.platform !== 'youtube' && item.platform !== 'facebook')) await ensureAccountPassword(item.id);
       setCurrent(0);
       setStep('signup');
       openSignup(made[0]);
@@ -181,14 +212,16 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     try { await navigator.clipboard.writeText(value); copied = true; } catch { /* clipboard blocked: the toast still has Copy */ }
     setCode({ value, copied });
     if (!account || !windowId) return;
+    if (account.platform === 'x' || account.platform === 'youtube' || account.platform === 'facebook') { setNote(copied ? `Code copied. Enter it on ${getPlatform(account.platform).name} yourself.` : `Enter the code on ${getPlatform(account.platform).name} yourself.`); return; }
     try {
-      await fillSiteForm(windowId, formFieldsFor(account, value), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
+      await fillSiteForm(windowId, wizardFormFields(account, value), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
       setNote(`Entered code ${value}${copied ? ' and copied it' : ''}. Check it, then press the button on the page.`);
     } catch (reason) { setError(errorText(reason)); }
   };
   const refill = (code?: string) => { if (code) return enterCode(code); return run(async () => {
-    if (!account || !windowId) return;
-    await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: code ? 'ifSaved' : true, keepFilling: true });
+    if (!account || !windowId || account.platform === 'x') return;
+    const existingLogin = account.platform === 'youtube' || account.platform === 'facebook';
+    await fillSiteForm(windowId, wizardFormFields(account, code), { accountId: account.id, includePassword: existingLogin ? false : code ? 'ifSaved' : true, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
   }); };
   const copyCode = async () => {
@@ -196,12 +229,25 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     try { await navigator.clipboard.writeText(code.value); setCode({ ...code, copied: true }); } catch (reason) { setError(errorText(reason)); }
   };
   const reopen = () => { if (account) openSignup(account); };
-  const togglePassword = () => run(async () => { if (!account) return; if (!showPass && !password) setPassword(await revealAccountPassword(account.id)); setShowPass((value) => !value); });
+  const togglePassword = () => run(async () => {
+    if (!account) return;
+    if (showPass) { setRevealedPassword(null); return; }
+    const id = account.id;
+    const value = await revealAccountPassword(id);
+    if (currentAccountId.current === id) setRevealedPassword({ accountId: id, value });
+  });
   const copy = (what: string, value: string | (() => Promise<string>)) => run(async () => {
     await navigator.clipboard.writeText(typeof value === 'string' ? value : await value());
     setNote(`${what} copied.`);
   });
-  const copyPassword = () => copy('Password', async () => password || (account ? revealAccountPassword(account.id) : ''));
+  const copyPassword = () => run(async () => {
+    if (!account) return;
+    const id = account.id;
+    const value = password || await revealAccountPassword(id);
+    if (currentAccountId.current !== id) return;
+    await navigator.clipboard.writeText(value);
+    if (currentAccountId.current === id) setNote('Password copied.');
+  });
   const advance = (outcome: Outcome) => run(async () => {
     if (!account) return;
     if (outcome === 'created') {
@@ -211,6 +257,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     }
     setOutcomes((map) => ({ ...map, [account.id]: outcome }));
     setCode(null);
+    setRevealedPassword(null);
     const next = current + 1;
     if (next < accounts.length) { setCurrent(next); openSignup(accounts[next]); }
     else { setPage(null); setWindowId(''); await closeEmbeddedPage(); setStep('profile'); }
@@ -219,7 +266,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     const updated = { ...target, imagePath };
     if (imagePath !== target.imagePath) { await onSave(updated); setAccounts((list) => list.map((item) => item.id === updated.id ? updated : item)); }
     setPage((last) => ({ account: updated, action: 'manage', imagePath: imagePath || undefined, nonce: (last?.nonce ?? 0) + 1 }));
-    setNote(`Opened ${getPlatform(target.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
+    setNote(target.platform === 'x' ? 'Opened X profile settings. Enter and save the details yourself.' : `Opened ${getPlatform(target.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
   });
   const created = accounts.filter((item) => outcomes[item.id] === 'created');
   const feedback = <>{note && <p className="success-message" role="status">{note}</p>}{error && <div className="error-message" role="alert">{error}</div>}</>;
@@ -234,40 +281,41 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         const outcome = outcomes[item.id];
         return <li key={item.id} className={step === 'signup' && index === current ? 'current' : outcome ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcome === 'created' ? 'Created' : outcome === 'skipped' ? 'Skipped' : step === 'signup' && index === current ? 'Now' : 'Next'}</em></li>;
       })}</ol>}
-      <p className="rail-note">Social Space only fills in forms. You press every button and solve any captcha or phone check.</p>
+      <p className="rail-note">Social Space can fill some forms. You complete X yourself and press final buttons and solve any captcha or phone check.</p>
     </aside>
 
     <div className="wizard-main">
       {step === 'details' && <form className="wizard-form" onSubmit={start}>
-        <div className="wizard-top"><div><h3>Who's it for?</h3><p>Fill this in once. Every social gets the same details and one strong shared password.</p></div>{closeButton}</div>
+        <div className="wizard-top"><div><h3>Who's it for?</h3><p>Fill this in once. New social accounts get their own saved passwords.</p></div>{closeButton}</div>
         <div className="wizard-scroll">
-          <fieldset className="platform-picks"><legend>Socials</legend>{PLATFORMS.map((item) => <label key={item.id} className="platform-pick"><input type="checkbox" aria-label={item.name} checked={chosen.includes(item.id)} onChange={() => toggle(item.id)}/><BrandMark platform={item.id} small/>{item.name}<span className="pick-check"><Check size={12} strokeWidth={3}/></span></label>)}</fieldset>
+          <fieldset className="platform-picks" disabled={fillingForm}><legend>Socials</legend>{PLATFORMS.map((item) => <label key={item.id} className="platform-pick"><input type="checkbox" aria-label={item.name} checked={chosen.includes(item.id)} onChange={() => toggle(item.id)}/><BrandMark platform={item.id} small/>{item.name}<span className="pick-check"><Check size={12} strokeWidth={3}/></span></label>)}</fieldset>
           <div className="idea-card">
-            <label htmlFor="wizard-idea"><Sparkles size={15}/> Your idea <span>optional, the assistant suggests a name and description</span></label>
-            <div className="idea-row"><input id="wizard-idea" maxLength={500} value={idea} onChange={(event) => setIdea(event.target.value)} placeholder="e.g. handmade butterfly jewelry for kids" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (idea.trim() && ordered.length) void suggest(); } }}/><button type="button" className="primary-button" disabled={busy || !idea.trim() || !ordered.length} onClick={() => void suggest()}><Sparkles size={15}/> {busy ? 'Thinking…' : 'Suggest'}</button></div>
+            <label htmlFor="wizard-idea"><Sparkles size={15}/> Your idea <span>write one or choose a suggestion</span></label>
+            <div className="idea-row wizard-idea-row"><input id="wizard-idea" maxLength={500} value={idea} disabled={fillingForm} onChange={(event) => { setIdea(event.target.value); setFillError(''); }} placeholder="e.g. handmade butterfly jewelry for kids" onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); if (idea.trim() && ordered.length && !busy) void fillForm(); } }}/><button type="button" className="outline-button" disabled={busy} onClick={brandIdeas.show}><Sparkles size={15}/> Suggest</button><button type="button" className="primary-button" disabled={busy || !idea.trim() || !ordered.length} onClick={() => void fillForm()}><Wand2 size={15}/> {fillingForm ? 'Filling…' : 'Fill form'}</button></div>
+            {fillError && <div className="error-message" role="alert">{fillError}</div>}
           </div>
           <div className="wizard-grid">
             <div>
               <label htmlFor="wizard-name">Account name</label>
-              <input id="wizard-name" autoFocus required maxLength={120} value={label} onChange={(event) => setLabel(event.target.value)} placeholder="e.g. Soft Wings Studio"/>
+              <input id="wizard-name" autoFocus required maxLength={120} value={label} disabled={fillingForm} onChange={(event) => setLabel(event.target.value)} placeholder="e.g. Soft Wings Studio"/>
               <div className="field-row">
-                <div><label htmlFor="wizard-handle">Username you want <span>optional</span></label><input id="wizard-handle" maxLength={120} value={handle} onChange={(event) => setHandle(event.target.value)} placeholder={label.trim() ? `@${emailTag(label)}` : '@softwings'}/></div>
-                <div><label htmlFor="wizard-display">Display name <span>optional</span></label><input id="wizard-display" maxLength={120} value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder={label.trim() || undefined}/></div>
+                <div><label htmlFor="wizard-handle">Username you want <span>optional</span></label><input id="wizard-handle" maxLength={120} value={handle} disabled={fillingForm} onChange={(event) => setHandle(event.target.value)} placeholder={label.trim() ? `@${emailTag(label)}` : '@softwings'}/></div>
+                <div><label htmlFor="wizard-display">Display name <span>optional</span></label><input id="wizard-display" maxLength={120} value={displayName} disabled={fillingForm} onChange={(event) => setDisplayName(event.target.value)} placeholder={label.trim() || undefined}/></div>
               </div>
               <label htmlFor="wizard-bio">Profile description <span className={`bio-count ${bioTooLong ? 'over' : ''}`}>{bioLength}/{tightest.limit}{ordered.length > 1 ? ` (${getPlatform(tightest.platform).name} limit)` : ''}</span></label>
-              <textarea id="wizard-bio" rows={3} maxLength={1000} value={bio} onChange={(event) => setBio(event.target.value)}/>
+              <textarea id="wizard-bio" rows={3} maxLength={1000} value={bio} disabled={fillingForm} onChange={(event) => setBio(event.target.value)}/>
               <label htmlFor="wizard-website">Website <span>optional</span></label><input id="wizard-website" maxLength={300} value={website} onChange={(event) => setWebsite(event.target.value)}/>
               <details className="signin-details">
                 <summary>Sign-in details <span>handled for you</span></summary>
                 <div className="field-row">
                   <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
-                  <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
+                  <div><label htmlFor="wizard-birthday">Birthday <span>optional; enter the correct date for sign-up</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
                 </div>
-                <p className="signin-hint">TikTok and X get their own address automatically, like you+brand@gmail.com, so no new inbox is needed. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
+                <p className="signin-hint">TikTok and X get suggested plus-addresses, like you+brand@gmail.com. Check whether the service accepts each address. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
                 {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
               </details>
               <label>Profile image <span>optional, you can add it later</span></label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()} auto={autoImage}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
               {feedback}
             </div>
             <aside className="preview-card" aria-label="Profile preview">
@@ -282,12 +330,12 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             </aside>
           </div>
         </div>
-        <div className="wizard-foot"><span className="foot-note">Profiles are saved as not created yet until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
+        <div className="wizard-foot"><span className="foot-note">Profiles are saved as not created yet until you mark them created.</span><button type="button" className="outline-button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary-button" disabled={busy || !label.trim() || !signupEmail.trim() || !ordered.length || bioTooLong || plans.some((plan) => !plan.email)}><AppWindow size={15}/> {busy ? 'Opening…' : `Start with ${ordered.length} ${ordered.length === 1 ? 'social' : 'socials'}`}</button></div>
       </form>}
 
       {step !== 'details' && <>
         <div className="wizard-top">{step === 'signup' && account
-          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>{steps === ADD_PROFILE_FLOWS[account.platform] ? `This adds the brand to your existing ${name} login. Follow the steps on the right.` : `Your details are filled in on the ${name} page below. Check them, then press Next or Sign up on the page yourself.`}</p></div>
+          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>{account.platform === 'x' ? 'Enter the details on X yourself; use the copy buttons if helpful.' : steps === ADD_PROFILE_FLOWS[account.platform] ? `This adds the brand to your existing ${name} login. Follow the steps on the right.` : `Your details are filled in on the ${name} page below. Check them, then press Next or Sign up on the page yourself.`}</p></div>
           : <div><h3>Finish the profiles</h3><p>{created.length ? `Created on ${created.map((item) => getPlatform(item.platform).name).join(', ')}.` : 'No accounts were marked as created.'} Add the picture and description now, or later from Accounts. Skipped socials stay saved as planned.</p></div>}{closeButton}</div>
         <div className="site-stage">
           <div ref={frame} className="site-frame" aria-label="Site page">{!windowId && <span>{page ? 'Loading the page…' : 'Pick a social on the right to open its profile settings here.'}</span>}</div>
@@ -298,10 +346,12 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <h3>Sign-up details</h3>
                 <div className="credential-row"><span>Email</span><code>{account.signupEmail}</code><button type="button" className="icon-button" aria-label="Copy email" onClick={() => void copy('Email', account.signupEmail ?? '')}><Copy size={15}/></button></div>
                 {account.handle && <div className="credential-row"><span>Username</span><code>{account.handle}</code><button type="button" className="icon-button" aria-label="Copy username" onClick={() => void copy('Username', account.handle)}><Copy size={15}/></button></div>}
-                <div className="credential-row"><span>Password</span><code>{showPass && password ? password : '••••••••••••••••'}</code><button type="button" className="icon-button" aria-label={showPass ? 'Hide password' : 'Show password'} onClick={() => void togglePassword()}>{showPass ? <EyeOff size={15}/> : <Eye size={15}/>}</button><button type="button" className="icon-button" aria-label="Copy password" onClick={() => void copyPassword()}><Copy size={15}/></button></div>
+                {account.platform === 'youtube' || account.platform === 'facebook'
+                  ? <p>Sign in with your existing {account.platform === 'youtube' ? 'Google' : 'Facebook'} account.</p>
+                  : <div className="credential-row"><span>Password</span><code>{showPass && password ? password : '••••••••••••••••'}</code><button type="button" className="icon-button" disabled={busy} aria-label={showPass ? 'Hide password' : 'Show password'} onClick={() => void togglePassword()}>{showPass ? <EyeOff size={15}/> : <Eye size={15}/>}</button><button type="button" className="icon-button" disabled={busy} aria-label="Copy password" onClick={() => void copyPassword()}><Copy size={15}/></button></div>}
                 {account.birthday && <div className="credential-row"><span>Birthday</span><code>{account.birthday}</code><button type="button" className="icon-button" aria-label="Copy birthday" onClick={() => void copy('Birthday', account.birthday ?? '')}><Copy size={15}/></button></div>}
               </section>
-              <div className="wizard-actions"><button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button><button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
+              <div className="wizard-actions">{account.platform !== 'x' && <button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button>}<button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
               {feedback}
               <InboxList compact autoRefresh refreshMs={SIGNUP_INBOX_MS} limit={8} onCode={(code) => void refill(code)} onNewCode={(code, mail) => { if (isMailFrom(account.platform, mail)) void refill(code); }}/>
             </>}
@@ -309,7 +359,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
               <label>Profile image</label>
               <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
-              {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> Fill {getPlatform(item.platform).name} profile <ChevronRight size={15}/></button>)}</div>}
+              {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> {item.platform === 'x' ? 'Edit X profile manually' : `Fill ${getPlatform(item.platform).name} profile`} <ChevronRight size={15}/></button>)}</div>}
               {feedback}
             </>}
           </aside>
@@ -320,5 +370,6 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
           : <div className="wizard-foot"><button type="button" className="primary-button" disabled={busy} onClick={onClose}>Done</button></div>}
       </>}
     </div>
+    {brandIdeas.open && <IdeaSuggestionsModal ideas={brandIdeas.ideas} loadingAll={brandIdeas.loadingAll} loadingIndex={brandIdeas.loadingIndex} error={brandIdeas.error} onSelect={(selected) => { setIdea(selected); setFillError(''); brandIdeas.close(); }} onRerollAll={brandIdeas.rerollAll} onReroll={brandIdeas.reroll} onClose={brandIdeas.close}/>}
   </section></div>;
 }

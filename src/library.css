@@ -144,15 +144,16 @@ button.vthumb:hover .vthumb-play { background: var(--accent); }
 .vcard-caption .post-empty { color: var(--text-3); font-style: italic; }
 .vcard-meta { margin: 6px 0 0; font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vcard-meta.library-failed { color: var(--danger); white-space: normal; }
-.dest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin-top: 12px; }
-.dest { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); min-width: 0; }
+.dest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 8px; margin-top: 12px; }
+.dest { display: grid; grid-template-columns: auto minmax(0, 1fr); align-content: start; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); min-width: 0; }
 .dest.tone-ok { border-color: var(--success-line); background: linear-gradient(0deg, var(--success-soft), var(--success-soft)), var(--surface-2); }
 .dest.tone-problem { border-color: var(--danger-line); }
 .dest.tone-muted .platform-mark { filter: grayscale(1); opacity: .5; }
 .dest-text { flex: 1; min-width: 0; display: grid; }
 .dest-text strong { font-size: 12.5px; }
 .dest-text small { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--tone, var(--text-3)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dest-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.dest-actions { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.dest-actions .error-message { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
 .dest-button { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--border-strong); background: var(--surface-3); color: var(--text); white-space: nowrap; cursor: pointer; }
 .dest-button:hover:not(:disabled) { border-color: var(--text-3); }
 .dest-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }

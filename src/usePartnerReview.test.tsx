@@ -41,7 +41,7 @@ describe('usePartnerReview', () => {
     const { result } = renderHook(() => usePartnerReview(workspace, true, save));
 
     await waitFor(() => expect(save).toHaveBeenCalled());
-    expect(publishInstagramReelFile).toHaveBeenCalledWith('C:\\v\\bunny.mp4', 'Approved text\n\n#bunny', 'ig1', expect.anything());
+    expect(publishInstagramReelFile).toHaveBeenCalledWith('C:\\v\\bunny.mp4', 'Approved text\n\n#bunny', 'ig1', expect.objectContaining({ expectedId: '1' }));
     expect(claimReviewPost).toHaveBeenCalledWith('v1');
     const [, status, results, events] = vi.mocked(recordReviewResult).mock.calls[0];
     expect(status).toBe('posted');

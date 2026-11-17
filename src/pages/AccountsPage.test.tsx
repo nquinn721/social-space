@@ -43,9 +43,8 @@ describe('brands page', () => {
     expect(within(profiles).getByRole('listitem', { name: 'Instagram profile' })).toBeInTheDocument();
     expect(within(profiles).getByText('Not created yet')).toBeInTheDocument();
     await user.click(within(profiles).getByRole('button', { name: 'Create on X' }));
-    // The brand's Instagram sits on a login shared with Clip Lab, so its password is not the brand's: X gets its own.
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })]));
-    expect(ensureSharedPassword).toHaveBeenCalledWith(['1']);
+    expect(ensureSharedPassword).not.toHaveBeenCalled();
     expect(within(profiles).queryByRole('button', { name: 'Create on Instagram' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /All brands/ }));
     expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
@@ -101,9 +100,23 @@ describe('brands page', () => {
     await user.click(within(screen.getByRole('region', { name: 'Soft Wings profiles' })).getByRole('button', { name: /Add TikTok/ }));
     const saved = (onSave.mock.calls[0] as unknown as [Workspace])[0];
     const tiktok = saved.accounts.find((item) => item.platform === 'tiktok');
-    expect(tiktok).toMatchObject({ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.', status: 'planned', signupEmail: 'softwings25+softwings@gmail.com', birthday: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) });
+    expect(tiktok).toMatchObject({ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.', status: 'planned', signupEmail: 'softwings25+softwings@gmail.com' });
+    expect(tiktok?.birthday).toBeUndefined();
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: tiktok!.id })]));
-    expect(ensureSharedPassword).toHaveBeenLastCalledWith(['1', tiktok!.id]);
+    expect(ensureSharedPassword).not.toHaveBeenCalled();
+  });
+
+  it('opens the wizard to choose another Google account at the channel planning limit', async () => {
+    const channels = Array.from({ length: 100 }, (_, n) => ({ ...account(`yt${n}`, 'youtube', `Brand ${n}`, 'active'), handle: `brand${n}` }));
+    const onSave = vi.fn(async () => true);
+    const onSignUp = vi.fn();
+    const onCreateAccounts = vi.fn();
+    renderPage({ workspace: workspace([account('mia', 'instagram', 'Mia', 'active'), ...channels]), onSave, onSignUp, onCreateAccounts });
+    const user = await openBrand('Mia');
+    await user.click(within(screen.getByRole('region', { name: 'Mia profiles' })).getByRole('button', { name: /Add YouTube/ }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onSignUp).not.toHaveBeenCalled();
+    expect(onCreateAccounts).toHaveBeenCalledWith(['youtube'], expect.objectContaining({ label: 'Mia', signupEmail: 'softwings25@gmail.com' }));
   });
 
   it('searches brands by name or username', async () => {

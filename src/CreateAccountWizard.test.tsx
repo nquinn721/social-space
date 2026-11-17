@@ -2,16 +2,18 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import CreateAccountWizard, { DEFAULT_SIGNUP_BIRTHDAY, DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
+import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
 import * as profile from './profileService';
 import * as email from './emailService';
 import * as suggest from './assistant/suggest';
+import * as brandIdeas from './assistant/brandIdeas';
 import * as imageAi from './imageAiService';
 import type { Account } from './model';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
-  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), openGmailSignup: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
+  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), openGmailSignup: vi.fn(), ensureAccountPassword: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
 vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
+vi.mock('./assistant/brandIdeas', () => ({ suggestBrandIdeas: vi.fn() }));
 vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), generateProfileImage: vi.fn() }));
 vi.mock('./emailService', () => ({ emailConnection: vi.fn(), listEmails: vi.fn(), readEmail: vi.fn() }));
 
@@ -27,7 +29,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('create account wizard', () => {
-  it('creates the same account on every social in turn with one shared password', async () => {
+  it('plans separate accounts and passwords on each social', async () => {
     const saved: Account[] = [];
     const onSave = vi.fn(async (account: Account) => { saved.push(account); });
     const user = userEvent.setup();
@@ -45,9 +47,10 @@ describe('create account wizard', () => {
     expect(await screen.findByText('Now: Instagram (1 of 3)')).toBeInTheDocument();
     expect(saved.map((item) => item.platform)).toEqual(['instagram', 'tiktok', 'x']);
     expect(saved.every((item) => item.handle === 'softwings' && item.bio === 'Wings for little dreamers.')).toBe(true);
-    // Instagram starts a login on the inbox address; TikTok and X always get the brand's own plus-address.
-    expect(saved.map((item) => item.signupEmail)).toEqual([DEFAULT_SIGNUP_EMAIL, 'softwings25+softwings@gmail.com', 'softwings25+softwings@gmail.com']);
-    expect(profile.ensureSharedPassword).toHaveBeenCalledWith(saved.map((item) => item.id));
+    // Addresses are aliases into the inbox; each social account gets its own password.
+    expect(saved.map((item) => item.signupEmail)).toEqual(Array(3).fill('softwings25+softwings@gmail.com'));
+    expect(vi.mocked(profile.ensureAccountPassword).mock.calls.map(([id]) => id)).toEqual(saved.map((item) => item.id));
+    expect(profile.ensureSharedPassword).not.toHaveBeenCalled();
     expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('instagram', 'create', expect.objectContaining({ x: 0, y: 0 }));
     await waitFor(() => expect(profile.fillSiteForm).toHaveBeenLastCalledWith('site-embed-4', expect.objectContaining({ username: 'softwings' }), { accountId: saved[0].id, includePassword: true, keepFilling: true }));
 
@@ -69,22 +72,100 @@ describe('create account wizard', () => {
     expect(profile.closeEmbeddedPage).toHaveBeenCalled();
   });
 
-  it('suggests a name and description from an idea', async () => {
+  it('lets you choose and reroll ideas before filling the form', async () => {
     vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Flutter Finds', username: 'flutterfinds', displayName: 'Flutter Finds', description: 'Butterfly jewelry kids love.', imagePrompt: 'pastel butterfly logo mark', imageStyle: 'logo' });
-    vi.mocked(imageAi.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\profile-1.png', preview: 'data:image/png;base64,1' });
-    vi.mocked(profile.loadImagePreview).mockResolvedValue('data:image/png;base64,1');
+    vi.mocked(brandIdeas.suggestBrandIdeas)
+      .mockResolvedValueOnce(['Idea one', 'Idea two', 'Idea three', 'Idea four', 'Idea five'])
+      .mockResolvedValueOnce(['Fresh second idea'])
+      .mockResolvedValueOnce(['New one', 'New two', 'New three', 'New four', 'New five']);
     const user = userEvent.setup();
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
-    await user.type(screen.getByLabelText(/Your idea/), 'butterfly jewelry for kids');
-    await user.click(screen.getByRole('button', { name: /Suggest/ }));
-    expect(await screen.findByText(/Suggested by Grok/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Suggest' }));
+    expect(await screen.findByRole('button', { name: /Idea one/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Idea five/ })).toBeInTheDocument();
+    expect(brandIdeas.suggestBrandIdeas).toHaveBeenCalledWith({ context: '', exclude: [], count: 5 });
+    await user.click(screen.getByRole('button', { name: 'Reroll suggestion 2' }));
+    expect(await screen.findByRole('button', { name: /Fresh second idea/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Idea one/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Idea five/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reroll all' }));
+    await user.click(await screen.findByRole('button', { name: /New three/ }));
+    expect(screen.queryByRole('dialog', { name: 'Find your idea' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Your idea/)).toHaveValue('New three');
+    expect(screen.getByLabelText('Account name')).toHaveValue('');
+    expect(suggest.suggestProfile).not.toHaveBeenCalled();
+    expect(imageAi.generateProfileImage).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Fill form' }));
+    expect(await screen.findByText(/Form filled/)).toBeInTheDocument();
     expect(screen.getByLabelText('Account name')).toHaveValue('Flutter Finds');
     expect(screen.getByLabelText('Username you want optional')).toHaveValue('flutterfinds');
     expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
-    expect(suggest.suggestProfile).toHaveBeenCalledWith('butterfly jewelry for kids', 80, ['Instagram', 'TikTok', 'YouTube', 'X', 'Facebook']);
-    // The matching picture is made straight away and becomes the account's image.
-    expect(await screen.findByText('profile-1.png')).toBeInTheDocument();
-    expect(vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt).toBe('minimal modern logo mark, pastel butterfly logo mark, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon, no tiny details, no watermark');
+    expect(suggest.suggestProfile).toHaveBeenCalledWith('New three', 80, ['Instagram', 'TikTok', 'YouTube', 'X', 'Facebook']);
+    expect(imageAi.generateProfileImage).not.toHaveBeenCalled();
+  });
+
+  it('keeps provider errors retryable and does not close the wizard on Escape', async () => {
+    vi.mocked(brandIdeas.suggestBrandIdeas).mockRejectedValueOnce(new Error('Add your xAI key in Settings.'))
+      .mockResolvedValueOnce(['One', 'Two', 'Three', 'Four', 'Five']);
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={onClose}/>);
+    await user.click(screen.getByRole('button', { name: 'Suggest' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Add your xAI key in Settings.');
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('button', { name: /^One/ })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Find your idea' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows a fill error next to the idea and lets you retry', async () => {
+    vi.mocked(suggest.suggestProfile).mockRejectedValueOnce(new Error('Check the xAI key.'))
+      .mockResolvedValueOnce({ name: 'Bright Ideas', username: 'brightideas', displayName: 'Bright Ideas', description: 'A bright new idea.', imagePrompt: '', imageStyle: 'photo' });
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText(/Your idea/), 'An art studio');
+    await user.click(screen.getByRole('button', { name: 'Fill form' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Check the xAI key.');
+    await user.click(screen.getByRole('button', { name: 'Fill form' }));
+    expect(await screen.findByText(/Form filled/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Account name')).toHaveValue('Bright Ideas');
+  });
+
+  it('prevents form edits while a fill request is in flight', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof suggest.suggestProfile>>) => void;
+    vi.mocked(suggest.suggestProfile).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText(/Your idea/), 'A garden studio');
+    await user.click(screen.getByRole('button', { name: 'Fill form' }));
+    expect(screen.getByLabelText(/Your idea/)).toBeDisabled();
+    expect(screen.getByLabelText('Instagram')).toBeDisabled();
+    expect(screen.getByLabelText('Account name')).toBeDisabled();
+    expect(screen.getByLabelText('Username you want optional')).toBeDisabled();
+    expect(screen.getByLabelText('Display name optional')).toBeDisabled();
+    expect(screen.getByLabelText(/Profile description/)).toBeDisabled();
+    finish({ name: 'Garden Studio', username: 'gardenstudio', displayName: 'Garden Studio', description: 'Growing together.', imagePrompt: '', imageStyle: 'photo' });
+    await waitFor(() => expect(screen.getByLabelText('Account name')).toBeEnabled());
+    expect(screen.getByLabelText('Account name')).toHaveValue('Garden Studio');
+  });
+
+  it('ignores an older request after the suggestions are closed and reopened', async () => {
+    let finishFirst!: (ideas: string[]) => void;
+    vi.mocked(brandIdeas.suggestBrandIdeas)
+      .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve; }))
+      .mockResolvedValueOnce(['Fresh one', 'Fresh two', 'Fresh three', 'Fresh four', 'Fresh five']);
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.click(screen.getByRole('button', { name: 'Suggest' }));
+    expect(screen.getByText('Finding ideas…')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close suggestions' }));
+    await user.click(screen.getByRole('button', { name: 'Suggest' }));
+    expect(await screen.findByRole('button', { name: /Fresh one/ })).toBeInTheDocument();
+    finishFirst(['Old one', 'Old two', 'Old three', 'Old four', 'Old five']);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Old one/ })).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Fresh five/ })).toBeInTheDocument();
   });
 
   it('keeps one description within the tightest chosen limit', async () => {
@@ -99,6 +180,14 @@ describe('create account wizard', () => {
 });
 
 describe('verification code detection', () => {
+  it('opens a planned X account without filling any X form', async () => {
+    const planned: Account = { id: 'p-x', platform: 'x', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: 'mia+x@example.com' };
+    render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('x', 'create', expect.anything()));
+    expect(profile.fillSiteForm).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Enter the details on X yourself/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Fill this page again/ })).not.toBeInTheDocument();
+  });
   it('prefers the number next to the word code', () => {
     expect(profile.findCode('Order 2024 shipped. Your verification code: 771204')).toBe('771204');
     expect(profile.findCode('Use 5521 to sign in')).toBe('5521');
@@ -118,9 +207,8 @@ describe('verification code detection', () => {
     const user = userEvent.setup();
     render(<CreateAccountWizard initialPlatforms={['instagram']} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
-    // Sign-up forms always ask for one, so the form starts with a default birthday.
-    expect(screen.getByLabelText(/Birthday/)).toHaveValue(DEFAULT_SIGNUP_BIRTHDAY);
-    await user.clear(screen.getByLabelText(/Birthday/));
+    // No date is guessed: the user supplies it if needed.
+    expect(screen.getByLabelText(/Birthday/)).toHaveValue('');
     await user.type(screen.getByLabelText(/Birthday/), '1998-04-12');
     await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ birthday: '1998-04-12' }));
@@ -132,7 +220,7 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
     expect(screen.getByText('Now: Instagram (1 of 1)')).toBeInTheDocument();
     await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('instagram', 'create', expect.anything()));
-    expect(profile.ensureSharedPassword).toHaveBeenCalledWith(['p1']);
+    expect(profile.ensureAccountPassword).toHaveBeenCalledWith('p1');
     await waitFor(() => expect(profile.fillSiteForm).toHaveBeenLastCalledWith('site-embed-4', expect.objectContaining({ username: 'massagelisa', email: DEFAULT_SIGNUP_EMAIL }), { accountId: 'p1', includePassword: true, keepFilling: true }));
   });
 
@@ -160,24 +248,92 @@ describe('verification code detection', () => {
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
     await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ verificationCode: '482913' }));
   });
-  it('adds Instagram to the shared login and gives TikTok its own email when the base one is taken', async () => {
+  it('starts fresh Instagram and TikTok accounts when another brand exists', async () => {
     const saved: Account[] = [];
     const existing: Account[] = [{ id: 'old-ig', platform: 'instagram', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }, { id: 'old-tt', platform: 'tiktok', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }];
     const user = userEvent.setup();
     render(<CreateAccountWizard initialPlatforms={['instagram', 'tiktok']} existing={existing} prefill={{ brandId: 'brand-mia' }} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     const plan = screen.getByRole('list', { name: 'Login plan' });
-    expect(plan).toHaveTextContent('Adds to your Instagram login softwings25@gmail.com (2 of 4 profiles).');
-    expect(plan).toHaveTextContent('New TikTok account with its own email softwings25+massagewithmia@gmail.com.');
+    expect(plan).toHaveTextContent('Plan a separate Instagram account with softwings25+massagewithmia@gmail.com; this plus-address uses your existing inbox if supported. Confirm the platform accepts it.');
+    expect(plan).toHaveTextContent('Plan a separate TikTok account with softwings25+massagewithmia@gmail.com; this plus-address uses your existing inbox if supported. Confirm the platform accepts it.');
     await user.click(screen.getByRole('button', { name: /Start with 2 socials/ }));
     await screen.findByText('Now: Instagram (1 of 2)');
-    expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', DEFAULT_SIGNUP_EMAIL, 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);
+    expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', 'softwings25+massagewithmia@gmail.com', 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);
     expect(saved.every((item) => item.handle === 'massagewithmia' && item.displayName === 'Massage With Mia')).toBe(true);
-    // Joining an existing login is not a sign-up: it opens the add-a-profile page and its own steps.
-    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('instagram', 'addProfile', expect.anything()));
-    expect(screen.getByRole('list', { name: 'Instagram sign-up steps' })).toHaveTextContent('Add Instagram account');
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('instagram', 'create', expect.anything()));
+    expect(screen.getByRole('list', { name: 'Instagram sign-up steps' })).toHaveTextContent('Sign-up form');
     await user.click(screen.getByRole('button', { name: /Instagram account is created, next/ }));
     await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenLastCalledWith('tiktok', 'create', expect.anything()));
+  });
+  it('opens the add-channel flow for the first YouTube channel without generating a Google password', async () => {
+    const user = userEvent.setup();
+    render(<CreateAccountWizard initialPlatforms={['youtube']} onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'First brand');
+    await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('youtube', 'addProfile', expect.anything()));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-embed-4', { channelName: 'First brand' }, expect.objectContaining({ includePassword: false })));
+    await user.click(screen.getByRole('button', { name: 'Fill this page again' }));
+    expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toEqual({ channelName: 'First brand' });
+    expect(profile.ensureAccountPassword).not.toHaveBeenCalled();
+    expect(profile.ensureSharedPassword).not.toHaveBeenCalled();
+  });
+  it('uses the existing Facebook login without generating or filling a Page password', async () => {
+    const planned: Account = { id: 'fb', platform: 'facebook', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL };
+    render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-embed-4', { pageName: 'Mia' }, expect.objectContaining({ accountId: 'fb', includePassword: false })));
+    expect(profile.ensureAccountPassword).not.toHaveBeenCalled();
+    expect(screen.getByText('Sign in with your existing Facebook account.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy password' })).not.toBeInTheDocument();
+  });
+  it('requires another Google account when 100 saved channels are already planned', async () => {
+    const existing: Account[] = Array.from({ length: 100 }, (_, i) => ({ id: `y${i}`, platform: 'youtube', label: `Brand ${i}`, handle: `brand${i}`, status: 'active', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }));
+    const user = userEvent.setup();
+    render(<CreateAccountWizard initialPlatforms={['youtube']} existing={existing} onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText('Account name'), 'New brand');
+    expect(screen.getByText(/Choose a different Google account/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start with 1 social/ })).toBeDisabled();
+    await user.clear(screen.getByLabelText('Sign-up email'));
+    await user.type(screen.getByLabelText('Sign-up email'), 'another@gmail.com');
+    expect(screen.getByRole('button', { name: /Start with 1 social/ })).toBeEnabled();
+  });
+  it('does not infer a shared Instagram login for a planned account with a duplicate email', async () => {
+    const planned: Account = { id: 'new', platform: 'instagram', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL };
+    const existing: Account[] = [{ ...planned, id: 'old', status: 'active', label: 'Other' }];
+    render(<CreateAccountWizard resume={[planned]} existing={existing} onSave={vi.fn()} onClose={vi.fn()}/>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('uses another account’s sign-up email');
+    expect(profile.embedPlatformPage).not.toHaveBeenCalled();
+    expect(profile.ensureSharedPassword).not.toHaveBeenCalled();
+  });
+  it('never displays or copies another social account password, even when reveal is still in flight', async () => {
+    const planned: Account[] = [
+      { id: 'p-ig', platform: 'instagram', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: 'mia+ig@example.com' },
+      { id: 'p-tt', platform: 'tiktok', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: 'mia+tt@example.com' },
+    ];
+    let release!: (value: string) => void;
+    vi.mocked(profile.revealAccountPassword).mockImplementation((id) => id === 'p-ig' ? new Promise((resolve) => { release = resolve; }) : Promise.resolve('tiktok-password'));
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(<CreateAccountWizard resume={planned} onSave={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('instagram', 'create', expect.anything()));
+    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(screen.getByRole('button', { name: 'Instagram account is created, next' })).toBeDisabled();
+    release('instagram-password');
+    expect(await screen.findByText('instagram-password')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Instagram account is created, next' }));
+    expect(await screen.findByText('Now: TikTok (2 of 2)')).toBeInTheDocument();
+    expect(screen.queryByText('instagram-password')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Copy password' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('tiktok-password'));
+    expect(writeText).not.toHaveBeenCalledWith('instagram-password');
+  });
+  it('reports a password-storage failure before opening an account sign-up', async () => {
+    vi.mocked(profile.ensureAccountPassword).mockRejectedValue(new Error('Password storage unavailable'));
+    const planned: Account = { id: 'p1', platform: 'instagram', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: 'mia@example.com' };
+    render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Password storage unavailable');
+    expect(profile.embedPlatformPage).not.toHaveBeenCalled();
   });
   it('opens Google sign-up with the brand filled in for an optional new Gmail', async () => {
     vi.mocked(profile.openGmailSignup).mockResolvedValue('site-9');
@@ -185,6 +341,6 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     await user.click(screen.getByRole('button', { name: 'Make a new Gmail instead' }));
-    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia', birthday: DEFAULT_SIGNUP_BIRTHDAY }, { keepFilling: true }));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia' }, { keepFilling: true }));
   });
 });

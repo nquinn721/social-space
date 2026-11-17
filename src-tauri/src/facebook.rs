@@ -414,10 +414,17 @@ fn reel_link(permalink: Option<&str>, video_id: &str) -> String {
     if facebook_post_url(&candidate) { candidate } else { format!("https://www.facebook.com/reel/{video_id}") }
 }
 
+fn check_publishing_identity(expected: Option<&str>, actual: &str) -> Result<(), String> {
+    match expected {
+        Some(id) if valid_id(id) && id == actual => Ok(()),
+        _ => Err("The connected Facebook Page changed or could not be verified. Review the destination and try again.".into()),
+    }
+}
+
 /// Uploads a video from this PC and publishes it as a Reel on the profile's Facebook Page.
 /// The final publish request is never retried: its outcome can be ambiguous.
 #[tauri::command]
-pub async fn publish_facebook_reel_file(path: String, description: String, profile: String) -> Result<FacebookPost, String> {
+pub async fn publish_facebook_reel_file(path: String, description: String, profile: String, expected_id: Option<String>) -> Result<FacebookPost, String> {
     let _guard = Guard::acquire()?;
     let slot = slot(&profile)?;
     validate_description(&description)?;
@@ -428,6 +435,7 @@ pub async fn publish_facebook_reel_file(path: String, description: String, profi
     if !valid_id(&credential.page_id) {
         return Err("The saved Facebook Page ID is invalid. Connect the Page again.".into());
     }
+    check_publishing_identity(expected_id.as_deref(), &credential.page_id)?;
     let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(file))
         .await
         .map_err(|_| "Could not read that video file.")?
@@ -507,6 +515,13 @@ pub async fn open_facebook_post(app: AppHandle, url: String) -> Result<(), Strin
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn publishing_requires_the_confirmed_page_id() {
+        assert!(super::check_publishing_identity(Some("123"), "123").is_ok());
+        for expected in [None, Some(""), Some("abc"), Some("456")] {
+            assert!(super::check_publishing_identity(expected, "123").is_err());
+        }
+    }
     use super::*;
 
     fn page(id: &str, name: &str, token: Option<&str>, tasks: &[&str]) -> PageEntry {

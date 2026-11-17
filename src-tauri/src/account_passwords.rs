@@ -2,6 +2,12 @@
 //! Credential Manager. Passwords are never written to the workspace file and
 //! never sent to the assistant model; form filling reads them in Rust.
 
+use std::sync::Mutex;
+
+// Serialize creation, replacement and removal within this app instance. A password
+// saved while sign-up is starting must not be replaced by a generated password.
+static PASSWORD_WRITE: Mutex<()> = Mutex::new(());
+
 const PASSWORD_LENGTH: usize = 20;
 const LOWER: &[u8] = b"abcdefghijkmnopqrstuvwxyz";
 const UPPER: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -76,19 +82,19 @@ pub fn read(account_id: &str) -> Result<Option<String>, String> {
 /// Creates a password for the account unless one is already saved.
 #[tauri::command]
 pub fn ensure_account_password(account_id: String) -> Result<(), String> {
-    if read(&account_id)?.is_some() {
-        return Ok(());
+    let _lock = PASSWORD_WRITE.lock().map_err(|_| "Could not access saved passwords.")?;
+    ensure_missing_password(|| read(&account_id), generate_password, |password| set_password_unlocked(&account_id, password))
+}
+
+fn ensure_missing_password(
+    read_current: impl FnOnce() -> Result<Option<String>, String>,
+    generate: impl FnOnce() -> Result<String, String>,
+    save: impl FnOnce(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    if read_current()?.is_none() {
+        save(&generate()?)?;
     }
-    let password = generate_password()?;
-    #[cfg(windows)]
-    return entry(&account_id)?
-        .set_password(&password)
-        .map_err(|_| "Could not save the password to Windows Credential Manager.".into());
-    #[cfg(not(windows))]
-    {
-        let _ = password;
-        Err("Saved account passwords are supported on Windows only.".into())
-    }
+    Ok(())
 }
 
 /// Gives every listed account the same password: an existing one from the
@@ -98,6 +104,7 @@ pub fn ensure_shared_password(account_ids: Vec<String>) -> Result<(), String> {
     if account_ids.is_empty() || account_ids.len() > 50 {
         return Err("Choose between 1 and 50 accounts.".into());
     }
+    let _lock = PASSWORD_WRITE.lock().map_err(|_| "Could not access saved passwords.")?;
     let mut shared = None;
     let mut missing = Vec::new();
     for id in &account_ids {
@@ -112,7 +119,7 @@ pub fn ensure_shared_password(account_ids: Vec<String>) -> Result<(), String> {
         None => generate_password()?,
     };
     for id in missing {
-        set_account_password(id.clone(), password.clone())?;
+        set_password_unlocked(id, &password)?;
     }
     Ok(())
 }
@@ -123,13 +130,18 @@ pub fn set_account_password(account_id: String, password: String) -> Result<(), 
     if password.is_empty() || password.len() > 500 || password.chars().any(char::is_control) {
         return Err("Enter a valid password.".into());
     }
+    let _lock = PASSWORD_WRITE.lock().map_err(|_| "Could not access saved passwords.")?;
+    set_password_unlocked(&account_id, &password)
+}
+
+fn set_password_unlocked(account_id: &str, password: &str) -> Result<(), String> {
     #[cfg(windows)]
-    return entry(&account_id)?
-        .set_password(&password)
+    return entry(account_id)?
+        .set_password(password)
         .map_err(|_| "Could not save the password to Windows Credential Manager.".into());
     #[cfg(not(windows))]
     {
-        valid_id(&account_id)?;
+        valid_id(account_id)?;
         Err("Saved account passwords are supported on Windows only.".into())
     }
 }
@@ -147,6 +159,7 @@ pub fn reveal_account_password(account_id: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn delete_account_password(account_id: String) -> Result<(), String> {
+    let _lock = PASSWORD_WRITE.lock().map_err(|_| "Could not access saved passwords.")?;
     #[cfg(windows)]
     return match entry(&account_id)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -192,5 +205,16 @@ mod tests {
         assert!(valid_id("").is_err());
         assert!(valid_id("../social-manager-x-oauth").is_err());
         assert!(valid_id("a b").is_err());
+    }
+
+    #[test]
+    fn generation_keeps_existing_password_and_generates_only_for_missing_entries() {
+        use std::cell::RefCell;
+        let stored = RefCell::new(Some("existing".to_string()));
+        ensure_missing_password(|| Ok(stored.borrow().clone()), || panic!("existing password must not be regenerated"), |_| panic!("existing password must not be overwritten")).unwrap();
+        assert_eq!(stored.borrow().as_deref(), Some("existing"));
+        *stored.borrow_mut() = None;
+        ensure_missing_password(|| Ok(stored.borrow().clone()), || Ok("new-generated".to_string()), |value| { *stored.borrow_mut() = Some(value.to_string()); Ok(()) }).unwrap();
+        assert_eq!(stored.borrow().as_deref(), Some("new-generated"));
     }
 }

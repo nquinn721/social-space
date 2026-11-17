@@ -11,7 +11,7 @@ export const INSTAGRAM_CHANGED = 'instagram-connection-changed';
  * The brand's live Instagram profile and whether the app can publish to it.
  * connected: signed in through Meta (null while checking). canUploadFiles: that sign-in may upload a video from this PC.
  */
-export type BrandInstagram = { accountId: string; handle: string; username: string; connected: boolean | null; canUploadFiles: boolean };
+export type BrandInstagram = { accountId: string; handle: string; username: string; providerId?: string; connected: boolean | null; canUploadFiles: boolean };
 
 /**
  * Finds the brand's live Instagram profile and checks its connection. A connection saved before
@@ -35,7 +35,7 @@ export function useBrandInstagram(workspace: Workspace, brandId: string | undefi
     setState({ ...base, connected: null });
     if (!isTauri()) { setState({ ...base, connected: false }); return; }
     claimInstagramConnection(account.id, handle)
-      .then((identity) => { if (live) setState(identity ? { ...base, username: identity.username, connected: true, canUploadFiles: identity.login !== 'instagram' } : { ...base, connected: false }); })
+      .then((identity) => { if (live) setState(identity ? { ...base, username: identity.username, providerId: identity.id, connected: true, canUploadFiles: identity.login !== 'instagram' } : { ...base, connected: false }); })
       .catch(() => { if (live) setState({ ...base, connected: false }); });
     return () => { live = false; };
   }, [account?.id, handle, checked]);
@@ -45,5 +45,5 @@ export function useBrandInstagram(workspace: Workspace, brandId: string | undefi
 /** Uploads a video saved on this PC and publishes it as a Reel with its description, hashtags, cover and feed choice. */
 export function publishVideoToInstagram(target: BrandInstagram, video: Video) {
   const details = detailsOf(video);
-  return publishInstagramReelFile(video.mediaSource, postText(video), target.accountId, { coverMs: details.coverMs, shareToFeed: details.shareToFeed });
+  return publishInstagramReelFile(video.mediaSource, postText(video), target.accountId, { coverMs: details.coverMs, shareToFeed: details.shareToFeed, expectedId: target.providerId });
 }

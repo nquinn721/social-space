@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { brandStatuses, brandSummary, progressLabel, socialStatus, videoProgress } from './brandStatus';
+import { brandStatuses, brandSummary, needsAttention, progressLabel, socialStatus, videoProgress } from './brandStatus';
 import type { Account, Workspace } from './model';
 
 const account = (id: string, platform: Account['platform'], extra: Partial<Account> = {}): Account => ({ id, platform, label: 'Bunny', handle: 'bunny', status: 'active', notes: '', brandId: 'b', ...extra });
 const base = (accounts: Account[]): Workspace => ({ businessName: '', brands: [{ id: 'b', name: 'Bunny', notes: '' }], accounts, channels: [] });
 
 describe('brand status', () => {
-  it('keeps YouTube under the main Google account as ready, never as a login to set up', () => {
+  it('does not claim a YouTube channel is verified without a current channel check', () => {
     const ws = base([account('y', 'youtube', { signupEmail: 'softwings25@gmail.com' })]);
-    expect(socialStatus(ws, 'b', 'youtube')).toMatchObject({ kind: 'ready', canPost: true, via: 'browser' });
+    expect(socialStatus(ws, 'b', 'youtube')).toMatchObject({ kind: 'verify-session', label: 'Not checked', canPost: true, via: 'browser' });
   });
   it('flags TikTok and X saved with the main Gmail', () => {
     const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25@gmail.com' }), account('x', 'x', { signupEmail: 'softwings25+bunny@gmail.com' })]);
     expect(socialStatus(ws, 'b', 'tiktok')).toMatchObject({ kind: 'main-login', canPost: false, action: { kind: 'own-login' } });
-    expect(socialStatus(ws, 'b', 'x')).toMatchObject({ kind: 'ready', canPost: true });
+    expect(socialStatus(ws, 'b', 'x')).toMatchObject({ kind: 'verify-session', canPost: true });
   });
   it('reads Instagram from its connection and waits while it is checked', () => {
     const ws = base([account('i', 'instagram')]);
@@ -22,6 +22,8 @@ describe('brand status', () => {
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).toMatchObject({ kind: 'ready', via: 'api', canPost: true });
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } })).toMatchObject({ kind: 'reconnect', label: 'Wrong account', canPost: false });
     expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: 'softwings25', detail: '' } } }).detail).toMatch(/Meta connected @softwings25/);
+    expect(socialStatus(ws, 'b', 'instagram', { connections: { i: { state: 'ok', username: '', detail: '' } } })).toMatchObject({ label: 'Identity not verified', canPost: false });
+    expect(socialStatus(base([account('i', 'instagram', { handle: '' })]), 'b', 'instagram', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).toMatchObject({ label: 'Identity not verified', canPost: false });
   });
   it('reads a Facebook Page from its connection: a Page name is never a wrong handle, and no login is asked for', () => {
     const ws = base([account('f', 'facebook', { handle: '', signupEmail: 'softwings25@gmail.com' })]);
@@ -34,18 +36,28 @@ describe('brand status', () => {
     const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' }), account('y', 'youtube')]);
     const signIns = { tiktok: { signedIn: false, checkedAt: 0 }, youtube: { signedIn: true, checkedAt: 0 } };
     expect(socialStatus(ws, 'b', 'tiktok', { signIns })).toMatchObject({ kind: 'sign-in', tone: 'todo', action: { kind: 'sign-in' }, canPost: true });
-    expect(socialStatus(ws, 'b', 'youtube', { signIns })).toMatchObject({ kind: 'ready' });
+    expect(socialStatus(ws, 'b', 'youtube', { signIns })).toMatchObject({ kind: 'verify-session', label: 'Session detected', canPost: true });
+    expect(socialStatus(ws, 'b', 'youtube', { signIns }).detail).toContain('channel is not verified');
+  });
+  it('blocks a last-seen browser account mismatch and does not treat matching or unknown cookies as proof', () => {
+    const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' })]);
+    const signIn = (handle?: string) => ({ tiktok: { signedIn: true, checkedAt: 1, handle } });
+    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('other') })).toMatchObject({ label: 'Wrong account', canPost: false, tone: 'problem' });
+    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') })).toMatchObject({ kind: 'verify-session', label: 'Session detected', canPost: true });
+    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn() }).detail).toContain('could not be verified');
+    expect(needsAttention(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') }))).toBe(true);
+    expect(needsAttention(socialStatus(ws, 'b', 'instagram'))).toBe(false);
   });
   it('tells a missing profile from one not created yet, and a missing saved login', () => {
     const ws = base([account('t', 'tiktok', { status: 'planned' }), account('x', 'x')]);
     expect(socialStatus(ws, 'b', 'instagram')).toMatchObject({ kind: 'no-profile', action: { kind: 'create' } });
     expect(socialStatus(ws, 'b', 'tiktok')).toMatchObject({ kind: 'not-created', action: { kind: 'finish-signup' } });
-    expect(socialStatus(ws, 'b', 'x', { passwords: { x: false } })).toMatchObject({ kind: 'no-password', canPost: true });
+    expect(socialStatus(ws, 'b', 'x', { passwords: { x: false } })).toMatchObject({ kind: 'verify-session', canPost: true });
   });
   it('sums a brand up from its own socials only', () => {
     const ws = base([account('i', 'instagram'), account('t', 'tiktok')]);
-    expect(brandSummary(brandStatuses(ws, 'b', { connections: { i: { state: 'none', username: '', detail: '' } } })).text).toBe('Ready on 1 of 2 · Instagram: not connected');
-    expect(brandSummary(brandStatuses(ws, 'b', { connections: { i: { state: 'ok', username: '', detail: '' } } })).text).toBe('Ready to post on all 2');
+    expect(brandSummary(brandStatuses(ws, 'b', { connections: { i: { state: 'none', username: '', detail: '' } } })).text).toBe('Ready on 0 of 2 · Instagram: not connected +1 more');
+    expect(brandSummary(brandStatuses(ws, 'b', { connections: { i: { state: 'ok', username: 'bunny', detail: '' } } })).text).toBe('Ready on 1 of 2 · TikTok: not checked');
   });
   it('labels how far a video is', () => {
     const video = { id: 'v', brandId: 'b', categoryId: 'c', title: 'Hop', mediaSource: '', caption: '', posted: ['instagram' as const], createdAt: 0 };

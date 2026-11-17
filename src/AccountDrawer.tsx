@@ -56,11 +56,16 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
     if (!account) return;
     const id = await openPlatformWindow(account.platform, 'manage');
     const sign = { email: account.signupEmail, username: normalizeHandle(account.handle) };
-    await fillSiteForm(id, Object.fromEntries(Object.entries(sign).filter(([, value]) => value)), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
+    if (account.platform !== 'x') await fillSiteForm(id, Object.fromEntries(Object.entries(sign).filter(([, value]) => value)), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
     setNote(`Opened ${getPlatform(account.platform).name}.`);
   });
   const fillProfile = () => run(async () => {
     if (!account) return;
+    if (account.platform === 'x') {
+      await openPlatformWindow(account.platform, 'manage');
+      setNote('Opened X. Enter and save the profile details yourself.');
+      return;
+    }
     const current = { ...account, handle: normalizeHandle(handle), displayName, bio, website, imagePath };
     // The brand picture at this social's size, unless a different file was chosen in this panel.
     const picture = pictureFile && imagePath === (account.imagePath ?? '') ? await profilePicturePath(pictureFile, account.platform) : imagePath;
@@ -102,7 +107,7 @@ export default function AccountDrawer({ account, busy, onClose, onSave, onRemove
           <div className="drawer-actions">
             {account.status === 'planned' && onSignUp && <button type="button" className="primary-button small-button" disabled={disabled} onClick={() => onSignUp(account)}><UserPlus size={14}/> Create on {getPlatform(account.platform).name}</button>}
             <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void openManage()}><AppWindow size={14}/> {account.status === 'planned' ? 'Sign in' : 'Open'} {getPlatform(account.platform).name}</button>
-            <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillProfile()}><Sparkles size={14}/> Fill profile on {getPlatform(account.platform).name}</button>
+            <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillProfile()}><Sparkles size={14}/> {account.platform === 'x' ? 'Edit X profile manually' : `Fill profile on ${getPlatform(account.platform).name}`}</button>
             {account.platform === 'instagram' && account.status === 'active' && <button type="button" className="outline-button small-button" disabled={disabled} onClick={() => void fillIdentity()}><Wand2 size={14}/> Change name & username</button>}
           </div>
           {note && <p className="success-message" role="status">{note}</p>}

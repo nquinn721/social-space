@@ -9,6 +9,7 @@ import type { BrandInstagram } from './useBrandInstagram';
 import { useBrandFacebook, type BrandFacebook } from './useBrandFacebook';
 import type { BrandSignIn } from './postingService';
 import { useSignIns } from './useSignIns';
+import { browserSession } from './browserSession';
 
 /**
  * Where a brand stands on each social, worked out from the real data: whether its profile exists, which
@@ -19,7 +20,7 @@ import { useSignIns } from './useSignIns';
  * through their own upload page in a per-brand app window (needs the profile and its login). YouTube
  * channels live under the main Google account on purpose, so that is never a problem.
  */
-export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'connect' | 'reconnect' | 'sign-in' | 'no-password' | 'ready';
+export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'connect' | 'reconnect' | 'sign-in' | 'verify-session' | 'no-password' | 'ready';
 export type Tone = 'ok' | 'ready' | 'todo' | 'problem' | 'muted' | 'checking';
 export type SocialAction = 'create' | 'finish-signup' | 'own-login' | 'connect' | 'sign-in' | 'save-login';
 export type SocialStatus = {
@@ -33,7 +34,7 @@ export type SocialStatus = {
   detail: string;
   /** What fixes it, when something does. */
   action?: { kind: SocialAction; label: string; short: string };
-  /** Whether a video can be posted there now. */
+  /** Whether the app may start this destination's posting or manual handoff flow. */
   canPost: boolean;
   via: PostMode;
 };
@@ -65,6 +66,9 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
     if (check.state === 'ok' && connectedAs && account.handle && connectedAs.toLowerCase() !== account.handle.replace(/^@/, '').toLowerCase()) {
       return { ...base, kind: 'reconnect', tone: 'problem', label: 'Wrong account', detail: `Meta connected @${connectedAs}, not @${account.handle.replace(/^@/, '')}, so posts would go to @${connectedAs}. Connect again and pick @${account.handle.replace(/^@/, '')} in the Meta window.`, action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
     }
+    if (check.state === 'ok' && (!connectedAs || !account.handle)) {
+      return { ...base, kind: 'reconnect', tone: 'problem', label: 'Identity not verified', detail: 'The connected Instagram identity or saved handle is missing. Check the account and reconnect before publishing.', action: { kind: 'connect', label: 'Check Instagram connection', short: 'Check account' }, canPost: false };
+    }
     if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${viaText(platform)}`, canPost: true };
     if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Instagram connection ran out.', action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
     return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect it through Meta so the app can post Reels for it.', action: { kind: 'connect', label: 'Connect Instagram', short: 'Connect' }, canPost: false };
@@ -78,18 +82,28 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
     if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Facebook Page connection stopped working.', action: { kind: 'connect', label: 'Reconnect Facebook', short: 'Reconnect' }, canPost: false };
     return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect the brand\'s Page through Meta so the app can post Reels to it.', action: { kind: 'connect', label: 'Connect Facebook Page', short: 'Connect' }, canPost: false };
   }
-  // The brand window posts as whoever it is signed in as, so a window that isn't signed in comes first.
-  // Posting still works: the window asks for the sign-in and fills it.
+  // Browser session checks are snapshots: they do not guarantee the current account or channel.
   const signIn = inputs.signIns?.[platform];
-  if (via(platform) === 'browser' && signIn && !signIn.signedIn) {
-    return { ...base, kind: 'sign-in', tone: 'todo', label: 'Not signed in', detail: `The ${name} window isn't signed in. Sign in once and it stays signed in.`, action: { kind: 'sign-in', label: `Sign in to ${name}`, short: 'Sign in' }, canPost: true };
+  const session = browserSession(platform, account.handle, signIn);
+  if (session === 'signed-out') {
+    return { ...base, kind: 'sign-in', tone: 'todo', label: 'Not signed in', detail: `The last check found no ${name} session. Open the window and sign in.`, action: { kind: 'sign-in', label: `Sign in to ${name}`, short: 'Sign in' }, canPost: true };
   }
-  // YouTube channels sit under the main Google account by design: nothing to save per brand.
-  const ownLogin = platform !== 'youtube';
-  if (ownLogin && inputs.passwords && inputs.passwords[account.id] === false) {
-    return { ...base, kind: 'no-password', tone: 'todo', label: 'Login not saved', detail: 'You can post, but the window can only fill the sign-in once its username and password are saved.', action: { kind: 'save-login', label: 'Save its login', short: 'Save login' }, canPost: true };
+  if (session === 'mismatch') {
+    return { ...base, kind: 'sign-in', tone: 'problem', label: 'Wrong account', detail: `The last check found @${signIn?.handle}, not @${account.handle}. Check the account in the ${name} window before posting.`, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: false };
   }
-  return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: viaText(platform), canPost: true };
+  if (session === 'not-checked' && platform === 'tiktok' && inputs.passwords && inputs.passwords[account.id] === false) {
+    return { ...base, kind: 'no-password', tone: 'todo', label: 'Login not saved', detail: 'The window can only fill the sign-in after its username and password are saved.', action: { kind: 'save-login', label: 'Save its login', short: 'Save login' }, canPost: true };
+  }
+  const label = session === 'not-checked' ? 'Not checked' : 'Session detected';
+  const detail = session === 'not-checked'
+    ? `Open ${name} to check which account is signed in before posting.`
+    : platform === 'youtube'
+      ? 'A Google session was detected, but the selected YouTube channel is not verified. Check the channel before posting.'
+      : session === 'matched'
+        ? `The last check saw @${signIn?.handle}. Check the current account before posting.`
+        : `A ${name} session was detected, but its account could not be verified. Check it before posting.`;
+  return { ...base, kind: 'verify-session', tone: 'todo', label, detail, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: true };
+
 }
 
 /** The brand's status on every social, in platform order. */
@@ -99,6 +113,9 @@ export function brandStatuses(workspace: Workspace, brandId: string, inputs: Sta
 /** Only the socials the brand has a profile on (planned or live). */
 export const withProfile = (statuses: SocialStatus[]) => statuses.filter((status) => status.kind !== 'no-profile');
 
+/** Include unverified browser sessions as attention items, even when a manual handoff can be opened. */
+export const needsAttention = (status: SocialStatus) => status.kind !== 'ready' && (status.tone === 'todo' || status.tone === 'problem');
+
 /** A word or two for a small chip. */
 export function chipLabel(status: SocialStatus): string {
   switch (status.kind) {
@@ -106,7 +123,8 @@ export function chipLabel(status: SocialStatus): string {
     case 'no-profile': return 'Not added';
     case 'checking': return '…';
     case 'no-password': return 'Save login';
-    case 'sign-in': return 'Sign in';
+    case 'sign-in': return status.action?.short ?? status.label;
+    case 'verify-session': return status.label;
     default: return status.action?.short ?? status.label;
   }
 }
@@ -114,8 +132,8 @@ export function chipLabel(status: SocialStatus): string {
 export function brandSummary(statuses: SocialStatus[]): { tone: Tone; text: string; short: string } {
   const own = withProfile(statuses);
   if (own.length === 0) return { tone: 'muted', text: 'No profiles yet', short: 'No profiles yet' };
-  const ready = own.filter((status) => status.canPost).length;
-  const blocking = own.filter((status) => !status.canPost && status.kind !== 'checking');
+  const ready = own.filter((status) => status.kind === 'ready').length;
+  const blocking = own.filter((status) => status.kind !== 'ready' && status.kind !== 'checking');
   const checking = own.some((status) => status.kind === 'checking');
   if (blocking.length === 0) return { tone: checking ? 'checking' : 'ok', text: checking ? `Ready on ${ready} of ${own.length} · checking…` : `Ready to post on all ${own.length}`, short: checking ? 'Checking…' : `Ready on all ${own.length}` };
   const first = blocking[0];

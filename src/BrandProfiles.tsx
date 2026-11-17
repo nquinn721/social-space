@@ -35,8 +35,7 @@ export function editorFields(account: Account, brand: Brand, draft: Draft): Form
 
 /**
  * The brand's profile details on every social: Grok suggests each bio and the YouTube keywords (grey, Tab
- * takes them), and Fill opens each social's profile editor in the brand's own window with the picture,
- * name, bio and keywords filled in. Nate checks the page and presses Save there.
+ * takes them). Fill opens the brand's profile editor; supported sites are filled for review and X is manual.
  */
 export default function BrandProfiles({ brand, accounts, busy, developerLogins, onSave }: Props) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => Object.fromEntries(accounts.map((account) => [account.id, draftOf(account)])));
@@ -104,7 +103,7 @@ export default function BrandProfiles({ brand, accounts, busy, developerLogins, 
       try { await fillOne(account); } catch (reason) { failed.push(`${getPlatform(account.platform).name}: ${errorText(reason)}`); }
     }
     const opened = targets.length - failed.length;
-    if (opened) setNote(`Opened ${opened === 1 && targets.length === 1 ? getPlatform(targets[0].platform).name : `${opened} profile editors`} signed in as ${brand.name}, with the picture, name and bio filled in. Check each page, then press Save there yourself.`);
+    if (opened) setNote(`Opened ${opened === 1 && targets.length === 1 ? getPlatform(targets[0].platform).name : `${opened} profile editors`}. Check the selected account and details, then press Save there yourself.${targets.some(account => account.platform === 'x') ? ' On X, enter the details yourself.' : ' Supported details are filled in.'}`);
     if (failed.length) setError(failed.join(' '));
   });
 
@@ -112,7 +111,7 @@ export default function BrandProfiles({ brand, accounts, busy, developerLogins, 
   const fillButton = (account: Account) => {
     const name = getPlatform(account.platform).name;
     const length = (drafts[account.id]?.bio ?? '').trim().length;
-    return <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || length > BIO_LIMITS[account.platform]} title={`Opens ${name}'s profile editor as ${brand.name} with the picture, name and bio filled in`} onClick={() => void fill([account])}>
+    return <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || length > BIO_LIMITS[account.platform]} title={account.platform === 'x' ? 'Open X and enter profile details yourself' : `Opens ${name}'s profile editor as ${brand.name} with the picture, name and bio filled in`} onClick={() => void fill([account])}>
       {working === account.id ? <Loader2 size={13} className="spin"/> : <BrandMark platform={account.platform} small/>} {name}</button>;
   };
   const youtube = accounts.find(takesKeywords);
@@ -134,7 +133,7 @@ export default function BrandProfiles({ brand, accounts, busy, developerLogins, 
     <div className="brand-profiles-head">
       <div>
         <h3 id="brand-profiles-title">Bio</h3>
-        <p>{split ? 'Each social has its own bio.' : `One bio for every social. Press Tab to take Grok's grey suggestion.`} Fill opens a social's profile editor as {brand.name} with the picture, name and bio filled in; you press Save there.</p>
+        <p>{split ? 'Each social has its own bio.' : `One bio for every social. Press Tab to take Grok's grey suggestion.`} Fill opens profile editors with supported details filled in. On X, enter the details yourself. Check the account and save on each site.</p>
       </div>
       <div className="heading-buttons">
         <button type="button" className="ghost-button small-button" disabled={blocked || writing} onClick={() => void suggest(true)}>{writing ? <><Loader2 size={14} className="spin"/> Writing…</> : <><Sparkles size={14}/> {copy ? 'New suggestions' : 'Suggest with Grok'}</>}</button>

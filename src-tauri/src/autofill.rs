@@ -14,8 +14,6 @@ use tauri::{AppHandle, Manager};
 const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_FIELD_CHARS: usize = 2_200;
 const PLATFORM_HOSTS: &[&str] = &[
-    "x.com",
-    "twitter.com",
     "instagram.com",
     "tiktok.com",
     "youtube.com",
@@ -42,6 +40,11 @@ pub struct FormFields {
     display_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     full_name: Option<String>,
+    /// Explicit Page/channel names avoid the generic name and username fields on login pages.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    page_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    channel_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     bio: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -63,7 +66,7 @@ pub struct FormFields {
 }
 
 impl FormFields {
-    fn values(&self) -> [&Option<String>; 14] {
+    fn values(&self) -> [&Option<String>; 16] {
         [
             &self.email,
             &self.phone,
@@ -72,6 +75,8 @@ impl FormFields {
             &self.last_name,
             &self.display_name,
             &self.full_name,
+            &self.page_name,
+            &self.channel_name,
             &self.bio,
             &self.website,
             &self.verification_code,
@@ -229,6 +234,8 @@ const FILL_SCRIPT: &str = r#"function (data) {
     ['firstName', { auto: ['given-name'], words: /first ?name|given/ }],
     ['lastName', { auto: ['family-name'], words: /last ?name|surname|family/ }],
     ['appName', { words: /app(lication)? name|project name/ }],
+    ['pageName', { words: /\bpage\s+name\b/ }],
+    ['channelName', { words: /\bchannel\s+name\b/ }],
     ['displayName', { auto: ['nickname'], words: /display ?name|channel name|nickname/ }],
     ['fullName', { auto: ['name'], words: /full ?name|\bname\b/ }],
     ['bio', { words: /\bbio\b|description|about/ }],
@@ -280,7 +287,11 @@ const FILL_SCRIPT: &str = r#"function (data) {
     for (const [key, rule] of rules) {
       const value = data.fields[key];
       if (typeof value !== 'string' || !value) continue;
-      const match = (test) => candidates.find((el) => !used.has(el) && test(el));
+      const scopedName = key === 'pageName' || key === 'channelName';
+      const isLogin = (el) => ['email', 'tel'].includes((el.type || '').toLowerCase())
+        || /^(username|email|tel)$/.test((el.getAttribute('autocomplete') || '').toLowerCase())
+        || /\b(user ?name|e-?mail|phone|log ?in|sign ?in)\b/.test(describe(el));
+      const match = (test) => candidates.find((el) => !used.has(el) && !(scopedName && isLogin(el)) && test(el));
       const el = match((el) => (rule.auto || []).includes((el.getAttribute('autocomplete') || '').toLowerCase()))
         || match((el) => (rule.types || []).includes((el.type || '').toLowerCase()))
         || match((el) => rule.words.test(describe(el)));
@@ -478,7 +489,6 @@ const FILL_SCRIPT: &str = r#"function (data) {
     else if (filled.length) banner('Socialspace filled: ' + filled.join(', ') + '. Check it, then press the button yourself.');
     else if (always) banner(data.note || 'Socialspace is ready. Fields will fill as each step appears.');
     window.__socialspaceHint = next;
-    if (filled.length) console.info('[Socialspace] filled', filled);
   };
   const signUpScreen = () => /set up your account|create your account|create an account|sign up for|choose a username|what should we call you/i
     .test(((document.body && document.body.innerText) || '').slice(0, 5000));
@@ -590,7 +600,7 @@ pub fn fill_site_form(
     // Right after opening, the page may still be blank; it is filled when it finishes loading.
     let still_loading = url.scheme() == "about" || url.host_str().is_none();
     if !still_loading && !platform_host(&url) {
-        return Err("Forms can only be filled on X, Instagram, TikTok, or YouTube pages.".into());
+        return Err("This page cannot be filled automatically. Enter the details on the site yourself.".into());
     }
     let image = match image_path.as_deref().filter(|path| !path.is_empty()) {
         Some(path) => {
@@ -646,7 +656,9 @@ mod tests {
     fn only_platform_pages_can_be_filled() {
         let ok = |value: &str| platform_host(&value.parse().unwrap());
         assert!(ok("https://www.instagram.com/accounts/emailsignup/"));
-        assert!(ok("https://x.com/i/flow/signup"));
+        assert!(!ok("https://x.com/i/flow/signup"));
+        assert!(!ok("https://twitter.com/i/flow/signup"));
+        assert!(!ok("https://mobile.x.com/i/flow/signup"));
         assert!(ok("https://accounts.google.com/signup"));
         assert!(!ok("https://instagram.com.evil.example/"));
         assert!(!ok("https://notx.com/"));

@@ -57,7 +57,7 @@ describe('brand picture', () => {
     await waitFor(() => expect(posting.openProfileEditor).toHaveBeenCalled());
     expect(pictures.profilePicturePath).toHaveBeenCalledWith('brand.jpg', 'x');
     expect(vi.mocked(posting.openProfileEditor).mock.calls[0][0]).toMatchObject({ platform: 'x', brandId: 'b1', imagePath: 'C:\\sized\\x-brand.jpg', accountId: 'a-x', fields: {} });
-    expect(await screen.findByRole('status')).toHaveTextContent('press Save on the page');
+    expect(await screen.findByRole('status')).toHaveTextContent('Choose your picture and save it on X yourself');
 
     await user.click(screen.getByRole('button', { name: /Use brand picture/ }));
     await waitFor(() => expect(onSaveAccountImage).toHaveBeenCalledWith(expect.objectContaining({ id: 'a-youtube' }), undefined, expect.any(String)));

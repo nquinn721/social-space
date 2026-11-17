@@ -74,7 +74,6 @@ const HANDLE_SCRIPT: &str = r#"(() => { try {
     if (data) { try { const user = JSON.parse(data.textContent)['__DEFAULT_SCOPE__']['webapp.app-context'].user; if (user && user.uniqueId) return user.uniqueId; } catch (e) {} }
     return href('a[data-e2e="nav-profile"]').replace(/^\/@/, '').split(/[/?]/)[0];
   }
-  if (/(^|\.)(x|twitter)\.com$/.test(host)) return href('a[data-testid="AppTabBar_Profile_Link"]').replace(/^\//, '').split(/[/?]/)[0];
   return '';
 } catch (e) { return ''; } })()"#;
 
@@ -117,7 +116,13 @@ fn changed(a: Option<&BTreeMap<String, SignIn>>, b: &BTreeMap<String, SignIn>) -
 }
 
 /// The username the window's page shows as signed in. Must run off the main thread.
+fn may_read_page_handle(url: &url::Url) -> bool {
+    !crate::browser::is_x_site(url)
+}
+
 fn page_handle(window: &WebviewWindow) -> Option<String> {
+    let url = window.url().ok()?;
+    if !may_read_page_handle(&url) { return None; }
     let (tx, rx) = std::sync::mpsc::channel();
     window.eval_with_callback(HANDLE_SCRIPT, move |result| { let _ = tx.send(result); }).ok()?;
     let raw = rx.recv_timeout(Duration::from_secs(3)).ok()?;
@@ -200,5 +205,13 @@ mod tests {
         assert_eq!(clean_handle("/animals").as_deref(), Some("animals"));
         assert_eq!(clean_handle(""), None);
         assert_eq!(clean_handle("<script>"), None);
+    }
+
+    #[test]
+    fn never_inspects_an_x_page_for_a_handle() {
+        for address in ["https://x.com/home", "https://mobile.twitter.com/home"] {
+            assert!(!may_read_page_handle(&address.parse().unwrap()));
+        }
+        assert!(may_read_page_handle(&"https://www.tiktok.com/".parse().unwrap()));
     }
 }

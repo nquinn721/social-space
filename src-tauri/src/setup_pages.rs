@@ -10,7 +10,7 @@ pub(crate) fn page_url(page: &str) -> Option<&'static str> {
         "meta-business" => "https://business.facebook.com/settings",
         // The business portfolio's Pages: Add → Create a new Facebook Page, then a Page's Connect assets →
         // Instagram account → Create a new Instagram profile (or Log into Instagram for one that exists).
-        "meta-business-pages" => "https://business.facebook.com/latest/settings/pages",
+        "meta-business-pages" => crate::SOFTWINGS_PAGES,
         "instagram-settings" => "https://www.instagram.com/accounts/edit/",
         "google-consent" => "https://console.cloud.google.com/apis/credentials/consent",
         "google-youtube-api" => "https://console.cloud.google.com/apis/library/youtube.googleapis.com",
@@ -39,6 +39,12 @@ pub async fn open_setup_page(app: AppHandle, page: String) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn page_setup_uses_the_same_business_portfolio_as_page_creation() {
+        assert_eq!(page_url("meta-business-pages"), Some(crate::SOFTWINGS_PAGES));
+        assert!(page_url("meta-business-pages").unwrap().contains("business_id=591387440571702"));
+    }
 
     #[test]
     fn only_known_https_pages_open() {

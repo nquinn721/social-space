@@ -7,14 +7,21 @@ and the step list in `src/signupFlows.ts` together.
 
 ## Ground rules
 
-- Social Space fills fields and picks birthday menu values. **Nate presses every button** (Next, Send
-  code, Submit, Sign up) and does every captcha, puzzle and phone check himself.
+- In Create accounts, **Suggest** offers five ideas, even with an empty idea field. Reroll one or all,
+  then select an idea to add it to the form. **Fill form** uses that idea to suggest the account name,
+  username and description. Both actions need the configured xAI key; profile images are generated separately.
+- Social Space fills supported fields and birthday menus where available. **Nate presses every button**
+  (Next, Send code, Submit, Sign up) and completes each captcha, puzzle and phone check himself.
 - No detection evasion, no hidden or background automation, no virtual SMS numbers.
-- The page is shown inside the Create accounts window; each new page or step is filled as it appears.
-- A code emailed to the sign-up address (Gmail plus-address `softwings25+<brand>@gmail.com` for TikTok
-  and X) is entered on the page within seconds and also shown at the bottom right with a Copy button,
-  both on the page and in the Social Space window.
-- The sign-up birthday is June 5 1983 (`DEFAULT_SIGNUP_BIRTHDAY` in `src/brands.ts`).
+- The page is shown inside the Create accounts window. Instagram and TikTok fields may fill as each
+  step appears; X is manual. YouTube and Facebook receive only clearly identified channel or Page names.
+- New Instagram, TikTok and X accounts have separate passwords stored in Windows Credential Manager.
+  Each can use a brand-specific plus-address (for example `softwings25+<brand>@gmail.com`), which is an
+  alias for the existing inbox rather than a new mailbox. Availability depends on the providers.
+- Codes from the inbox can be filled on supported Instagram and TikTok pages. For X, YouTube and
+  Facebook, copy the code and enter it yourself.
+- New accounts have no prefilled birthday; enter the correct date when a service asks. Dates already
+  saved for existing profiles are preserved.
 - When a page needs Nate (TikTok's QR code, a puzzle, a phone number), the banner at the top of the page
   says what to do.
 
@@ -46,14 +53,15 @@ Opens at `https://www.instagram.com/accounts/emailsignup/` ("Get started on Inst
 | 3 | Confirmation code | Code from Instagram's email. | App fills, copy box shows |
 | 4 | Next, then any captcha or phone check | | Nate |
 
-Up to 5 Instagram profiles share one login (`LOGIN_RULES` in `src/brands.ts`), so later brands are added
-from the signed-in account instead of signing up again.
+Each new brand is planned as a separate Instagram account with its own password. Existing accounts
+are not changed when this planning preference changes.
 
 ## YouTube (Google)
 
 A brand's channel lives under the shared Google account, so the normal path is
-`https://www.youtube.com/create_channel` while signed in: channel name and handle are filled, Nate presses
-Create channel.
+`https://www.youtube.com/create_channel` while signed in. Social Space fills a clearly identified channel
+name field when available; Nate signs in, checks the details and presses Create channel. The app plans
+up to 100 channels per Google account based on saved profiles; verify the actual count in YouTube.
 
 A brand new Google account (Make a new Gmail) goes through `https://accounts.google.com/signup`, which
 redirects to `/lifecycle/steps/signup/...`, one step per page:
@@ -63,21 +71,18 @@ redirects to `/lifecycle/steps/signup/...`, one step per page:
 | 1 | Enter your name | `input#firstName`, `input#lastName` (optional) | App fills, Nate presses Next |
 | 2 | Basic information | Month (`select#month`), Day (`input#day`), Year (`input#year`), Gender (`select#gender`) | App fills date, Nate picks gender and presses Next |
 | 3 | Choose your Gmail address | Suggested addresses or "Create your own" with `input[name=Username]` | App fills username, Nate picks and presses Next |
-| 4 | Create a strong password | `input[name=Passwd]`, `input[name=PasswdAgain]` | App fills, Nate presses Next |
+| 4 | Create a strong password | `input[name=Passwd]`, `input[name=PasswdAgain]` | Nate chooses and enters it |
 | 5 | Confirm you're not a robot / phone number | Nate's own phone number and the texted code | Nate |
 | 6 | Review, Privacy and Terms | | Nate |
 
 ## X
 
-Opens at `https://x.com/i/flow/signup`, which now lands on `https://x.com/i/jf/onboarding/web?mode=signup`:
-"Continue with phone / Google / Apple", or "Email or username" (`input[name=username_or_email]`) and
-Continue.
+Opens X's sign-up page. X signup and profile editing are manual: use the wizard's copy buttons for
+the email, username and saved password, enter the details yourself, and complete any checks on X.
 
-| Step | Page | Fields | Who |
-| --- | --- | --- | --- |
-| 1 | Onboarding | Email box | App fills, Nate presses Continue or Create account |
-| 2 | Create your account | Name, Email, Date of birth (`<select>` Month, Day, Year) | App fills, Nate presses Next |
-| 3 | Puzzle (Arkose) if shown | | Nate |
-| 4 | We sent you a code | Code from X's email | App fills, copy box shows |
-| 5 | You'll need a password | Password | App fills, Nate presses Next |
-| 6 | What should we call you? | Username | App fills, Nate presses Next |
+## Facebook
+
+Each brand gets a Facebook Page managed with the existing Facebook login. The wizard opens the Pages
+area in the business portfolio and can fill a clearly identified Page name field. Sign in with your
+existing Facebook account, create the Page, and review its details yourself. Social Space never creates
+a password for the Page or fills the Facebook login password.

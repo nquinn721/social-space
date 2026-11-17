@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AccountDrawer from './AccountDrawer';
 import { createAccount } from './model';
 import * as profile from './profileService';
+import * as brandImage from './brandImageService';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()), openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn() }));
+vi.mock('./brandImageService', async (original) => ({ ...(await original<typeof import('./brandImageService')>()), profilePicturePath: vi.fn() }));
 vi.mock('./AccountCredentials', () => ({ default: () => null }));
 vi.mock('./ProfileImageStudio', () => ({ default: () => null }));
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(profile.openPlatformWindow).mockResolvedValue('site-7'); });
@@ -39,5 +41,15 @@ describe('Editing a live Instagram profile', () => {
     expect(screen.queryByRole('button', { name: /Change name & username/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Fill profile on Instagram/ }));
     expect(profile.fillSiteForm).toHaveBeenCalledWith('site-7', expect.anything(), expect.objectContaining({ replace: false }));
+  });
+
+  it('opens X without filling its forms', async () => {
+    const user = userEvent.setup();
+    render(<AccountDrawer account={{ ...live, platform: 'x' }} pictureFile="brand.png" busy={false} onClose={vi.fn()} onSave={vi.fn()} onRemove={vi.fn()}/>);
+    await user.click(screen.getByRole('button', { name: /Edit X profile manually/ }));
+    expect(profile.openPlatformWindow).toHaveBeenCalledWith('x', 'manage');
+    expect(profile.fillSiteForm).not.toHaveBeenCalled();
+    expect(brandImage.profilePicturePath).not.toHaveBeenCalled();
+    expect(await screen.findByText('Opened X. Enter and save the profile details yourself.')).toBeInTheDocument();
   });
 });

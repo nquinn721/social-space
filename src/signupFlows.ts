@@ -22,7 +22,7 @@ export const ADD_PROFILE_FLOWS: Partial<Record<Platform, SignupStep[]>> = {
   ],
   youtube: [
     { title: 'Google sign-in', by: 'you', detail: 'Sign in to the Google account that holds your channels, if asked.' },
-    { title: 'New channel', by: 'app', detail: 'Opens "Create a new channel" (not your existing one) and fills the channel name.' },
+    { title: 'New channel', by: 'app', detail: 'Opens "Create a new channel" and fills the channel name when the field is identified.' },
     { title: 'Create', by: 'you', detail: 'Press Create. YouTube may ask you to confirm with your Google password.' },
   ],
 };
@@ -51,14 +51,14 @@ export const SIGNUP_FLOWS: Record<Platform, SignupStep[]> = {
   facebook: [
     { title: 'SoftWings business Pages', by: 'you', detail: 'Opens the Pages list of the SoftWings business portfolio, so the business owns the new Page. Sign in to Facebook if asked.' },
     { title: 'Create a new Facebook Page', by: 'you', detail: 'Press Add, then "Create a new Facebook Page".' },
-    { title: 'Page name and bio', by: 'app', detail: 'The Page name (the brand) and bio are filled in the dialog. Pick a category from the list yourself.' },
+    { title: 'Page name and bio', by: 'app', detail: 'The Page name is filled when the field is identified. Check it, then enter the bio and pick a category yourself.' },
     { title: 'Create Page', by: 'you', detail: 'Press Next, tick the terms box and press Create Page. Then press "I already made it" and Connect.' },
   ],
   x: [
     { title: 'Create account', by: 'you', detail: 'Choose Create account, or use email on the first page.' },
-    { title: 'Name, email, birthday', by: 'app', detail: 'Name, email and the birthday menus are filled.' },
+    { title: 'Name, email, birthday', by: 'you', detail: 'Enter the brand details on X.' },
     { title: 'Next and puzzle', by: 'you', detail: 'Press Next and solve the puzzle if X shows one.' },
-    { title: 'Verification code', by: 'app', detail: 'The code X emails is entered, and shows bottom right to copy.' },
-    { title: 'Password and username', by: 'app', detail: 'Password, then username, are filled. You press Next on each.' },
+    { title: 'Verification code', by: 'you', detail: 'Copy the code from the inbox and enter it on X.' },
+    { title: 'Password and username', by: 'you', detail: 'Enter your password and username on X.' },
   ],
 };

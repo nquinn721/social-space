@@ -7,7 +7,7 @@ import { BrandMark } from './ui';
 /** Posts still to make for a brand: every finished video times every social it has a profile on and isn't up on yet. */
 export function postsToMake(workspace: Workspace, brandId: string, statuses: SocialStatus[]) {
   const socials = statuses.filter((status) => status.kind !== 'no-profile').map((status) => status.platform);
-  const ready = new Set<Platform>(statuses.filter((status) => status.canPost).map((status) => status.platform));
+  const ready = new Set<Platform>(statuses.filter((status) => status.kind === 'ready').map((status) => status.platform));
   let total = 0; let now = 0;
   for (const video of workspace.videos ?? []) {
     if (video.brandId !== brandId || video.generation) continue;

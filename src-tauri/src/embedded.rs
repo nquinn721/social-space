@@ -71,6 +71,7 @@ const SETUP_ZOOM: f64 = 0.8;
 /// Darkens light developer sites to match the app: inverts the page and turns pictures back.
 /// Pages that are already dark (TikTok's sign-in, for one) are left as they are.
 const DARK_SCRIPT: &str = r#"(() => {
+  if (/(^|\.)(x|twitter)\.com$/i.test(location.hostname.replace(/\.+$/, ''))) return;
   const id = 'socialspace-dark';
   const css = 'html{filter:invert(.9) hue-rotate(180deg)!important;background:#fff!important}' +
     'img,video,picture,canvas,iframe,embed,object,[style*="background-image"],#socialspace-fill-banner,#socialspace-code,[data-ss-keep]' +
@@ -129,6 +130,10 @@ const DARK_SCRIPT: &str = r#"(() => {
   window.addEventListener('load', () => { check(); setTimeout(check, 1500); setTimeout(check, 4000); });
 })();"#;
 
+fn darken_site(url: &url::Url) -> bool {
+    !crate::browser::is_x_site(url)
+}
+
 fn embed_address(app: &AppHandle, address: &str, bounds: Bounds, dark: bool) -> Result<String, String> {
     let bounds = bounds.checked()?;
     let url: url::Url = address.parse().map_err(|_| "Invalid website address.")?;
@@ -136,12 +141,14 @@ fn embed_address(app: &AppHandle, address: &str, bounds: Bounds, dark: bool) -> 
     close_current(app);
     let label = format!("site-embed-{}", NEXT.fetch_add(1, Ordering::Relaxed));
     let popup_app = app.clone();
+    let allow_automation = darken_site(&url);
+    let apply_dark = dark && allow_automation;
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(url));
-    if dark {
+    if apply_dark {
         builder = builder.initialization_script(DARK_SCRIPT);
     }
+    let builder = if allow_automation { builder.initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT) } else { builder };
     let builder = builder
-        .initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
         .on_navigation(|url| crate::browser::allowed_navigation(url, false))
         .on_page_load(|webview, payload| {
             if payload.event() == PageLoadEvent::Finished && !crate::browser::to_email_login(&webview) {
@@ -208,5 +215,14 @@ mod tests {
         assert!(Bounds { width: 10.0, ..ok }.checked().is_err());
         assert!(Bounds { x: f64::NAN, ..ok }.checked().is_err());
         assert!(Bounds { y: -5.0, ..ok }.checked().is_err());
+    }
+
+    #[test]
+    fn x_sites_do_not_receive_the_automatic_theme() {
+        for value in ["https://x.com/", "https://mobile.twitter.com/", "https://developer.x.com/"] {
+            assert!(!darken_site(&value.parse().unwrap()), "{value}");
+        }
+        assert!(darken_site(&"https://www.tiktok.com/".parse().unwrap()));
+        assert!(DARK_SCRIPT.contains("(x|twitter)\\.com$"));
     }
 }

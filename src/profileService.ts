@@ -1,7 +1,7 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import type { Account, Platform, PlatformAction, Workspace } from './model';
 
-export type FormFields = Partial<Record<'email' | 'phone' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'fullName' | 'bio' | 'website' | 'verificationCode' | 'birthday' | 'appName' | 'redirectUri' | 'keywords', string>>;
+export type FormFields = Partial<Record<'email' | 'phone' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'fullName' | 'pageName' | 'channelName' | 'bio' | 'website' | 'verificationCode' | 'birthday' | 'appName' | 'redirectUri' | 'keywords', string>>;
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to use this.'); }
 /** Opens a platform page in an app window and returns the window id. */
 export async function openPlatformWindow(platform: Platform, action: PlatformAction): Promise<string> { desktopOnly(); return invoke('open_platform_action', { platform, action }); }

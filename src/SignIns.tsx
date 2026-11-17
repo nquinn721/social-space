@@ -37,13 +37,14 @@ export function PasswordField({ id, label }: { id: string; label: string }) {
     <input type="password" aria-label={`New password for ${label}`} placeholder={saved ? 'New password' : 'Not saved yet'} value={draft} onChange={(event) => setDraft(event.target.value)} autoComplete="off"/>
     <button className="outline-button small-button" disabled={!draft}>Save</button>
     {editing && <button type="button" className="ghost-button small-button" onClick={() => { setEditing(false); setDraft(''); }}>Cancel</button>}
+    <small>This only updates the saved copy in Social Space. It does not change the password on the social.</small>
     {note && <small role="status">{note}</small>}
   </form>;
   return <span className="password-cell">
     <code>{shown ? value : '••••••••••'}</code>
     <button type="button" className="icon-button" aria-label={`${shown ? 'Hide' : 'Show'} password for ${label}`} onClick={() => void act(async () => { if (!shown) await load(); setShown(!shown); })}>{shown ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
     <button type="button" className="icon-button" aria-label={`Copy password for ${label}`} onClick={() => void act(async () => { await navigator.clipboard.writeText(await load()); setNote('Copied.'); })}><Copy size={14}/></button>
-    <button type="button" className="icon-button" aria-label={`Change password for ${label}`} onClick={() => setEditing(true)}><Pencil size={14}/></button>
+    <button type="button" className="icon-button" aria-label={`Edit saved password for ${label}`} title="Edit the saved copy" onClick={() => setEditing(true)}><Pencil size={14}/></button>
     {note && <small role="status">{note}</small>}
   </span>;
 }
@@ -97,7 +98,7 @@ export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup
 
   return <section className="sign-ins" aria-label="Sign-ins">
     <div className="sign-ins-head">
-      <div><h2><KeyRound size={16}/> Sign-ins</h2><p>{showBackup ? "Every account's username, email and password. Passwords are kept in Windows Credential Manager on this PC." : 'Username, email and password for each profile.'}</p></div>
+      <div><h2><KeyRound size={16}/> Sign-ins</h2><p>{showBackup ? "Use the eye or copy button beside an account to access its saved password. It is kept in Windows Credential Manager on this PC; no JSON file is needed." : 'Use the eye or copy button beside an account to access its saved password.'}</p><p>A saved password is the copy on this PC. If it was changed on the social, update the saved copy here.</p></div>
       {showBackup && <div className="heading-buttons">
         <button type="button" className="primary-button small-button" disabled={working} onClick={() => { setMode('backup'); setError(''); }}><DatabaseBackup size={14}/> Back up sign-ins</button>
         <button type="button" className="outline-button small-button" disabled={working} onClick={() => { setMode('restore'); setError(''); }}><Upload size={14}/> Restore</button>

@@ -28,9 +28,9 @@ export async function disconnectFacebook(profile: string): Promise<void> {
   window.dispatchEvent(new CustomEvent(FACEBOOK_CHANGED, { detail: profile }));
 }
 /** Uploads a video saved on this PC and publishes it as a Reel on the profile's Page. */
-export async function publishFacebookReelFile(path: string, description: string, profile: string): Promise<PublishedReel> {
+export async function publishFacebookReelFile(path: string, description: string, profile: string, expectedId?: string): Promise<PublishedReel> {
   desktopOnly();
-  return invoke('publish_facebook_reel_file', { path, description, profile });
+  return invoke('publish_facebook_reel_file', { path, description, profile, expectedId: expectedId ?? null });
 }
 /** Opens a published Reel (a facebook.com /reel/ link) in an app window. */
 export async function openFacebookPost(url: string): Promise<void> { desktopOnly(); return invoke('open_facebook_post', { url }); }

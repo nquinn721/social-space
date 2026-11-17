@@ -410,6 +410,9 @@ h1 { font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02e
 .idea-card label svg { color: var(--accent-text); }
 .idea-row { display: flex; gap: 8px; }
 .idea-row input { flex: 1; }
+.wizard-idea-row { flex-wrap: wrap; }
+.wizard-idea-row input { min-width: min(220px, 100%); }
+.wizard-idea-row button { flex-shrink: 0; }
 .preview-card { position: sticky; top: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-top: 14px; }
 .preview-card > .label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin-bottom: 12px; }
 .preview-profile { display: flex; align-items: center; gap: 12px; }
