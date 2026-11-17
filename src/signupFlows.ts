@@ -56,9 +56,9 @@ export const SIGNUP_FLOWS: Record<Platform, SignupStep[]> = {
   ],
   x: [
     { title: 'Create account', by: 'you', detail: 'Choose Create account, or use email on the first page.' },
-    { title: 'Name, email, birthday', by: 'app', detail: 'Name, email and the birthday menus are filled.' },
+    { title: 'Name, email, birthday', by: 'you', detail: 'Enter the brand details on X.' },
     { title: 'Next and puzzle', by: 'you', detail: 'Press Next and solve the puzzle if X shows one.' },
-    { title: 'Verification code', by: 'app', detail: 'The code X emails is entered, and shows bottom right to copy.' },
-    { title: 'Password and username', by: 'app', detail: 'Password, then username, are filled. You press Next on each.' },
+    { title: 'Verification code', by: 'you', detail: 'Copy the code from the inbox and enter it on X.' },
+    { title: 'Password and username', by: 'you', detail: 'Enter your password and username on X.' },
   ],
 };

@@ -1,0 +1,216 @@
+{
+  "summary": "Prepare posting across a brand’s social accounts while distinguishing saved browser sessions from verified connections, and support manual X workflows.",
+  "features": [
+    "accounts",
+    "connections",
+    "facebook",
+    "instagram",
+    "overview",
+    "partner-review",
+    "posting",
+    "profile-images",
+    "video-library"
+  ],
+  "changes": [
+    {
+      "old": "Ready",
+      "new": "Session detected for unverified browser sessions"
+    },
+    {
+      "old": "Fill profile on X",
+      "new": "Edit X profile manually"
+    }
+  ],
+  "kept": [
+    {
+      "term": "Ready",
+      "reason": "Still used for verified API connections and other unrelated ready states."
+    }
+  ],
+  "spots": [
+    {
+      "path": ".claude/context/features.json",
+      "note": "Map account status and posting components to their features."
+    },
+    {
+      "path": "src-tauri/src/autofill.rs",
+      "note": "Restrict automated form filling on X."
+    },
+    {
+      "path": "src-tauri/src/browser.rs",
+      "note": "Keep X pages free of injected site automation."
+    },
+    {
+      "path": "src-tauri/src/embedded.rs",
+      "note": "Avoid automated theme and login injection on X."
+    },
+    {
+      "path": "src-tauri/src/facebook.rs",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src-tauri/src/instagram.rs",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src-tauri/src/posting.rs",
+      "note": "Open X for manual sign-in, profile editing and posting; preserve supported site flows."
+    },
+    {
+      "path": "src-tauri/src/setup_pages.rs",
+      "note": "Use the shared SoftWings Facebook Pages setup address."
+    },
+    {
+      "path": "src-tauri/src/sign_in_state.rs",
+      "note": "Do not inspect X pages for a handle."
+    },
+    {
+      "path": "src/AccountDrawer.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/AccountDrawer.tsx",
+      "note": "Keep X setup and profile editing manual."
+    },
+    {
+      "path": "src/BrandAccounts.tsx",
+      "note": "Explain detected sessions and guide manual X management."
+    },
+    {
+      "path": "src/BrandCard.test.ts",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/BrandCard.tsx",
+      "note": "Count verified API connections as ready."
+    },
+    {
+      "path": "src/BrandPicture.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/BrandPicture.tsx",
+      "note": "Describe manual picture selection on X."
+    },
+    {
+      "path": "src/BrandProfiles.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/BrandProfiles.tsx",
+      "note": "Describe manual profile updates on X."
+    },
+    {
+      "path": "src/CreateAccountWizard.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/CreateAccountWizard.tsx",
+      "note": "Offer manual X signup and clarify address suggestions."
+    },
+    {
+      "path": "src/PostingSettings.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/PostingSettings.tsx",
+      "note": "Describe the manual X posting handoff."
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "Prepare supported posting destinations, with per-platform review and account checks."
+    },
+    {
+      "path": "src/batchPosting.test.ts",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/batchPosting.ts",
+      "note": "Plan posting destinations and surface blocked or manual steps."
+    },
+    {
+      "path": "src/brandStatus.test.ts",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/brandStatus.ts",
+      "note": "Separate detected browser sessions from verified API connections."
+    },
+    {
+      "path": "src/brands.test.ts",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/brands.ts",
+      "note": "Apply local Instagram profile allocation preferences and YouTube channel cap."
+    },
+    {
+      "path": "src/browserSession.ts",
+      "note": "Classify saved browser sign-in observations without asserting verification."
+    },
+    {
+      "path": "src/pages/OverviewPage.test.tsx",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/pages/OverviewPage.tsx",
+      "note": "Show session checks and account attention in the overview."
+    },
+    {
+      "path": "src/postingMode.test.ts",
+      "note": "Focused regression coverage."
+    },
+    {
+      "path": "src/postingMode.ts",
+      "note": "Describe what is filled for each platform and the manual X flow."
+    },
+    {
+      "path": "src/signupFlows.ts",
+      "note": "Provide manual steps for X signup."
+    },
+    {
+      "path": "src/useBrowserPosting.ts",
+      "note": "Track posting windows and keep confirmations when saving a posted result fails or overlaps."
+    },
+    {
+      "path": "src/facebookService.ts",
+      "note": "Pin the intended Facebook Page for publishing."
+    },
+    {
+      "path": "src/instagramService.ts",
+      "note": "Pin the intended Instagram identity for publishing."
+    },
+    {
+      "path": "src/useBrandFacebook.ts",
+      "note": "Retain the Page identity when preparing a post."
+    },
+    {
+      "path": "src/useBrandInstagram.ts",
+      "note": "Retain the Instagram identity when preparing a post."
+    },
+    {
+      "path": "src/usePartnerReview.tsx",
+      "note": "Coordinate review result handling with posting."
+    },
+    {
+      "path": "src/usePartnerReview.test.tsx",
+      "note": "Regression coverage for review posting."
+    },
+    {
+      "path": "src/useBrandPublishing.test.tsx",
+      "note": "Regression coverage for branded publishing identities."
+    },
+    {
+      "path": "src/useBrowserPosting.test.tsx",
+      "note": "Regression coverage for failed and overlapping posted-status saves."
+    },
+    {
+      "path": "src-tauri/src/queue.rs",
+      "note": "Pass the queued Instagram identity to the guarded publish command and test identity validation."
+    }
+  ]
+}

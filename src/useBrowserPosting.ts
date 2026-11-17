@@ -38,7 +38,8 @@ export type Asking = { videoId: string; platform: Platform };
 
 /** What the upload page of one social gets for one video: the brand's profile there, the file and every detail. */
 export function postRequest(workspace: Workspace, video: Video, platform: Platform): PostRequest {
-  const account = workspace.accounts.find((item) => item.brandId === video.brandId && item.platform === platform);
+  const matches = (item: Account) => item.brandId === video.brandId && item.platform === platform;
+  const account = workspace.accounts.find((item) => matches(item) && item.status === 'active') ?? workspace.accounts.find(matches);
   const details = detailsOf(video);
   return {
     platform, brandId: video.brandId, videoId: video.id, ...brandLogin(workspace.developerLogins, account), handle: account?.handle ?? '',
@@ -62,19 +63,41 @@ export function markPosted(workspace: Workspace, videoId: string, platform: Plat
  */
 export function useBrowserPosting(workspace: Workspace, onSave: Save) {
   const latest = useRef(workspace);
-  latest.current = workspace;
+  // A second window may report before React delivers the first successful save as a prop.
+  const pending = useRef<Asking[]>([]);
+  pending.current = pending.current.filter((item) => !workspace.videos?.find((video) => video.id === item.videoId)?.posted.includes(item.platform));
+  latest.current = pending.current.reduce((current, item) => markPosted(current, item.videoId, item.platform) ?? current, workspace);
   const save = useRef(onSave);
   save.current = onSave;
   const [asking, setAsking] = useState<Asking[]>([]);
   const [open, setOpen] = useState<Asking[]>([]);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const confirming = useRef(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const same = (a: Asking) => (b: Asking) => a.videoId === b.videoId && a.platform === b.platform;
+  const key = (item: Asking) => JSON.stringify([item.videoId, item.platform]);
+  function clearError(item: Asking) {
+    setErrors((current) => { const next = { ...current }; delete next[key(item)]; return next; });
+  }
+  function ask(item: Asking) { setAsking((list) => list.some(same(item)) ? list : [...list, item]); }
 
   async function confirm(item: Asking, posted: boolean) {
-    setAsking((list) => list.filter((other) => !same(item)(other)));
-    if (!posted) return;
-    const next = markPosted(latest.current, item.videoId, item.platform);
-    const video = latest.current.videos?.find((v) => v.id === item.videoId);
-    if (next) await save.current(next, `Marked "${video?.title ?? 'the video'}" as posted on ${getPlatform(item.platform).name}.`);
+    if (confirming.current) { ask(item); return; }
+    if (!posted) { setAsking((list) => list.filter((other) => !same(item)(other))); clearError(item); return; }
+    confirming.current = true; setIsConfirming(true); ask(item); clearError(item);
+    try {
+      const next = markPosted(latest.current, item.videoId, item.platform);
+      const video = latest.current.videos?.find((v) => v.id === item.videoId);
+      if (!video) throw new Error('Video no longer exists.');
+      if (next) {
+        if (!(await save.current(next, `Marked "${video.title}" as posted on ${getPlatform(item.platform).name}.`))) throw new Error('Save failed.');
+        pending.current = [...pending.current.filter((other) => !same(item)(other)), item];
+        latest.current = markPosted(latest.current, item.videoId, item.platform) ?? latest.current;
+      }
+      setAsking((list) => list.filter((other) => !same(item)(other)));
+    } catch {
+      setErrors((current) => ({ ...current, [key(item)]: 'Could not save the posted status. Try Yes again.' }));
+    } finally { confirming.current = false; setIsConfirming(false); }
   }
 
   useEffect(() => {
@@ -88,7 +111,7 @@ export function useBrowserPosting(workspace: Workspace, onSave: Save) {
         return;
       }
       const video = latest.current.videos?.find((v) => v.id === update.videoId);
-      if (video && !video.posted.includes(update.platform)) setAsking((list) => list.some(same(item)) ? list : [...list, item]);
+      if (video && !video.posted.includes(update.platform)) ask(item);
     }).then((unlisten) => { if (live) stop = unlisten; else unlisten(); });
     return () => { live = false; stop?.(); };
   }, []);
@@ -101,5 +124,6 @@ export function useBrowserPosting(workspace: Workspace, onSave: Save) {
   }
   const isAsking = (videoId: string, platform: Platform) => asking.some(same({ videoId, platform }));
   const isOpen = (videoId: string, platform: Platform) => open.some(same({ videoId, platform }));
-  return { post, confirm, isAsking, isOpen, asking };
+  const confirmationError = (videoId: string, platform: Platform) => errors[key({ videoId, platform })];
+  return { post, confirm, isAsking, isOpen, asking, isConfirming, confirmationError };
 }

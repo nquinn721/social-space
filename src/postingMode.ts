@@ -4,7 +4,7 @@ import type { Platform } from './model';
 
 /**
  * How each social gets a video: 'api' posts it from the app by itself, 'browser' opens the social's own
- * upload page in an app window with everything filled in, for Nate to press Post.
+ * upload page in an app window, for Nate to review and press Post.
  * Instagram and Facebook Page Reels post through the Graph API. TikTok (Sandbox) and YouTube (audit) post through the browser
  * until their review is approved and API uploading is built for them; X posts through the browser too.
  */
@@ -24,8 +24,9 @@ export function apiReview(marks: Record<string, number> | undefined, platform: P
 /** One line on how a social posts, for Settings and the Post panel. */
 export function postModeNote(marks: Record<string, number> | undefined, platform: Platform): string {
   if (postMode(platform) === 'api') return 'Posts by itself through the API.';
+  if (platform === 'x') return 'Opens X for you to attach the video, enter the text, and post yourself.';
   const review = apiReview(marks, platform);
-  if (!review) return 'Posts through its own page in a Social Space window: everything is filled in, you press Post.';
+  if (!review) return 'Opens its page in a Social Space window. Check the details, then post yourself.';
   if (review.state === 'approved') return 'App review approved, so API posting can now be added. Until then it posts through its own page in a Social Space window.';
-  return 'Posts through its own page in a Social Space window until the app review is approved: everything is filled in, you press Post.';
+  return 'Opens its page in a Social Space window until the app review is approved. Check the filled details, then post yourself.';
 }

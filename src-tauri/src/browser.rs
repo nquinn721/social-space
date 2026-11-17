@@ -8,6 +8,14 @@ use tauri::{
 static NEXT_WINDOW: AtomicU64 = AtomicU64::new(1);
 const OAUTH_CALLBACK_PORT: u16 = 49173;
 
+/// X's website is opened for manual use; page automation is reserved for other sites.
+pub(crate) fn is_x_site(url: &url::Url) -> bool {
+    url.host_str().is_some_and(|host| {
+        let host = host.trim_end_matches('.');
+        ["x.com", "twitter.com"].iter().any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+    })
+}
+
 pub(crate) fn allowed_navigation(url: &url::Url, oauth_callback: bool) -> bool {
     if url.as_str() == "about:blank" {
         return true;
@@ -91,12 +99,14 @@ pub(crate) fn make_window(
 ) -> Result<WebviewWindow, String> {
     let label = format!("site-{}", NEXT_WINDOW.fetch_add(1, Ordering::Relaxed));
     let popup_app = app.clone();
+    let apply_email_routing = !is_x_site(&url);
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title("Socialspace · Website")
         .inner_size(1100.0, 800.0)
         // The app fills logins itself; WebView2's autofill would offer old entries over its fill.
-        .general_autofill_enabled(false)
-        .initialization_script(EMAIL_LOGIN_SCRIPT)
+        .general_autofill_enabled(false);
+    let builder = if apply_email_routing { builder.initialization_script(EMAIL_LOGIN_SCRIPT) } else { builder };
+    let builder = builder
         .on_navigation(move |url| allowed_navigation(url, oauth_callback))
         .on_page_load(|window, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished && !to_email_login(window.as_ref()) {
@@ -183,5 +193,14 @@ mod tests {
         assert!(!allowed("http://127.0.0.1:49173/callback?code=x", false));
         assert!(allowed("http://127.0.0.1:49173/callback?code=x", true));
         assert!(!allowed("http://127.0.0.1:49173/other", true));
+    }
+    #[test]
+    fn recognises_x_hosts_without_matching_similar_domains() {
+        for address in ["https://x.com/", "https://mobile.x.com/", "https://twitter.com/", "https://developer.twitter.com/", "https://x.com./"] {
+            assert!(is_x_site(&address.parse().unwrap()), "{address}");
+        }
+        for address in ["https://notx.com/", "https://x.com.example/", "https://www.tiktok.com/"] {
+            assert!(!is_x_site(&address.parse().unwrap()), "{address}");
+        }
     }
 }

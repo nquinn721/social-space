@@ -8,7 +8,7 @@ import { postText } from './postDetails';
  * The brand's live Facebook profile (its Page) and whether the app can post Reels to it.
  * connected: a Page is connected (null while checking). page: the connected Page's name.
  */
-export type BrandFacebook = { accountId: string; page: string; connected: boolean | null };
+export type BrandFacebook = { accountId: string; page: string; pageId?: string; connected: boolean | null };
 
 /** Finds the brand's live Facebook profile and checks its Page connection. null when the brand has none. */
 export function useBrandFacebook(workspace: Workspace, brandId: string | undefined): BrandFacebook | null {
@@ -28,7 +28,7 @@ export function useBrandFacebook(workspace: Workspace, brandId: string | undefin
     setState({ ...base, connected: null });
     if (!isTauri()) { setState({ ...base, connected: false }); return; }
     facebookConnection(account.id)
-      .then((page) => { if (live) setState(page ? { ...base, page: page.name, connected: true } : { ...base, connected: false }); })
+      .then((page) => { if (live) setState(page ? { ...base, page: page.name, pageId: page.id, connected: true } : { ...base, connected: false }); })
       .catch(() => { if (live) setState({ ...base, connected: false }); });
     return () => { live = false; };
   }, [account?.id, checked]);
@@ -37,5 +37,5 @@ export function useBrandFacebook(workspace: Workspace, brandId: string | undefin
 
 /** Uploads a video saved on this PC and publishes it as a Reel on the brand's Page, with its description and hashtags. */
 export function publishVideoToFacebook(target: BrandFacebook, video: Video) {
-  return publishFacebookReelFile(video.mediaSource, postText(video), target.accountId);
+  return publishFacebookReelFile(video.mediaSource, postText(video), target.accountId, target.pageId);
 }

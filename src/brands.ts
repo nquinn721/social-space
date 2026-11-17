@@ -2,18 +2,18 @@ import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type
 
 /**
  * How each social lets one sign-in hold several profiles.
- * Instagram: up to 5 profiles can share one email and switch under one login (each needs its own username).
+ * Instagram profiles can be grouped under a sign-in. The app plans four per login by preference.
  * YouTube: one Google account can own many channels (Brand Accounts).
  * TikTok and X: every profile is its own account and needs an email no other account there uses.
  */
-export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number; explain: string }> = {
-  // Instagram allows 5; Nate keeps 4 per login, then a new login takes the next brands.
-  instagram: { profilesPerLogin: 4, explain: 'Up to 4 profiles share one Instagram login; the next brand gets a new Instagram account.' },
-  youtube: { profilesPerLogin: 100, explain: 'YouTube channels live under one Google account as Brand Accounts.' },
+export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number | null; explain: string }> = {
+  // Four is the owner's planning preference; the real provider state must be checked separately.
+  instagram: { profilesPerLogin: 4, explain: 'Plan up to 4 Instagram profiles per login, then use another login. Confirm availability in Instagram.' },
+  youtube: { profilesPerLogin: 100, explain: 'Plan up to 100 YouTube channels per Google account. Confirm existing channels in YouTube.' },
   tiktok: { profilesPerLogin: 1, explain: 'TikTok needs a separate account with its own email for each profile.' },
   x: { profilesPerLogin: 1, explain: 'X needs a separate account with its own email for each profile.' },
   // Pages have no login of their own: they all belong to the SoftWings business portfolio, managed with your own Facebook account.
-  facebook: { profilesPerLogin: 100, explain: 'Facebook Pages live in the SoftWings business portfolio; each brand gets its own Page there.' },
+  facebook: { profilesPerLogin: null, explain: 'Each brand gets a Facebook Page managed through your Facebook login and business portfolio.' },
 };
 
 /** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; brands use this one unless changed. */
@@ -21,15 +21,26 @@ export const DEFAULT_SIGNUP_BIRTHDAY = '1983-06-05';
 /** The default before 0.8.0. Profiles not created yet that still carry it move to the current default. */
 const OLD_DEFAULT_BIRTHDAY = '1995-06-15';
 
-export const sharesLogins = (platform: Platform) => LOGIN_RULES[platform].profilesPerLogin > 1;
+export const sharesLogins = (platform: Platform) => {
+  const limit = LOGIN_RULES[platform].profilesPerLogin;
+  return limit === null || limit > 1;
+};
 const emailKey = (email: string | undefined) => (email ?? '').trim().toLowerCase();
+/** Gmail plus-addresses and dots are aliases of the same Google account. */
+function loginKey(platform: Platform, email: string | undefined): string {
+  const key = emailKey(email);
+  if (platform !== 'youtube') return key;
+  const parts = key.split('@');
+  if (parts.length !== 2 || !['gmail.com', 'googlemail.com'].includes(parts[1])) return key;
+  return `${parts[0].split('+')[0].replace(/\./g, '')}@gmail.com`;
+}
 
 /** A sign-in on one social and the profiles under it. Logins are grouped by sign-up email. */
 export type Login = { platform: Platform; email: string; accounts: Account[] };
 export function loginsOn(accounts: Account[], platform: Platform): Login[] {
   const groups = new Map<string, Login>();
   for (const account of accounts) {
-    const key = emailKey(account.signupEmail);
+    const key = loginKey(platform, account.signupEmail);
     if (account.platform !== platform || !key) continue;
     const login = groups.get(key) ?? { platform, email: account.signupEmail!.trim(), accounts: [] };
     login.accounts.push(account);
@@ -77,12 +88,25 @@ export function planPresence(accounts: Account[], platform: Platform, brandName:
   const { profilesPerLogin } = LOGIN_RULES[platform];
   const logins = loginsOn(accounts, platform);
   if (sharesLogins(platform)) {
-    const roomy = logins.filter((login) => login.accounts.length < profilesPerLogin);
-    const login = roomy.find((item) => emailKey(item.email) === emailKey(baseEmail)) ?? roomy[0];
+    const roomy = logins.filter((login) => profilesPerLogin === null || login.accounts.length < profilesPerLogin);
+    const login = roomy.find((item) => loginKey(platform, item.email) === loginKey(platform, baseEmail)) ?? roomy[0];
     if (login) {
-      const count = platform === 'youtube' || platform === 'facebook' ? `${login.accounts.length} ${login.accounts.length === 1 ? (platform === 'youtube' ? 'channel' : 'Page') : (platform === 'youtube' ? 'channels' : 'Pages')} there now` : `${login.accounts.length + 1} of ${profilesPerLogin} profiles`;
-      return { mode: 'attach', platform, email: login.email, login, reason: `Adds to your ${name} login ${login.email} (${count}).` };
+      const saved = login.accounts.length;
+      const reason = platform === 'facebook'
+        ? `Plan a Page for this brand in your business portfolio. Social Space has ${saved} saved for this login; confirm them in Facebook.`
+        : platform === 'youtube'
+          ? `Plan a channel under ${login.email}. Social Space has ${saved} saved for this login; confirm the actual count in YouTube.`
+          : `Plan to add this profile to ${login.email} (${saved + 1} of ${profilesPerLogin} in your plan). Confirm availability in ${name}.`;
+      return { mode: 'attach', platform, email: login.email, login, reason };
     }
+  }
+  // A Gmail plus-address is an alias for the same Google account, not another YouTube login.
+  if (platform === 'youtube' && logins.length > 0) {
+    const requestedEmail = baseEmail.trim();
+    if (requestedEmail && !logins.some((login) => loginKey(platform, login.email) === loginKey(platform, requestedEmail))) {
+      return { mode: 'new', platform, email: requestedEmail, reason: 'Plan this channel under the different Google account provided; confirm the account and its channel count in YouTube.' };
+    }
+    return { mode: 'new', platform, email: '', reason: 'The saved Google logins have reached the 100-channel planning limit. Choose a different Google account; a Gmail plus-address is not a new account.' };
   }
   const used = new Set(accounts.filter((account) => account.platform === platform).map((account) => emailKey(account.signupEmail)));
   // TikTok and X accounts always get the brand's own plus-address, never the main inbox address itself.
@@ -92,7 +116,12 @@ export function planPresence(accounts: Account[], platform: Platform, brandName:
     email = plusAddress(baseEmail, tag);
     for (let n = 2; used.has(emailKey(email)); n += 1) email = plusAddress(baseEmail, `${tag}${n}`);
   }
-  return { mode: 'new', platform, email, reason: sharesLogins(platform) ? `New ${name} login with ${email}.` : `New ${name} account with its own email ${email}.` };
+  const reason = platform === 'facebook'
+    ? 'Plan a Facebook Page for this brand in your business portfolio, managed through your Facebook login.'
+    : sharesLogins(platform)
+      ? `Plan a new ${name} login with ${email}; confirm availability on the platform.`
+      : `Plan a separate ${name} account with ${email}; confirm the platform accepts this address.`;
+  return { mode: 'new', platform, email, reason };
 }
 
 /** Problems that would stop sign-ups on the socials themselves, so they show before Nate tries. */
@@ -102,8 +131,10 @@ export function presenceIssues(accounts: Account[]): { accountId: string; text: 
     const name = getPlatform(platform).name;
     for (const login of loginsOn(accounts, platform)) {
       const limit = LOGIN_RULES[platform].profilesPerLogin;
-      if (login.accounts.length > limit) for (const account of login.accounts.slice(limit)) {
-        issues.push({ accountId: account.id, text: limit === 1 ? `Another ${name} account already uses ${login.email}. ${name} needs a different email for each account.` : `${login.email} already has ${limit} ${name} profiles, the most one login allows.` });
+      if (limit !== null && login.accounts.length > limit) for (const account of login.accounts.slice(limit)) {
+        issues.push({ accountId: account.id, text: limit === 1
+          ? `Another ${name} account already uses ${login.email}. ${name} needs a different email for each account.`
+          : `${login.email} has more than the ${limit} ${name} profiles in your Social Space plan. Check the actual count on ${name}.` });
       }
     }
     const handles = new Map<string, string>();
@@ -153,6 +184,7 @@ export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
 
 /** Where a profile signs in, in plain words: shared with other brands, or its own account. */
 export function loginText(account: Account, workspace: Pick<Workspace, 'accounts' | 'brands'>) {
+  if (account.platform === 'facebook') return 'This Page is managed through your Facebook login and business portfolio.';
   if (!account.signupEmail) return 'No sign-up email yet.';
   if (!sharesLogins(account.platform)) return `Its own ${getPlatform(account.platform).name} account, signed up with ${account.signupEmail}.`;
   const login = loginsOn(workspace.accounts, account.platform).find((item) => item.accounts.some((other) => other.id === account.id));

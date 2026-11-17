@@ -417,6 +417,7 @@ fn run_once(dir: &Path) -> Result<(), String> {
             item.input.media_source.clone(),
             item.input.caption.clone(),
             profile,
+            item.instagram_account_id.clone(),
         ))
         .map(|_| ())
     })();
@@ -491,10 +492,12 @@ mod tests {
     }
     #[test]
     fn identity_is_pinned_and_handles_are_normalized() {
-        let job = item(QueueMode::Automatic, QueuePlatform::Instagram, 100);
+        let mut job = item(QueueMode::Automatic, QueuePlatform::Instagram, 100);
         assert!(matches_identity(&job, "42", "Studio"));
         assert!(!matches_identity(&job, "43", "studio"));
         assert!(!matches_identity(&job, "42", "other"));
+        job.instagram_account_id = None;
+        assert!(!matches_identity(&job, "42", "studio"));
     }
     #[test]
     fn queue_claims_once_and_recovers_interrupted_posts_as_review() {

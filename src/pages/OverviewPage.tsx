@@ -8,7 +8,8 @@ import { listModels } from '../assistant/grokClient';
 import { getPlatform, type Platform, type View, type Workspace } from '../model';
 import { BrandMark } from '../ui';
 import { useSetupStatus } from '../setupService';
-import { brandStatuses } from '../brandStatus';
+import { brandStatuses, needsAttention } from '../brandStatus';
+import { useSignIns } from '../useSignIns';
 import { migrateWorkspace } from '../brands';
 import BrandCard, { postsToMake } from '../BrandCard';
 
@@ -62,14 +63,15 @@ export default function OverviewPage({ workspace: saved, loaded, onNavigate, onO
   // Still checking email and Grok: don't flash the setup card at people who are set up.
   const setupKnown = email !== null && model !== null;
   const status = useSetupStatus(workspace.accounts);
+  const signIns = useSignIns();
   const brands = workspace.brands ?? [];
   const boards = useMemo(() => brands.map((brand) => {
-    const statuses = brandStatuses(workspace, brand.id, { connections: status.connections, passwords: status.passwords });
+    const statuses = brandStatuses(workspace, brand.id, { connections: status.connections, passwords: status.passwords, signIns: signIns[brand.id] });
     return { brand, accounts: workspace.accounts.filter((account) => account.brandId === brand.id), statuses, posts: postsToMake(workspace, brand.id, statuses) };
-  }), [workspace, brands, status.connections, status.passwords]);
+  }), [workspace, brands, status.connections, status.passwords, signIns]);
   const toMake = boards.reduce((sum, board) => sum + board.posts.total, 0);
   const canGo = boards.reduce((sum, board) => sum + board.posts.now, 0);
-  const attention = boards.flatMap((board) => board.statuses.filter((item) => !item.canPost && (item.tone === 'todo' || item.tone === 'problem')).map((item) => ({ ...item, brand: board.brand })));
+  const attention = boards.flatMap((board) => board.statuses.filter(needsAttention).map((item) => ({ ...item, brand: board.brand })));
   const live = workspace.accounts.filter((account) => account.status === 'active').length;
   const waitingBrands = boards.filter((board) => board.posts.total > 0).sort((a, b) => b.posts.now - a.posts.now);
 

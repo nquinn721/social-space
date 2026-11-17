@@ -3,6 +3,7 @@ import { openPasswordReset, openProfilePage, saveResetPassword, type BrandSignIn
 import { useSignIns } from './useSignIns';
 import { brandLogin, wrongLogin } from './useBrowserPosting';
 import { sharesLogins } from './brands';
+import { browserSession } from './browserSession';
 import { useEffect, useRef, useState } from 'react';
 import { useConnectFlow } from './Connections';
 import { getPlatform, normalizeHandle, PLATFORMS, type Account, type Brand, type DeveloperLogin, type Platform, type View } from './model';
@@ -51,13 +52,14 @@ type RowState = { tone: Tone; text: string; action?: { label: string; run: () =>
 
 /** What the brand's window folder is signed in as on this social, for the card. */
 export function signInLine(platformName: string, handle: string, state: BrandSignIn | undefined): { tone: 'ok' | 'warning' | 'unknown'; text: string } {
-  if (!state) return { tone: 'unknown', text: `Sign-in not checked yet. Open ${platformName} in Social Space once to check it.` };
-  const at = new Date(state.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (!state.signedIn) return { tone: 'warning', text: `Not signed in to ${platformName} (checked ${at}). Open it in Social Space and sign in once; it stays signed in.` };
-  const own = normalizeHandle(handle).toLowerCase();
-  if (state.handle && own && state.handle.toLowerCase() !== own) return { tone: 'warning', text: `Signed in as @${state.handle}, not @${normalizeHandle(handle)} (checked ${at}). Sign out in the window and sign in as @${normalizeHandle(handle)}.` };
-  if (state.handle) return { tone: 'ok', text: `Signed in as @${state.handle} (checked ${at})` };
-  return { tone: 'ok', text: `Signed in to ${platformName} (checked ${at})` };
+  const platform = PLATFORMS.find((item) => item.name === platformName)?.id ?? 'x';
+  const session = browserSession(platform, handle, state);
+  if (session === 'not-checked') return { tone: 'unknown', text: `Sign-in not checked yet. Open ${platformName} and check the account before posting.` };
+  const at = new Date(state!.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (session === 'signed-out') return { tone: 'warning', text: `No ${platformName} session was detected at ${at}. Open it and sign in.` };
+  if (session === 'mismatch') return { tone: 'warning', text: `The last check saw @${state!.handle}, not @${normalizeHandle(handle)}. Check the account before posting.` };
+  if (session === 'matched') return { tone: 'unknown', text: `The last check saw @${state!.handle} at ${at}. Confirm the account is still selected before posting.` };
+  return { tone: 'unknown', text: `A ${platformName} session was detected at ${at}, but the ${platform === 'youtube' ? 'channel' : 'account'} was not verified. Check it before posting.` };
 }
 
 function CopyValue({ value, label }: { value: string; label: string }) {
@@ -144,13 +146,15 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
         note: account.platform === 'instagram' ? 'Meta only offers an Instagram account that is Professional and linked to the brand\'s Facebook Page. Do the steps below first.' : undefined };
     }
     const signIn = signIns[account.platform];
-    const own = normalizeHandle(account.handle).toLowerCase();
-    if (signIn && !signIn.signedIn) return { tone: 'todo', text: 'Not signed in', action: { label: 'Sign in', run: () => void viewProfile(account, false) },
-      note: account.platform === 'youtube' ? undefined : `Sign in once and it stays signed in. If ${name} says the password is wrong, use Details, Reset password.` };
-    if (signIn?.handle && own && signIn.handle.toLowerCase() !== own) return { tone: 'problem', text: `Signed in as @${signIn.handle}`, action: { label: 'Fix sign-in', run: () => void viewProfile(account, false) },
-      note: `The ${brand.name} window is signed in to another account. Sign out there and sign in as @${normalizeHandle(account.handle)}.` };
-    if (account.platform !== 'youtube' && status.passwords[account.id] === false) return { tone: 'todo', text: 'Login not saved', action: { label: 'Save login', run: () => onEditAccount(account) } };
-    return { tone: 'ok', text: 'Ready' };
+    const session = browserSession(account.platform, account.handle, signIn);
+    if (session === 'signed-out') return { tone: 'todo', text: 'Not signed in', action: { label: 'Sign in', run: () => void viewProfile(account, false) },
+      note: `Open ${name} and sign in yourself.` };
+    if (session === 'mismatch') return { tone: 'problem', text: `Signed in as @${signIn?.handle}`, action: { label: 'Fix sign-in', run: () => void viewProfile(account, false) },
+      note: `The last check saw another account. Check the window and select @${normalizeHandle(account.handle)} before posting.` };
+    if (session === 'not-checked' && account.platform !== 'youtube' && status.passwords[account.id] === false) return { tone: 'todo', text: 'Login not saved', action: { label: 'Save login', run: () => onEditAccount(account) } };
+    return { tone: 'todo', text: session === 'not-checked' ? 'Not checked' : 'Session detected', action: { label: 'Check account', run: () => void viewProfile(account, false) },
+      note: account.platform === 'youtube' ? 'A Google session does not verify the selected YouTube channel. Check it before posting.' : `Check which ${name} account is selected before posting.` };
+
   }
 
   function stepRow(need: Need, who: string, explain = false) {
@@ -212,10 +216,11 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
             <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${name} email`}/></dd></div>
             <div><dt>{account.platform === 'youtube' ? 'Google password' : 'Password'}</dt><dd><PasswordCell account={account}/></dd></div>
           </dl>}
+          {account.platform === 'x' && <p className="footnote">X sign-in, profile changes, and password resets are done manually on X. After changing your password, save it here with Edit details.</p>}
           {account.platform === 'youtube' && <p className="footnote">YouTube signs in with your Google account. The window only fills the password saved here, so if Google says it's wrong, change it here to your real Google password.</p>}
           <div className="social-row-links">
             {live && account.handle && <button type="button" className="ghost-button small-button" onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>}
-            {live && account.platform !== 'youtube' && account.platform !== 'facebook' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
+            {live && account.platform !== 'youtube' && account.platform !== 'facebook' && account.platform !== 'x' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
             <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => onEditAccount(account)}><Pencil size={14}/> Edit details</button>
             {live && check?.state === 'ok' && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void disconnect(account)}>Disconnect</button>}
             {!live && onAlreadyCreated && <button type="button" className="ghost-button small-button" disabled={disabled} aria-label="Mark it live" title="Made it on the social yourself? Mark it live" onClick={() => onAlreadyCreated(account)}><Check size={14}/> Mark it live</button>}
@@ -231,7 +236,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
         </div>}
       </li>;
     })}</ul>
-    {onAddSocial && missing.length > 0 && <div className="add-socials">{missing.map((platform) => <button type="button" key={platform.id} className="outline-button small-button" disabled={disabled} title={addHint?.(platform.id) || `Opens ${platform.name} sign-up with ${brand.name}'s details and password filled in.`} onClick={() => onAddSocial(platform.id)}>
+    {onAddSocial && missing.length > 0 && <div className="add-socials">{missing.map((platform) => <button type="button" key={platform.id} className="outline-button small-button" disabled={disabled} title={addHint?.(platform.id) || (platform.id === 'x' ? 'Open X sign-up and enter details yourself.' : `Opens ${platform.name} sign-up with ${brand.name}'s details filled in.`)} onClick={() => onAddSocial(platform.id)}>
       <Plus size={14}/> Add {platform.name}
     </button>)}</div>}
   </section>;

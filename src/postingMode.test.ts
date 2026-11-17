@@ -14,7 +14,7 @@ describe('posting mode', () => {
   it('says when a review is approved', () => {
     expect(postModeNote(undefined, 'tiktok')).toMatch(/until the app review is approved/);
     expect(postModeNote(withReviewState(undefined, 'tiktok', 'approved'), 'tiktok')).toMatch(/approved/);
-    expect(postModeNote(undefined, 'x')).toMatch(/you press Post/);
+    expect(postModeNote(undefined, 'x')).toMatch(/attach the video, enter the text, and post yourself/);
   });
 });
 
@@ -32,6 +32,12 @@ describe('browser posting', () => {
       videoPath: 'C:\\v\\bunny.mp4', title: 'Bunny hops', text: 'Hop\n\n#bunny', madeWithAi: true, madeForKids: false, cover: '0:03.2', coverMs: 3200,
     });
     expect(postRequest(workspace, workspace.videos![0], 'youtube').accountId).toBeUndefined();
+  });
+  it('uses the same active brand account that the status check selects', () => {
+    const planned = { ...workspace.accounts[0], id: 'planned', handle: 'old', status: 'planned' as const };
+    const anotherBrand = { ...workspace.accounts[0], id: 'other', brandId: 'other', handle: 'other' };
+    const current = { ...workspace, accounts: [planned, anotherBrand, workspace.accounts[0]] };
+    expect(postRequest(current, current.videos![0], 'tiktok')).toEqual(expect.objectContaining({ accountId: 'a1', handle: 'animals' }));
   });
   it('never fills the main Gmail or a developer login on TikTok or X', () => {
     const account = workspace.accounts[0];

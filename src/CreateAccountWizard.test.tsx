@@ -99,6 +99,14 @@ describe('create account wizard', () => {
 });
 
 describe('verification code detection', () => {
+  it('opens a planned X account without filling any X form', async () => {
+    const planned: Account = { id: 'p-x', platform: 'x', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: 'mia+x@example.com' };
+    render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('x', 'create', expect.anything()));
+    expect(profile.fillSiteForm).not.toHaveBeenCalled();
+    expect(await screen.findByText(/Enter the details on X yourself/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Fill this page again/ })).not.toBeInTheDocument();
+  });
   it('prefers the number next to the word code', () => {
     expect(profile.findCode('Order 2024 shipped. Your verification code: 771204')).toBe('771204');
     expect(profile.findCode('Use 5521 to sign in')).toBe('5521');
@@ -167,8 +175,8 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard initialPlatforms={['instagram', 'tiktok']} existing={existing} prefill={{ brandId: 'brand-mia' }} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     const plan = screen.getByRole('list', { name: 'Login plan' });
-    expect(plan).toHaveTextContent('Adds to your Instagram login softwings25@gmail.com (2 of 4 profiles).');
-    expect(plan).toHaveTextContent('New TikTok account with its own email softwings25+massagewithmia@gmail.com.');
+    expect(plan).toHaveTextContent('Plan to add this profile to softwings25@gmail.com (2 of 4 in your plan). Confirm availability in Instagram.');
+    expect(plan).toHaveTextContent('Plan a separate TikTok account with softwings25+massagewithmia@gmail.com; confirm the platform accepts this address.');
     await user.click(screen.getByRole('button', { name: /Start with 2 socials/ }));
     await screen.findByText('Now: Instagram (1 of 2)');
     expect(saved.map((item) => [item.platform, item.signupEmail, item.brandId])).toEqual([['instagram', DEFAULT_SIGNUP_EMAIL, 'brand-mia'], ['tiktok', 'softwings25+massagewithmia@gmail.com', 'brand-mia']]);

@@ -72,4 +72,12 @@ describe('brand profile details', () => {
     expect(editorFields(account('tiktok', 'active', { displayName: 'Mia', website: ' https://mia.example ' }), brand, { bio: ' Hi ', keywords: 'spa' }))
       .toEqual({ fullName: 'Mia', displayName: 'Mia', bio: 'Hi', website: 'https://mia.example' });
   });
+
+  it('tells the user to enter X profile details manually', async () => {
+    const user = userEvent.setup();
+    render(<BrandProfiles brand={brand} accounts={[account('x', 'active', { bio: 'Done' })]} busy={false} onSave={vi.fn(async () => true)}/>);
+    await user.click(screen.getByRole('button', { name: /^X$/ }));
+    expect(posting.openProfileEditor).toHaveBeenCalledWith(expect.objectContaining({ platform: 'x' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('On X, enter the details yourself.');
+  });
 });

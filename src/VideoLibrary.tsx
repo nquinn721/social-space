@@ -22,6 +22,7 @@ import { progressLabel, useBrandStatuses, videoProgress, type SocialStatus, type
 import { API_UPLOADS, postModeNote } from './postingMode';
 import { testModeOf, withPosted } from './appReviews';
 import { earlierPartMissing, videoPartLabel, waitingOnEarlierPart } from './series';
+import { batchPlan, preparationSignature, type BatchDestination } from './batchPosting';
 import './library.css';
 import './series.css';
 
@@ -92,8 +93,14 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   const [panel, setPanel] = useState<Panel>(null);
   const [stage, setStage] = useState<Stage | 'all'>('all');
   const [error, setError] = useState('');
+  const [batchBusy, setBatchBusy] = useState(false);
+  const batchGuard = useRef(false);
+  const latestWorkspace = useRef(workspace);
+  latestWorkspace.current = workspace;
   const generations = useVideoGenerations(workspace, onSave);
   const browser = useBrowserPosting(workspace, onSave);
+  const latestBrowser = useRef(browser);
+  latestBrowser.current = browser;
   const socials = brand ? brandSocials(workspace, brand.id) : [];
   const statuses = useBrandStatuses(workspace, brand?.id, instagram);
   const facebook = useBrandFacebook(workspace, brand?.id);
@@ -135,7 +142,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   }
   /** Posts the video as a Reel on the brand's connected Instagram profile, then saves its details and marks it posted there. */
   async function post(draft: Video, saveDefaults: boolean) {
-    if (!instagram) return;
+    if (!instagram || batchGuard.current) return;
     let link: string | undefined;
     try { link = (await publishVideoToInstagram(instagram, draft)).permalink; }
     catch (reason) {
@@ -149,7 +156,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   }
   /** Posts the video as a Reel on the brand's connected Facebook Page, then saves its details and marks it posted there. */
   async function postFacebook(draft: Video, saveDefaults: boolean) {
-    if (!facebook?.connected) return;
+    if (!facebook?.connected || batchGuard.current) return;
     let link: string | undefined;
     try { link = (await publishVideoToFacebook(facebook, draft)).permalink; }
     catch (reason) {
@@ -159,6 +166,27 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
     }
     const posted = link ? { ...draft, links: { ...draft.links, facebook: link } } : draft;
     await savePost(posted, saveDefaults, `Posted "${draft.title}" as a Reel on the Facebook Page ${facebook.page}.`, draft.posted.includes('facebook') ? draft.posted : [...draft.posted, 'facebook']);
+  }
+  /** Opens manual publishing windows after checking the approved plan is still current. */
+  async function preparePosts(video: Video, plan: BatchDestination[]) {
+    if (batchGuard.current) throw new Error('Posting windows are already being prepared.');
+    batchGuard.current = true;
+    setBatchBusy(true);
+    try {
+      for (const destination of plan) {
+        if (destination.method !== 'browser' && destination.method !== 'manual') continue;
+        const currentWorkspace = latestWorkspace.current;
+        const current = currentWorkspace.videos?.find(item => item.id === video.id);
+        if (!current || current.generation || preparationSignature(current) !== preparationSignature(video)) throw new Error('The video changed. Review it again before opening posting windows.');
+        if (current.posted.includes(destination.platform)) throw new Error(`${getPlatform(destination.platform).name} is already marked posted. Review the destinations again; any windows already opened remain open.`);
+        const order = waitingOnEarlierPart(currentWorkspace, current, destination.platform);
+        if (order) throw new Error(order);
+        const account = currentWorkspace.accounts.find(item => item.brandId === current.brandId && item.platform === destination.platform && item.status === 'active');
+        if (!brandSocials(currentWorkspace, current.brandId).includes(destination.platform) || !account || account.id !== destination.accountId || JSON.stringify(account) !== destination.accountSnapshot) throw new Error(`The ${getPlatform(destination.platform).name} account changed. Review the destinations again.`);
+        if (latestBrowser.current.isOpen(current.id, destination.platform) || latestBrowser.current.isAsking(current.id, destination.platform)) throw new Error(`Check the existing ${getPlatform(destination.platform).name} posting window first.`);
+        await latestBrowser.current.post(current, destination.platform);
+      }
+    } finally { batchGuard.current = false; setBatchBusy(false); }
   }
   function removeVideo(video: Video) {
     const note = video.generation?.status === 'working' ? ' The source may still finish it, but it will not be saved here.' : ' This does not delete it from any social or from your PC.';
@@ -207,10 +235,10 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
           </div>}
           {inCategory.length === 0 ? <div className="library-empty">No videos in {category.name} yet. Make one with AI or add a file.</div>
             : shown.length === 0 ? <div className="library-empty">Nothing in {STAGES.find((item) => item.id === stage)?.label} right now.</div> : <ul className="library-videos">
-            {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy} disabled={disabled} progress={generations.progress[video.id]}
+            {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy || batchBusy} disabled={disabled || batchBusy} progress={generations.progress[video.id]}
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
               category={category} brandName={brand.name} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
-              instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix}
+              instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix} onPreparePosts={preparePosts}
               part={videoPartLabel(workspace, video)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
           </ul>}
         </>}
@@ -265,6 +293,7 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; soci
   instagram?: BrandInstagram | null; onPost?: (draft: Video, saveDefaults: boolean) => Promise<void>; onConnectInstagram?: () => void;
   /** The brand's Facebook Page, and posting a Reel to it through the API. */
   facebook?: BrandFacebook | null; onPostFacebook?: (draft: Video, saveDefaults: boolean) => Promise<void>;
+  onPreparePosts: (video: Video, plan: BatchDestination[]) => Promise<void>;
   browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void;
   /** For a series episode: "Part 2 of 5", and why it can't go up on a social before an earlier part. */
   part?: string | null; waitingOn?: (platform: Platform) => string | null; earlierPart?: (platform: Platform) => number | null };
@@ -272,14 +301,19 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; soci
  * One video as a post: its picture and text on the left, and a tile for every social of the brand that
  * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
  */
-function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart }: RowProps) {
+function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, onPreparePosts }: RowProps) {
   const job = video.generation;
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
   const [watching, setWatching] = useState(false);
   const [editing, setEditing] = useState(false);
   const [working, setWorking] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [manualBusy, setManualBusy] = useState(false);
+  const manualGuard = useRef(false);
   const [error, setError] = useState('');
+  const [batchMessage, setBatchMessage] = useState('');
+  const actionGuard = useRef(false);
   const automatic = canPostAutomatically(video, socials, instagram, !!onPost);
   const tags = detailsOf(video).hashtags;
   const { confirm, dialog } = useConfirm();
@@ -289,14 +323,46 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   const facebookLink = video.links?.facebook;
   const openReel = () => { if (facebookLink) openFacebookPost(facebookLink).catch((reason) => setError(errorText(reason))); };
   const facebookReady = !job && !!onPostFacebook && !!facebook?.connected && isLocalVideo(video.mediaSource);
+  const plan = batchPlan({ video, socials, statuses, instagramReady: automatic, facebookReady, browserAvailable: !!browser,
+    isOpen: platform => !!browser?.isOpen(video.id, platform), isAsking: platform => !!browser?.isAsking(video.id, platform),
+    waitingOn: platform => waitingOn?.(platform) ?? null });
+  const eligible = plan.filter(item => item.method === 'browser' || item.method === 'manual');
+  async function startBatch() {
+    if (actionGuard.current || busy || working || !eligible.length) return;
+    actionGuard.current = true;
+    setConfirming(true);
+    try {
+      const problems = detailProblems(video, socials);
+      if (problems.length) { setEditing(true); setError(problems[0]); return; }
+      const ok = await confirm({ title: `Prepare "${video.title}"?`,
+        body: <><p>Review the destinations for <strong>{brandName}</strong>.</p><ul>{plan.map(item => <li key={item.platform}><strong>{getPlatform(item.platform).name}:</strong> {item.reason}</li>)}</ul><p>Check the account and publish in each window. Instagram and Facebook use their separate Post buttons.</p></>,
+        confirmLabel: 'Open posting windows' });
+      if (!ok) return;
+      setWorking(true); setError(''); setBatchMessage('');
+      try { await onPreparePosts(video, plan); setBatchMessage('Posting windows opened. Check each account and publish there.'); }
+      catch (reason) { setError(errorText(reason, 'Could not finish preparing all destinations.')); }
+      finally { setWorking(false); }
+    } finally { actionGuard.current = false; setConfirming(false); }
+  }
   const statusOf = (platform: Platform) => statuses.find((status) => status.platform === platform)!;
+  async function manualX(action: 'caption' | 'file') {
+    if (manualGuard.current || busy || working) return;
+    manualGuard.current = true; setManualBusy(true); setError('');
+    try {
+      if (action === 'caption') await navigator.clipboard.writeText(postText(video));
+      else await showVideoInFolder(video.mediaSource);
+    } catch (reason) { setError(errorText(reason, action === 'caption' ? 'Could not copy the caption.' : 'Could not locate the video.')); }
+    finally { manualGuard.current = false; setManualBusy(false); }
+  }
   async function unmark(platform: Platform) {
     const name = getPlatform(platform).name;
     if (await confirm({ title: `Mark as not posted on ${name}?`, body: <p>"{video.title}" goes back to waiting for {name}. Nothing is removed from {name}.</p>, confirmLabel: 'Mark as not posted' })) onToggle(platform);
   }
   /** Posting to Instagram goes straight out through the API, after one confirmation. */
   async function approve(draft: Video, saveDefaults: boolean) {
-    if (!onPost || !instagram || working) return false;
+    if (!onPost || !instagram || working || busy || actionGuard.current) return false;
+    actionGuard.current = true; setConfirming(true);
+    try {
     const order = waitingOn?.('instagram');
     if (order) { setError(order); return false; }
     const problems = detailProblems(draft, socials);
@@ -312,10 +378,13 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     try { await onPost(draft, saveDefaults); return true; }
     catch (reason) { setError(errorText(reason, 'Instagram did not publish this video.')); return false; }
     finally { setWorking(false); }
+    } finally { actionGuard.current = false; setConfirming(false); }
   }
   /** Posting a Reel to the brand's Facebook Page also goes straight out through the API, after one confirmation. */
   async function approveFacebook(draft: Video, saveDefaults: boolean) {
-    if (!onPostFacebook || !facebook?.connected || working) return false;
+    if (!onPostFacebook || !facebook?.connected || working || busy || actionGuard.current) return false;
+    actionGuard.current = true; setConfirming(true);
+    try {
     const order = waitingOn?.('facebook');
     if (order) { setError(order); return false; }
     const problems = detailProblems(draft, socials);
@@ -331,10 +400,13 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     try { await onPostFacebook(draft, saveDefaults); return true; }
     catch (reason) { setError(errorText(reason, 'Facebook did not publish this video.')); return false; }
     finally { setWorking(false); }
+    } finally { actionGuard.current = false; setConfirming(false); }
   }
   /** Opens the social's upload page with this post filled in, after saving any edits. */
   async function postOnPage(draft: Video, platform: Platform, saveDefaults = false) {
-    if (!browser || !onSavePost) return false;
+    if (!browser || !onSavePost || actionGuard.current || busy || working) return false;
+    actionGuard.current = true; setWorking(true);
+    try {
     const order = waitingOn?.(platform);
     if (order) { setError(order); return false; }
     const problems = detailProblems(draft, socials);
@@ -346,6 +418,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       await browser.post(draft, platform);
       return true;
     } catch (reason) { setError(errorText(reason, `Could not open the ${getPlatform(platform).name} upload page.`)); return false; }
+    } finally { actionGuard.current = false; setWorking(false); }
   }
 
   function destination(platform: Platform) {
@@ -368,18 +441,18 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       tone = 'muted'; line = `After Part ${earlierPart(platform)}`;
     } else if (browser?.isAsking(video.id, platform)) {
       tone = 'todo'; line = 'Did it go up?';
-      action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
-        <button type="button" className="dest-link quiet" onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button></>;
+      action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
+        <button type="button" className="dest-link quiet" disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button>{browser.confirmationError(video.id, platform) && <span className="error-message" role="alert">{browser.confirmationError(video.id, platform)}</span>}</>;
     } else if (status.canPost && platform === 'facebook') {
-      if (facebookReady) { tone = 'ready'; line = `Posts to ${facebook?.page}`; action = <button type="button" className="dest-button primary" aria-label="Post to Facebook" disabled={busy || working} onClick={() => void approveFacebook(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
+      if (facebookReady) { tone = 'ready'; line = `Posts to ${facebook?.page}`; action = <button type="button" className="dest-button primary" aria-label="Post to Facebook" disabled={busy || working || confirming} onClick={() => void approveFacebook(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
       else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected' : 'Needs a video file'; }
     } else if (status.canPost && platform === 'instagram') {
-      if (automatic) { tone = 'ready'; line = `Posts as @${instagram?.username}`; action = <button type="button" className="dest-button primary" aria-label="Post to Instagram" disabled={busy || working} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
+      if (automatic) { tone = 'ready'; line = `Posts as @${instagram?.username}`; action = <button type="button" className="dest-button primary" aria-label="Post to Instagram" disabled={busy || working || confirming} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
       else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected, can\'t upload' : 'Needs a video file'; }
     } else if (status.canPost && browser) {
       const open = browser.isOpen(video.id, platform);
-      tone = 'ready'; line = open ? 'Window open' : status.kind === 'no-password' ? 'Ready · login not saved' : 'Ready';
-      action = <button type="button" className="dest-button primary" aria-label={open ? `Open ${name} again` : `Post on ${name}`} disabled={busy || working} title={`Opens ${name}'s upload page in ${brandName}'s window with everything filled in. You press Post.`} onClick={() => void postOnPage(video, platform)}><AppWindow size={13}/> {open ? 'Open again' : 'Post'}</button>;
+      tone = 'todo'; line = open ? 'Window open' : status.label;
+      action = <><button type="button" className="dest-button primary" aria-label={open ? `Open ${name} again` : `Post on ${name}`} disabled={busy || working || confirming} title={platform === 'x' ? 'Opens X; attach the video and write the post yourself.' : `Opens ${name}'s upload page. Check the account and publish there.`} onClick={() => void postOnPage(video, platform)}><AppWindow size={13}/> {open ? 'Open again' : 'Post'}</button>{platform === 'x' && <><button type="button" className="dest-link" disabled={busy || working || manualBusy} aria-label="Copy X caption" onClick={() => void manualX('caption')}>Copy caption</button><button type="button" className="dest-link" disabled={busy || working || manualBusy || !isLocalVideo(video.mediaSource)} aria-label="Show X video in folder" onClick={() => void manualX('file')}>Show file</button></>}</>;
     } else if (status.action) {
       action = <button type="button" className="dest-button" aria-label={`${status.action.label} (${name})`} disabled={busy} title={status.detail} onClick={() => onFix(status)}>{status.action.short}</button>;
     }
@@ -413,8 +486,11 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       </div>
     </div>
     {socials.length > 0 && !editing && <div className="dest-grid" role="group" aria-label="Where it goes">{socials.map(destination)}</div>}
+    {!job && !editing && <button type="button" className="primary-button small-button" disabled={disabled || working || confirming || eligible.length === 0} onClick={() => void startBatch()}><Send size={14}/> Prepare posting windows</button>}
+    {!job && !editing && <p className="library-hint">Instagram and Facebook use their separate Post buttons.</p>}
+    {batchMessage && <p className="library-hint" role="status">{batchMessage}</p>}
     {!editing && done.state !== 'making' && <PartnerReviewControls video={video} socials={socials} disabled={disabled || working}/>}
-    {working && <p className="library-hint" role="status">Uploading. This can take a few minutes; keep the app open.</p>}
+    {working && <p className="library-hint" role="status">Preparing this post. This can take a few minutes; keep the app open.</p>}
     {dialog}
     {error && !editing && <div className="error-message" role="alert">{error}</div>}
     {editing && onSavePost && <PostPanel video={video} category={category} brandName={brandName} socials={socials} busy={busy || working} disabled={disabled} instagram={instagram} onOpen={onOpen}

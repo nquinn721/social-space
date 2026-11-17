@@ -113,7 +113,7 @@ type Props = {
 /**
  * The brand's picture, made with Grok and used on every profile of the brand by default.
  * Each social can have its own instead. Putting it on a live profile opens that social's profile
- * settings with the picture filled in at the social's size; Nate checks it and presses Save.
+ * settings for review; X requires choosing the picture manually.
  */
 export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSaveAccountImage, onNavigate, developerLogins }: Props) {
   const [target, setTarget] = useState<Target | null>(null);
@@ -169,7 +169,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
     // The brand's own window (its signed-in folder), so the picture lands on this brand's profile and
     // a sign-in page there fills the brand's login.
     await openProfileEditor({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: normalizeHandle(account.handle), fields: {}, imagePath: path });
-    setNote(`Opened ${getPlatform(account.platform).name} profile settings with the picture filled in (${PROFILE_SIZES[account.platform]} x ${PROFILE_SIZES[account.platform]}). Check the crop there, then press Save on the page.${account.platform === 'youtube' && image?.banner ? ' For the banner: on Branding press Upload under Banner image and pick the file Show banner file selects.' : ''}`);
+    setNote(account.platform === 'x' ? 'Opened X profile settings. Choose your picture and save it on X yourself.' : `Opened ${getPlatform(account.platform).name} profile settings with the picture filled in (${PROFILE_SIZES[account.platform]} x ${PROFILE_SIZES[account.platform]}). Check the crop there, then press Save on the page.${account.platform === 'youtube' && image?.banner ? ' For the banner: on Branding press Upload under Banner image and pick the file Show banner file selects.' : ''}`);
   });
   const showBanner = () => run(async () => { if (image?.banner) await revealBrandImage(image.banner); });
   const needKey = onNavigate ? () => onNavigate('settings', 'video-sources') : undefined;
@@ -185,7 +185,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
           <button type="button" className="primary-button small-button" disabled={blocked} aria-expanded={target?.kind === 'brand'} onClick={() => studioFor({ kind: 'brand' })}><Wand2 size={14}/> {image?.file ? 'Make a new one' : 'Generate with Grok'}</button>
           <button type="button" className="outline-button small-button" disabled={blocked} onClick={() => void choose()}><ImagePlus size={14}/> Choose a file</button>
         </div>
-        {image?.file && accounts.some((account) => account.status === 'active') && <div className="picture-put-on"><span>Put it on</span>{accounts.filter((account) => account.status === 'active').map((account) => <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || !pictureFileFor(account, brand)} aria-label={`Put on ${getPlatform(account.platform).name}`} title={`Opens ${getPlatform(account.platform).name} profile settings with the picture filled in`} onClick={() => void putOn(account)}><BrandMark platform={account.platform} small/> {getPlatform(account.platform).name}</button>)}</div>}
+        {image?.file && accounts.some((account) => account.status === 'active') && <div className="picture-put-on"><span>Put it on</span>{accounts.filter((account) => account.status === 'active').map((account) => <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || !pictureFileFor(account, brand)} aria-label={`Put on ${getPlatform(account.platform).name}`} title={account.platform === 'x' ? 'Open X profile settings and choose the picture yourself' : `Opens ${getPlatform(account.platform).name} profile settings with the picture filled in`} onClick={() => void putOn(account)}><BrandMark platform={account.platform} small/> {getPlatform(account.platform).name}</button>)}</div>}
       </div>
     </div>
     {target?.kind === 'brand' && <PictureStudio key="brand" title={`Picture for ${brand.name}`} aspect="1:1" initial={image?.prompt ? '' : brand.name} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}

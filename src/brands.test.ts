@@ -42,6 +42,25 @@ describe('brand model', () => {
     expect(planPresence(full, 'instagram', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
   });
 
+  it('does not infer a Facebook Page limit from local counts', () => {
+    const pages = Array.from({ length: 101 }, (_, n) => account(String(n), 'facebook', `Brand ${n}`));
+    expect(planPresence(pages, 'facebook', 'New brand', BASE)).toMatchObject({ mode: 'attach', email: BASE });
+    expect(presenceIssues(pages)).toEqual([]);
+  });
+
+  it('asks for a different Google account after 100 saved YouTube channels instead of inventing a Gmail alias', () => {
+    const channels = Array.from({ length: 100 }, (_, n) => account(String(n), 'youtube', `Channel ${n}`));
+    expect(planPresence(channels, 'youtube', 'New brand', BASE)).toMatchObject({ mode: 'new', email: '' });
+    expect(planPresence(channels, 'youtube', 'New brand', BASE).reason).toContain('plus-address is not a new account');
+    expect(planPresence(channels, 'youtube', 'New brand', 'softwings25+other@gmail.com')).toMatchObject({ mode: 'new', email: '' });
+    expect(planPresence(channels, 'youtube', 'New brand', 'different@gmail.com')).toMatchObject({ mode: 'new', email: 'different@gmail.com' });
+  });
+
+  it('counts Gmail aliases and dots as the same YouTube account', () => {
+    const channels = Array.from({ length: 100 }, (_, n) => account(String(n), 'youtube', `Channel ${n}`, n % 2 ? 'soft.wings25+brand@gmail.com' : BASE));
+    expect(planPresence(channels, 'youtube', 'New brand', BASE)).toMatchObject({ mode: 'new', email: '' });
+  });
+
   it('gives TikTok and X their own unused email per account', () => {
     expect(planPresence([], 'tiktok', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
     const taken = [account('1', 'x', 'MassageMentor'), account('2', 'x', 'Old', 'softwings25+massagewithmia@gmail.com')];

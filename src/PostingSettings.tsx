@@ -8,7 +8,7 @@ import './setup.css';
 export default function PostingSettings({ marks }: { marks?: Record<string, number> }) {
   return <section className="settings-card" id="posting">
     <h2><Send size={17}/> Posting</h2>
-    <p>Instagram posts by itself through Meta's API. TikTok, YouTube and X open their own upload page in the brand's window with the video, caption, hashtags, title and cover filled in, and you press Post.</p>
+    <p>Instagram and Facebook can post through Meta's API. TikTok and YouTube open their upload pages with supported details filled in for your review. X opens its posting page for you to enter everything yourself.</p>
     <ul className="posting-modes">{PLATFORMS.map((platform) => {
       return <li key={platform.id}>
         <BrandMark platform={platform.id} small/>

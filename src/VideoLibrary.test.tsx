@@ -31,7 +31,7 @@ import * as instagram from './instagramService';
 vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }), cachedPostSuggestion: vi.fn(async () => { throw new Error('offline'); }) }));
 import * as ai from './assistant/postSuggest';
 const mocked = vi.mocked(sources);
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.clear(); });
 beforeEach(() => { vi.clearAllMocks(); });
 
 const profile = (id: string, platform: Account['platform'], status: Account['status'] = 'active'): Account => ({ id, platform, label: 'Mia', handle: 'mia', status, notes: '', brandId: 'mia' });
@@ -82,10 +82,31 @@ describe('video library', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
   });
 
+  it('keeps the confirmation visible with an error when saving a posted mark fails', async () => {
+    const { onSave, user } = setup();
+    onSave.mockResolvedValue(false);
+    const video = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await act(async () => { postingHandler?.({ payload: { videoId: 'v1', platform: 'tiktok', state: 'closed', posted: false } }); });
+    await user.click(within(video).getByRole('button', { name: /Yes, it's on TikTok/ }));
+    expect(await within(video).findByRole('alert')).toBeVisible();
+    expect(within(video).getByRole('button', { name: /Yes, it's on TikTok/ })).toBeEnabled();
+  });
+
   it('marks it posted by itself when the page shows the post went up', async () => {
     const { onSave } = setup();
     await act(async () => { postingHandler?.({ payload: { videoId: 'v1', platform: 'tiktok', state: 'posted', posted: true } }); });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ posted: ['instagram', 'tiktok'] })] }), 'Marked "Bunny hop" as posted on TikTok.');
+  });
+
+  it('offers manual X caption and file helpers without marking the post as published', async () => {
+    const x = { ...profile('x1', 'x'), signupEmail: 'brand@example.com' };
+    const { onSave, user } = setup({ ...base, accounts: [x], videos: [{ ...bunny, posted: [], caption: 'A brand caption' }] });
+    const row = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(row).getByRole('button', { name: 'Copy X caption' }));
+    expect(await navigator.clipboard.readText()).toBe('A brand caption');
+    await user.click(within(row).getByRole('button', { name: 'Show X video in folder' }));
+    expect(files.showVideoInFolder).toHaveBeenCalledWith(bunny.mediaSource);
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it('counts videos per category and how many are on every social', () => {
@@ -200,6 +221,34 @@ describe('approving a post', () => {
   const workspace = { ...base, videos: [fresh] };
   const connected = () => vi.mocked(instagram.claimInstagramConnection).mockResolvedValue({ id: '178', username: 'mia', login: 'facebook' });
 
+  it('prepares browser windows without sending or marking Meta posts', async () => {
+    connected();
+    const { onSave, user } = setup(workspace);
+    const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
+    await waitFor(() => expect(within(row).getByRole('button', { name: 'Post to Instagram' })).toBeEnabled());
+    await user.click(within(row).getByRole('button', { name: 'Prepare posting windows' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('separate Instagram Post');
+    expect(dialog).toHaveTextContent('TikTok: Opens the upload page; you review and publish');
+    await user.click(within(dialog).getByRole('button', { name: 'Open posting windows' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('open_posting_window', expect.objectContaining({ request: expect.objectContaining({ platform: 'tiktok' }) })));
+    expect(instagram.publishInstagramReelFile).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('refuses a changed account after the plan was reviewed', async () => {
+    connected();
+    const { view, onSave, onOpen, onManageSources, onConnectInstagram, user } = setup(workspace);
+    const row = screen.getByRole('listitem', { name: 'Carrot crunch' });
+    await user.click(within(row).getByRole('button', { name: 'Prepare posting windows' }));
+    const dialog = await screen.findByRole('alertdialog');
+    const changed = { ...workspace, accounts: workspace.accounts.map(account => account.platform === 'tiktok' ? { ...account, handle: 'replacement' } : account) };
+    view.rerender(<VideoLibrary workspace={changed} loaded busy={false} onSave={onSave} onOpen={onOpen} onManageSources={onManageSources} onConnectInstagram={onConnectInstagram}/>);
+    await user.click(within(dialog).getByRole('button', { name: 'Open posting windows' }));
+    expect(await within(row).findByRole('alert')).toHaveTextContent('account changed');
+    expect(invoke).not.toHaveBeenCalledWith('open_posting_window', expect.anything());
+  });
+
   it('shows the whole post and posts it to Instagram when approved', async () => {
     connected();
     vi.mocked(instagram.publishInstagramReelFile).mockResolvedValue({ id: 'reel-1', permalink: 'https://www.instagram.com/reel/abc/' });
@@ -214,7 +263,7 @@ describe('approving a post', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
     expect(confirmBox).not.toHaveBeenCalled();
     expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('1', 'mia');
-    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1', { coverMs: undefined, shareToFeed: true });
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1', { coverMs: undefined, shareToFeed: true, expectedId: '178' });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), 'Posted "Carrot crunch" to @mia on Instagram.');
   });
 
@@ -271,7 +320,7 @@ describe('approving a post', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Crunchy #bunny #snow');
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
-    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith(fresh.mediaSource, 'Crunchy\n\n#bunny #snow', '1', { coverMs: 2500, shareToFeed: false });
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith(fresh.mediaSource, 'Crunchy\n\n#bunny #snow', '1', { coverMs: 2500, shareToFeed: false, expectedId: '178' });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ categories: [expect.objectContaining({ id: 'rabbit', defaults: { caption: 'Crunchy', hashtags: ['bunny', 'snow'] } })] }), expect.any(String));
   });
 });

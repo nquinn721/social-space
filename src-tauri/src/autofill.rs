@@ -14,8 +14,6 @@ use tauri::{AppHandle, Manager};
 const MAX_IMAGE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_FIELD_CHARS: usize = 2_200;
 const PLATFORM_HOSTS: &[&str] = &[
-    "x.com",
-    "twitter.com",
     "instagram.com",
     "tiktok.com",
     "youtube.com",
@@ -590,7 +588,7 @@ pub fn fill_site_form(
     // Right after opening, the page may still be blank; it is filled when it finishes loading.
     let still_loading = url.scheme() == "about" || url.host_str().is_none();
     if !still_loading && !platform_host(&url) {
-        return Err("Forms can only be filled on X, Instagram, TikTok, or YouTube pages.".into());
+        return Err("This page cannot be filled automatically. Enter the details on the site yourself.".into());
     }
     let image = match image_path.as_deref().filter(|path| !path.is_empty()) {
         Some(path) => {
@@ -646,7 +644,9 @@ mod tests {
     fn only_platform_pages_can_be_filled() {
         let ok = |value: &str| platform_host(&value.parse().unwrap());
         assert!(ok("https://www.instagram.com/accounts/emailsignup/"));
-        assert!(ok("https://x.com/i/flow/signup"));
+        assert!(!ok("https://x.com/i/flow/signup"));
+        assert!(!ok("https://twitter.com/i/flow/signup"));
+        assert!(!ok("https://mobile.x.com/i/flow/signup"));
         assert!(ok("https://accounts.google.com/signup"));
         assert!(!ok("https://instagram.com.evil.example/"));
         assert!(!ok("https://notx.com/"));

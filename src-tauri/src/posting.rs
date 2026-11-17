@@ -2,11 +2,8 @@
 //! is not approved yet (TikTok Sandbox, YouTube audit) or not used (X).
 //!
 //! Each brand gets its own browser profile (cookie folder) for posting, so every brand stays signed in
-//! to its own TikTok, YouTube and X account. The window opens the upload page, fills the sign-in form
-//! with the account's saved username and password, attaches the video file, and fills in everything
-//! else (caption, title, cover, AI label, audience, visibility). It never presses Sign in, Post or
-//! Publish: Nate does, so publishing is his one click. When the page shows the post went
-//! up, the app is told and marks the video as posted; otherwise it asks Nate when the window closes.
+//! to its own TikTok, YouTube and X account. TikTok and YouTube windows can fill upload details;
+//! X is a manual handoff with no page automation. Nate reviews and posts on each site himself.
 
 use std::{
     path::PathBuf,
@@ -129,10 +126,14 @@ fn on_social(url: &url::Url) -> bool {
         })
 }
 
-/// X shows its sign-in as a pop-up over any page (compose, home) without changing the address, so the
-/// sign-in fill (which only fills empty sign-in fields as they appear) runs on every X page.
-pub(crate) fn signs_in_over_page(url: &url::Url) -> bool {
-    matches!(url.host_str().unwrap_or("").trim_start_matches("www."), "x.com" | "twitter.com")
+/// X's automation rules prohibit scripting its website, so its windows are manual.
+fn may_automate(platform: Platform) -> bool {
+    platform != Platform::X
+}
+
+/// Even a window opened for another provider can navigate to X; never run form scripts there.
+fn may_fill_page(url: &url::Url) -> bool {
+    on_social(url) && !crate::browser::is_x_site(url)
 }
 
 /// Whether the page shows the post went up: the post script marked it, or TikTok Studio moved on
@@ -235,14 +236,15 @@ struct Posting {
 }
 
 fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
+    if !may_automate(posting.request.platform) { return; }
     if crate::browser::to_email_login(webview) {
         return;
     }
     let Ok(url) = webview.url() else { return };
-    if !on_social(&url) {
+    if !may_fill_page(&url) {
         return;
     }
-    if is_sign_in(&url) || signs_in_over_page(&url) {
+    if is_sign_in(&url) {
         if let Some(script) = &posting.sign_in_script {
             let _ = webview.eval(script);
         }
@@ -282,7 +284,7 @@ fn build_window(
         Platform::Facebook => "Facebook",
     };
     let handle = &posting.request.handle;
-    let verb = if posting.config_script.is_some() { "Post on" } else { "Profile on" };
+    let verb = window_verb(&posting.request.video_id);
     let title = if handle.is_empty() { format!("Socialspace · {verb} {name}") } else { format!("Socialspace · {verb} {name} as @{handle}") };
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title(title)
@@ -290,8 +292,11 @@ fn build_window(
         .data_directory(dir)
         // WebView2's own form autofill would offer whatever was typed in this brand window before (the
         // main Gmail, another profile's login) and fill it over the app's fill; the app fills logins itself.
-        .general_autofill_enabled(false)
-        .initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
+        .general_autofill_enabled(false);
+    let builder = if may_automate(posting.request.platform) {
+        builder.initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
+    } else { builder };
+    let builder = builder
         .on_navigation(|url| crate::browser::allowed_navigation(url, false))
         .on_page_load(move |window, payload| {
             if payload.event() == PageLoadEvent::Finished {
@@ -313,6 +318,10 @@ fn build_window(
     builder.build().map_err(|_| "Could not open the upload page inside the app.".into())
 }
 
+fn window_verb(video_id: &str) -> &'static str {
+    if video_id.is_empty() { "Profile on" } else { "Post on" }
+}
+
 /// Watches the window for the post going up, and tells the app when it does or when the window closes.
 fn watch(app: AppHandle, window: WebviewWindow, request: PostRequest) {
     let platform = request.platform;
@@ -327,6 +336,7 @@ fn watch(app: AppHandle, window: WebviewWindow, request: PostRequest) {
             let _ = closed_app.emit(EVENT, update);
         }
     });
+    if !may_automate(platform) { return; }
     tauri::async_runtime::spawn(async move {
         let mut was_uploading = false;
         loop {
@@ -342,14 +352,21 @@ fn watch(app: AppHandle, window: WebviewWindow, request: PostRequest) {
     });
 }
 
-/// Opens the social's upload page for one video, signed in as the brand's profile, with the video
-/// attached and the text filled in. Nate checks it and presses Post.
+/// Opens a brand's upload page for review. X is entirely manual; other supported pages attempt to fill details.
 #[tauri::command]
 pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result<String, String> {
     check(&request)?;
     let address = upload_url(request.platform).ok_or("Instagram posts through its API, not a page.")?;
     let dir = profile_dir(&app, &request.brand_id)?;
     std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
+    if !may_automate(request.platform) {
+        let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: None, sign_in_script: None, profile_script: None, file: None, shared_session: Default::default() });
+        let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
+        let window = open_signed_in(&app, url, dir, posting)?;
+        let label = window.label().to_owned();
+        watch(app, window, request);
+        return Ok(label);
+    }
     let (file, file_note) = match attachable(&request.video_path) {
         Ok(file) => (Some(file), None),
         Err(note) => (None, Some(note)),
@@ -403,6 +420,10 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
     let window = build_window(app, blank, dir, posting.clone(), None)?;
     let (task_app, task_window) = (app.clone(), window.clone());
     tauri::async_runtime::spawn(async move {
+        if !may_automate(platform) {
+            let _ = task_window.navigate(url);
+            return;
+        }
         // WebView2 cookies must be handled off the main thread.
         let (restore_app, restore_window, restore_brand) = (task_app.clone(), task_window.clone(), brand.clone());
         let shared = tauri::async_runtime::spawn_blocking(move || {
@@ -443,14 +464,14 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
 }
 
 /// The sign-in fill for a brand profile's window. Only a profile the app sends is filled: its own
-/// login on TikTok and X, or the parent login an Instagram profile or YouTube channel lives under.
+/// login on TikTok, or the parent login an Instagram profile or YouTube channel lives under.
 /// Without one the sign-in page is left for Nate.
 fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, email: &str, password: Option<String>) -> Result<Option<String>, String> {
+    if !may_automate(platform) { return Ok(None); }
     if account_id.as_deref().map_or(true, str::is_empty) {
         return Ok(None);
     }
-    // TikTok and X sign in with the profile's username, which always matches the account, whatever
-    // email it was made with; giving them an email that has no account turns X's sign-in into sign-up.
+    // TikTok signs in with the profile's username so a shared email cannot select another account.
     match platform {
         Platform::Youtube | Platform::Instagram if !email.is_empty() => crate::autofill::sign_in_script(email, email, password),
         _ => crate::autofill::sign_in_script(handle.trim().trim_start_matches('@'), "", password),
@@ -531,10 +552,9 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
     }
     let dir = profile_dir(&app, &request.brand_id)?;
     std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
-    let password = match request.account_id.as_deref().filter(|id| !id.is_empty()) {
-        Some(id) => crate::account_passwords::read(id).ok().flatten(),
-        None => None,
-    };
+    let password = if may_automate(request.platform) {
+        request.account_id.as_deref().filter(|id| !id.is_empty()).and_then(|id| crate::account_passwords::read(id).ok().flatten())
+    } else { None };
     let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
     let post = PostRequest {
         platform: request.platform,
@@ -578,6 +598,9 @@ static PENDING_RESETS: std::sync::Mutex<Option<std::collections::HashMap<String,
 /// saved by `save_reset_password` once he confirms it worked.
 #[tauri::command]
 pub async fn open_password_reset(app: AppHandle, request: ProfileRequest) -> Result<(), String> {
+    if !may_automate(request.platform) {
+        return Err("Reset your password on X, then save the new password in Socialspace.".into());
+    }
     let address = reset_url(request.platform).ok_or("YouTube signs in with your main Google account, so there is nothing to reset here.")?;
     let account_id = request.account_id.clone().filter(|id| !id.is_empty()).ok_or("Choose the profile to reset.")?;
     if request.email.len() > 320 || account_id.len() > 128 {
@@ -944,8 +967,9 @@ mod tests {
         assert!(is_sign_in(&url("https://x.com/i/flow/login")));
         assert!(!is_sign_in(&url("https://x.com/compose/post")));
         assert!(is_sign_in(&url("https://www.instagram.com/accounts/login/")));
-        assert!(signs_in_over_page(&url("https://x.com/compose/post")));
-        assert!(!signs_in_over_page(&url("https://www.tiktok.com/tiktokstudio/upload")));
+        assert!(!may_fill_page(&url("https://x.com/compose/post")));
+        assert!(!may_fill_page(&url("https://mobile.twitter.com/i/flow/login")));
+        assert!(may_fill_page(&url("https://www.tiktok.com/tiktokstudio/upload")));
         assert!(!is_sign_in(&url("https://www.tiktok.com/tiktokstudio/upload")));
     }
 
@@ -988,12 +1012,16 @@ mod tests {
     }
 
     #[test]
-    fn x_and_tiktok_sign_in_by_username_and_never_fill_sign_up() {
-        let x = brand_sign_in(&Some("a1".into()), Platform::X, "@animals", "x+animals@example.com", None).unwrap().unwrap();
-        assert!(x.contains("\"username\":\"animals\"") && !x.contains("x+animals@example.com"), "{x}");
-        assert!(x.contains("\"signInOnly\":true"));
+    fn x_is_manual_and_tiktok_sign_in_uses_username_without_sign_up() {
+        assert!(!may_automate(Platform::X));
+        assert!(may_automate(Platform::Tiktok));
+        assert!(brand_sign_in(&Some("a1".into()), Platform::X, "@animals", "x+animals@example.com", Some("secret".into())).unwrap().is_none());
+        let tiktok = brand_sign_in(&Some("a1".into()), Platform::Tiktok, "@animals", "x+animals@example.com", None).unwrap().unwrap();
+        assert!(tiktok.contains("\"username\":\"animals\"") && tiktok.contains("\"signInOnly\":true"));
         let yt = brand_sign_in(&Some("a1".into()), Platform::Youtube, "animals", "x+animals@example.com", None).unwrap().unwrap();
         assert!(yt.contains("x+animals@example.com"));
+        assert_eq!(window_verb("video-1"), "Post on");
+        assert_eq!(window_verb(""), "Profile on");
     }
 
     #[test]
@@ -1037,7 +1065,7 @@ pub(crate) fn signed_out_entry(platform: Platform, address: &str, signed_in: boo
 fn profile_edit_note(platform: Platform) -> &'static str {
     match platform {
         Platform::Instagram => "Socialspace fills the picture, name, bio and website here. Check them, then press Submit yourself.",
-        Platform::X => "Socialspace fills the picture, name, bio and website in Edit profile. Check them, then press Save yourself.",
+        Platform::X => "Enter the picture, name, bio and website on X yourself, then press Save yourself.",
         Platform::Tiktok => "Press Edit profile: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
         Platform::Youtube => "Open Customization, then Profile: the picture, name and description fill in. Keywords are under Settings, Channel. Press Publish or Save yourself.",
         Platform::Facebook => "Press Edit on the Page: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
@@ -1069,13 +1097,14 @@ pub async fn open_profile_editor(app: AppHandle, request: ProfileEditRequest) ->
     if request.email.len() > 320 {
         return Err("The account details are not valid.".into());
     }
-    let profile_script = crate::autofill::profile_edit_script(&request.fields, request.image_path.as_deref(), profile_edit_note(request.platform))?;
+    let profile_script = if may_automate(request.platform) {
+        Some(crate::autofill::profile_edit_script(&request.fields, request.image_path.as_deref(), profile_edit_note(request.platform))?)
+    } else { None };
     let dir = profile_dir(&app, &request.brand_id)?;
     std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
-    let password = match request.account_id.as_deref().filter(|id| !id.is_empty()) {
-        Some(id) => crate::account_passwords::read(id).ok().flatten(),
-        None => None,
-    };
+    let password = if may_automate(request.platform) {
+        request.account_id.as_deref().filter(|id| !id.is_empty()).and_then(|id| crate::account_passwords::read(id).ok().flatten())
+    } else { None };
     let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
     let post = PostRequest {
         platform: request.platform,
@@ -1092,7 +1121,7 @@ pub async fn open_profile_editor(app: AppHandle, request: ProfileEditRequest) ->
         cover: String::new(),
         cover_ms: None,
     };
-    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script: Some(profile_script), file: None, shared_session: Default::default() });
+    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script, file: None, shared_session: Default::default() });
     let address = signed_out_entry(request.platform, &address, crate::sign_in_state::known_signed_in(&app, &request.brand_id, request.platform));
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
     open_signed_in(&app, url, dir, posting).map(|window| window.label().to_owned())

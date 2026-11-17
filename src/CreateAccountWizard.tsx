@@ -107,6 +107,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         const id = await embedPlatformPage(page.account.platform, page.action, boundsOf(element));
         if (cancelled) return;
         setWindowId(id);
+        if (page.account.platform === 'x') return;
         await fillSiteForm(id, formFieldsFor(page.account), page.action === 'create'
           ? { accountId: page.account.id, includePassword: true, keepFilling: true }
           : page.action === 'addProfile' ? { accountId: page.account.id, includePassword: false, keepFilling: true }
@@ -181,13 +182,14 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     try { await navigator.clipboard.writeText(value); copied = true; } catch { /* clipboard blocked: the toast still has Copy */ }
     setCode({ value, copied });
     if (!account || !windowId) return;
+    if (account.platform === 'x') { setNote(copied ? 'Code copied. Enter it on X yourself.' : 'Enter the code on X yourself.'); return; }
     try {
       await fillSiteForm(windowId, formFieldsFor(account, value), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
       setNote(`Entered code ${value}${copied ? ' and copied it' : ''}. Check it, then press the button on the page.`);
     } catch (reason) { setError(errorText(reason)); }
   };
   const refill = (code?: string) => { if (code) return enterCode(code); return run(async () => {
-    if (!account || !windowId) return;
+    if (!account || !windowId || account.platform === 'x') return;
     await fillSiteForm(windowId, formFieldsFor(account, code), { accountId: account.id, includePassword: code ? 'ifSaved' : true, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
   }); };
@@ -219,7 +221,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     const updated = { ...target, imagePath };
     if (imagePath !== target.imagePath) { await onSave(updated); setAccounts((list) => list.map((item) => item.id === updated.id ? updated : item)); }
     setPage((last) => ({ account: updated, action: 'manage', imagePath: imagePath || undefined, nonce: (last?.nonce ?? 0) + 1 }));
-    setNote(`Opened ${getPlatform(target.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
+    setNote(target.platform === 'x' ? 'Opened X profile settings. Enter and save the details yourself.' : `Opened ${getPlatform(target.platform).name} profile settings and filled what matched. Check it, then save on the page.`);
   });
   const created = accounts.filter((item) => outcomes[item.id] === 'created');
   const feedback = <>{note && <p className="success-message" role="status">{note}</p>}{error && <div className="error-message" role="alert">{error}</div>}</>;
@@ -234,7 +236,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         const outcome = outcomes[item.id];
         return <li key={item.id} className={step === 'signup' && index === current ? 'current' : outcome ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcome === 'created' ? 'Created' : outcome === 'skipped' ? 'Skipped' : step === 'signup' && index === current ? 'Now' : 'Next'}</em></li>;
       })}</ol>}
-      <p className="rail-note">Social Space only fills in forms. You press every button and solve any captcha or phone check.</p>
+      <p className="rail-note">Social Space can fill some forms. You complete X yourself and press final buttons and solve any captcha or phone check.</p>
     </aside>
 
     <div className="wizard-main">
@@ -263,7 +265,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                   <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
                   <div><label htmlFor="wizard-birthday">Birthday <span>for sign-up forms that ask</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
                 </div>
-                <p className="signin-hint">TikTok and X get their own address automatically, like you+brand@gmail.com, so no new inbox is needed. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
+                <p className="signin-hint">TikTok and X get suggested plus-addresses, like you+brand@gmail.com. Check whether the service accepts each address. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
                 {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
               </details>
               <label>Profile image <span>optional, you can add it later</span></label>
@@ -287,7 +289,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
 
       {step !== 'details' && <>
         <div className="wizard-top">{step === 'signup' && account
-          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>{steps === ADD_PROFILE_FLOWS[account.platform] ? `This adds the brand to your existing ${name} login. Follow the steps on the right.` : `Your details are filled in on the ${name} page below. Check them, then press Next or Sign up on the page yourself.`}</p></div>
+          ? <div><h3 className="wizard-now"><BrandMark platform={account.platform}/><span>Now: {name} ({current + 1} of {accounts.length})</span></h3><p>{account.platform === 'x' ? 'Enter the details on X yourself; use the copy buttons if helpful.' : steps === ADD_PROFILE_FLOWS[account.platform] ? `This adds the brand to your existing ${name} login. Follow the steps on the right.` : `Your details are filled in on the ${name} page below. Check them, then press Next or Sign up on the page yourself.`}</p></div>
           : <div><h3>Finish the profiles</h3><p>{created.length ? `Created on ${created.map((item) => getPlatform(item.platform).name).join(', ')}.` : 'No accounts were marked as created.'} Add the picture and description now, or later from Accounts. Skipped socials stay saved as planned.</p></div>}{closeButton}</div>
         <div className="site-stage">
           <div ref={frame} className="site-frame" aria-label="Site page">{!windowId && <span>{page ? 'Loading the page…' : 'Pick a social on the right to open its profile settings here.'}</span>}</div>
@@ -301,7 +303,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <div className="credential-row"><span>Password</span><code>{showPass && password ? password : '••••••••••••••••'}</code><button type="button" className="icon-button" aria-label={showPass ? 'Hide password' : 'Show password'} onClick={() => void togglePassword()}>{showPass ? <EyeOff size={15}/> : <Eye size={15}/>}</button><button type="button" className="icon-button" aria-label="Copy password" onClick={() => void copyPassword()}><Copy size={15}/></button></div>
                 {account.birthday && <div className="credential-row"><span>Birthday</span><code>{account.birthday}</code><button type="button" className="icon-button" aria-label="Copy birthday" onClick={() => void copy('Birthday', account.birthday ?? '')}><Copy size={15}/></button></div>}
               </section>
-              <div className="wizard-actions"><button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button><button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
+              <div className="wizard-actions">{account.platform !== 'x' && <button type="button" className="outline-button small-button" disabled={busy || !windowId} onClick={() => void refill()}><RefreshCw size={14}/> Fill this page again</button>}<button type="button" className="outline-button small-button" disabled={busy} onClick={reopen}><AppWindow size={14}/> Start {name} over</button></div>
               {feedback}
               <InboxList compact autoRefresh refreshMs={SIGNUP_INBOX_MS} limit={8} onCode={(code) => void refill(code)} onNewCode={(code, mail) => { if (isMailFrom(account.platform, mail)) void refill(code); }}/>
             </>}
@@ -309,7 +311,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
               <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
               <label>Profile image</label>
               <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
-              {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> Fill {getPlatform(item.platform).name} profile <ChevronRight size={15}/></button>)}</div>}
+              {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> {item.platform === 'x' ? 'Edit X profile manually' : `Fill ${getPlatform(item.platform).name} profile`} <ChevronRight size={15}/></button>)}</div>}
               {feedback}
             </>}
           </aside>
