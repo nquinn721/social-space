@@ -1,0 +1,126 @@
+{
+  "summary": "Suggest brand-specific video prompts, review and edit complete stories, extend story parts and keep generated clips connected to their story.",
+  "features": [
+    "accounts",
+    "navigation",
+    "posting",
+    "series",
+    "updates",
+    "video-library"
+  ],
+  "changes": [
+    {
+      "old": "Series",
+      "new": "Stories"
+    },
+    {
+      "old": "New series",
+      "new": "New story"
+    },
+    {
+      "old": "All series",
+      "new": "All stories"
+    },
+    {
+      "old": "No series yet",
+      "new": "No stories yet"
+    },
+    {
+      "old": "Plan the series",
+      "new": "Generate story"
+    },
+    {
+      "old": "Delete series",
+      "new": "Delete story"
+    }
+  ],
+  "kept": [
+    {
+      "term": "Series",
+      "reason": "Internal model names and references to serialized video series remain valid."
+    }
+  ],
+  "spots": [
+    {
+      "path": "docs/brand-profiles.md"
+    },
+    {
+      "path": "hub-app.json"
+    },
+    {
+      "path": "package-lock.json"
+    },
+    {
+      "path": "package.json"
+    },
+    {
+      "path": "src-tauri/Cargo.lock"
+    },
+    {
+      "path": "src-tauri/Cargo.toml"
+    },
+    {
+      "path": "src-tauri/src/kling.rs"
+    },
+    {
+      "path": "src-tauri/src/lib.rs"
+    },
+    {
+      "path": "src-tauri/src/video_gen.rs"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json"
+    },
+    {
+      "path": "src/SeriesPanel.test.tsx"
+    },
+    {
+      "path": "src/SeriesPanel.tsx"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx"
+    },
+    {
+      "path": "src/VideoLibrary.tsx"
+    },
+    {
+      "path": "src/model.ts"
+    },
+    {
+      "path": "src/pages/AccountsPage.tsx"
+    },
+    {
+      "path": "src/series.css"
+    },
+    {
+      "path": "src/series.test.ts"
+    },
+    {
+      "path": "src/series.ts"
+    },
+    {
+      "path": "src/seriesWriter.ts"
+    },
+    {
+      "path": "src/videoProviders.ts"
+    },
+    {
+      "path": "src/SeriesEpisodeEditor.tsx"
+    },
+    {
+      "path": "src/VideoIdeasDialog.tsx"
+    },
+    {
+      "path": "src/assistant/videoIdeas.test.ts"
+    },
+    {
+      "path": "src/assistant/videoIdeas.ts"
+    },
+    {
+      "path": "src/useVideoIdeas.ts"
+    },
+    {
+      "path": "src/videoIdeas.css"
+    }
+  ]
+}

@@ -209,7 +209,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       })}</div>
       <div className="segmented account-tabs brand-tabs" role="tablist" aria-label={`${brand.name} sections`}>
         <button type="button" role="tab" aria-selected={brandTab === 'content'} aria-pressed={brandTab === 'content'} onClick={() => showBrandTab('content')}>Posts</button>
-        {onSave && <button type="button" role="tab" aria-selected={brandTab === 'series'} aria-pressed={brandTab === 'series'} onClick={() => showBrandTab('series')}>Series</button>}
+        {onSave && <button type="button" role="tab" aria-selected={brandTab === 'series'} aria-pressed={brandTab === 'series'} onClick={() => showBrandTab('series')}>Stories</button>}
         <button type="button" role="tab" aria-selected={brandTab === 'accounts'} aria-pressed={brandTab === 'accounts'} onClick={() => showBrandTab('accounts')}>Accounts</button>
       </div>
       {brandTab === 'series' && onSave ? <SeriesPanel workspace={workspace} brand={brand} loaded={loaded} busy={busy} onSave={onSave} onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined}/>

@@ -81,9 +81,11 @@ describe('series writer (Grok)', () => {
   });
 
   it('checks the plan and keeps exactly the asked number of parts', () => {
-    const plan = readPlan({ title: 'T', bible: 'B', style: 'S', characters: [{ name: 'Pip', description: 'rabbit' }, { description: 'nameless' }], episodes: [1, 2, 3, 4, 5].map((n) => ({ title: `E${n}`, summary: `S${n}` })) }, 4);
+    const plan = readPlan({ title: 'T', bible: 'B', story: 'Once there was a rabbit.', style: 'S', characters: [{ name: 'Pip', description: 'rabbit' }, { description: 'nameless' }], episodes: [1, 2, 3, 4, 5].map((n) => ({ title: `E${n}`, summary: `S${n}` })) }, 4);
     expect(plan.episodes.map((item) => item.title)).toEqual(['E1', 'E2', 'E3', 'E4']);
     expect(plan.characters).toEqual([{ name: 'Pip', description: 'rabbit' }]);
+    expect(plan.story).toBe('Once there was a rabbit.');
+    expect(() => readPlan({ title: 'T', bible: 'B', episodes: [{ summary: 'a' }, { summary: 'b' }] }, 2)).toThrow('incomplete');
     expect(() => readPlan({ title: 'T', episodes: [] }, 4)).toThrow('incomplete');
     expect(() => readEpisode({ script: 'x' })).toThrow('incomplete');
     expect(readEpisode({ script: ' a ', videoPrompt: 'b', caption: 'c' })).toEqual({ script: 'a', videoPrompt: 'b', caption: 'c' });

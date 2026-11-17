@@ -241,6 +241,10 @@
     "notes": [],
     "paths": [
       "src/VideoLibrary.tsx",
+      "src/VideoIdeasDialog.tsx",
+      "src/useVideoIdeas.ts",
+      "src/assistant/videoIdeas.ts",
+      "src/videoIdeas.css",
       "src/VideoSources.tsx",
       "src/useVideoGenerations.ts",
       "src/postDetails.ts",
@@ -254,7 +258,8 @@
       "src/videoSourcesService.ts",
       "src/batchPosting.ts"
     ],
-    "summary": "Brand video library: categories, AI generation (Kling, Grok), post details, local files",
+    "screens": [{"name": "Video prompt suggestions", "path": "src/VideoIdeasDialog.tsx"}],
+    "summary": "Brand video library: categories, Grok prompt suggestions, AI generation (Kling, Grok), post details, local files",
     "terms": [
       "video",
       "library",
@@ -415,16 +420,19 @@
   },
   {
     "id": "series",
+    "menu": ["Stories"],
     "notes": [],
     "paths": [
       "src/SeriesPanel.tsx",
+      "src/SeriesEpisodeEditor.tsx",
       "src/series.ts",
       "src/seriesWriter.ts",
       "src/series.css",
       "src-tauri/src/video_gen.rs",
       "src-tauri/src/grok.rs"
     ],
-    "summary": "Series: stories told across several videos on a brand's Series tab, written by Grok, with character pictures as video references",
+    "screens": [{"name": "Stories", "path": "src/SeriesPanel.tsx"}],
+    "summary": "Stories across multiple videos, with editable narratives, Grok continuations, parts and character reference pictures",
     "terms": [
       "series",
       "episode",

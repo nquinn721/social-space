@@ -43,21 +43,26 @@ describe('series panel', () => {
   it('prefers Grok for clips even when another source is active', () => {
     expect(defaultSource({ active: 'k1', sources: [klingSource, grokSource] })?.id).toBe('g1');
     expect(defaultSource({ active: 'k1', sources: [klingSource] })?.id).toBe('k1');
-    expect(seriesDurations(grokSource)).toEqual([5, 8, 10]);
+    expect(seriesDurations(grokSource)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(seriesDurations(klingSource)).toEqual([5, 10]);
   });
 
   it('has Grok plan a series into a new category', async () => {
-    vi.mocked(grok.chat).mockResolvedValue({ role: 'assistant', content: JSON.stringify({ title: 'Knots', bible: 'B', style: 'S', characters: [{ name: 'Sam', description: 'office worker' }], episodes: [{ title: 'One', summary: 'a' }, { title: 'Two', summary: 'b' }, { title: 'Three', summary: 'c' }, { title: 'Four', summary: 'd' }] }) });
+    vi.mocked(grok.chat).mockResolvedValue({ role: 'assistant', content: JSON.stringify({ title: 'Knots', story: 'Sam learns to relax.', bible: 'B', style: 'S', characters: [{ name: 'Sam', description: 'office worker' }], episodes: [{ title: 'One', summary: 'a' }, { title: 'Two', summary: 'b' }, { title: 'Three', summary: 'c' }, { title: 'Four', summary: 'd' }] }) });
     const { saved, user } = setup();
-    await user.click(screen.getAllByRole('button', { name: /New series/ })[0]);
+    await user.click(screen.getAllByRole('button', { name: /New story/ })[0]);
     await user.type(screen.getByLabelText('What is the story about?'), 'A stiff office worker learns to relax');
     expect(await screen.findByRole('option', { name: 'Main Grok · Grok Imagine' })).toBeInTheDocument();
     expect(screen.getByLabelText('Clips made with')).toHaveValue('g1');
-    await user.click(screen.getByRole('button', { name: /Plan the series/ }));
+    await user.click(screen.getByRole('button', { name: /Generate story/ }));
+    expect(await screen.findByText('Sam learns to relax.')).toBeInTheDocument();
+    expect(saved).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: /Reroll story/ }));
+    expect(grok.chat).toHaveBeenCalledTimes(2);
+    await user.click(await screen.findByRole('button', { name: 'Save story' }));
     const next = saved.at(-1)!;
     expect(next.categories).toEqual([expect.objectContaining({ brandId: 'mia', name: 'Knots' })]);
-    expect(next.series?.[0]).toMatchObject({ title: 'Knots', sourceId: 'g1', duration: 10, aspectRatio: '9:16', categoryId: next.categories![0].id });
+    expect(next.series?.[0]).toMatchObject({ title: 'Knots', story: 'Sam learns to relax.', sourceId: 'g1', duration: 10, aspectRatio: '9:16', categoryId: next.categories![0].id });
     expect(next.series?.[0].episodes.map((item) => item.number)).toEqual([1, 2, 3, 4]);
     expect(await screen.findByRole('heading', { name: 'Knots' })).toBeInTheDocument();
   });
@@ -93,5 +98,50 @@ describe('series panel', () => {
     expect(screen.queryByRole('button', { name: /Make a new picture/ })).not.toBeInTheDocument();
     await user.click(screen.getAllByRole('button', { name: /Make clip/ })[0]);
     expect(sources.generateVideo).toHaveBeenCalledWith('k1', expect.stringContaining('Sam: office worker, blue shirt.'), '9:16', 10, []);
+  });
+
+  it('lets the user write the story, edit a part, add a part and see its linked videos', async () => {
+    const video = { id: 'v1', brandId: 'mia', categoryId: 'c', title: 'Sam stretches', mediaSource: 'C:\\videos\\sam.mp4', caption: '', posted: [], createdAt: 1, seriesId: 's', episode: 1 };
+    const { saved, user } = setup({ ...withStory, videos: [video] });
+    await user.click(screen.getByRole('button', { name: /Knots/ }));
+    await user.type(screen.getByLabelText('Written story'), 'Sam finds a quieter day.');
+    await user.click(screen.getByRole('button', { name: 'Save story' }));
+    expect(saved.at(-1)?.series?.[0].story).toBe('Sam finds a quieter day.');
+    const first = screen.getAllByRole('listitem').find((item) => within(item).queryByText('Part 1 of 2'))!;
+    expect(within(first).getByText(/Sam stretches — Ready/)).toBeInTheDocument();
+    await user.click(within(first).getByRole('button', { name: 'Edit part' }));
+    await user.type(within(first).getByLabelText('Video prompt'), 'Sam stretches in morning light.');
+    await user.click(within(first).getByRole('button', { name: 'Save part' }));
+    expect(saved.at(-1)?.series?.[0].episodes[0].videoPrompt).toBe('Sam stretches in morning light.');
+    expect(within(first).getByRole('button', { name: 'Make another' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Add part' }));
+    expect(saved.at(-1)?.series?.[0].episodes).toHaveLength(3);
+  });
+
+  it('adds a Grok continuation without replacing the existing story or parts', async () => {
+    vi.mocked(grok.chat).mockResolvedValue({ role: 'assistant', content: JSON.stringify({ continuation: 'Sam teaches a friend.', episodes: [{ title: 'A friend', summary: 'Sam helps a friend relax.' }] }) });
+    const { saved, user } = setup({ ...withStory, series: [{ ...story, story: 'Sam relaxes.' }] });
+    await user.click(screen.getByRole('button', { name: /Knots/ }));
+    await user.type(screen.getByLabelText(/Direction for the next part/), 'Introduce a friend');
+    await user.click(screen.getByRole('button', { name: 'Continue with Grok' }));
+    expect(vi.mocked(grok.chat).mock.calls[0][1][1].content).toContain('Direction: Introduce a friend');
+    expect(saved.at(-1)?.series?.[0].story).toBe('Sam relaxes.\n\nSam teaches a friend.');
+    expect(saved.at(-1)?.series?.[0].episodes).toHaveLength(3);
+    expect(saved.at(-1)?.series?.[0].episodes[2]).toMatchObject({ number: 3, title: 'A friend' });
+  });
+
+  it('previews a directed Grok revision in the part editor before saving', async () => {
+    vi.mocked(grok.chat).mockResolvedValue({ role: 'assistant', content: JSON.stringify({ script: 'Sam smiles.', videoPrompt: 'Sam stretches in sunlight.', caption: 'Feel better.' }) });
+    const { saved, user } = setup(withStory);
+    await user.click(screen.getByRole('button', { name: /Knots/ }));
+    const first = screen.getAllByRole('listitem').find((item) => within(item).queryByText('Part 1 of 2'))!;
+    await user.click(within(first).getByRole('button', { name: 'Edit part' }));
+    await user.type(within(first).getByLabelText(/What should Grok change/), 'Make it sunny');
+    await user.click(within(first).getByRole('button', { name: 'Rewrite draft with Grok' }));
+    expect(await within(first).findByDisplayValue('Sam stretches in sunlight.')).toBeInTheDocument();
+    expect(saved).toHaveLength(0);
+    expect(vi.mocked(grok.chat).mock.calls[0][1][1].content).toContain('Make it sunny');
+    await user.click(within(first).getByRole('button', { name: 'Save part' }));
+    expect(saved.at(-1)?.series?.[0].episodes[0].videoPrompt).toBe('Sam stretches in sunlight.');
   });
 });

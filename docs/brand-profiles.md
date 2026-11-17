@@ -1,5 +1,23 @@
 # Brand bio and ghost-text suggestions
 
+## Video ideas and stories
+
+In a brand's **Posts** tab, choose a category, select **Make a video**, and use **Suggest video prompts**.
+Grok suggests five ideas using the brand and category. Each idea includes complete prompts and available
+clip lengths. Reroll the choices or an individual idea, then choose a scene to put its prompt and length
+in the video form. You can edit it before making the video. Multi-scene ideas are separate clips; generate
+each scene individually and combine them in a video editor. Grok Imagine offers 1–15-second clips here;
+clips with character references use at most 10 seconds.
+
+In the brand's **Stories** tab, choose **New story**, enter an optional direction and generate a draft.
+Review or reroll the complete story before saving it. A saved story has an editable narrative, a story
+bible, characters and parts. Edit a part's summary, script, video prompt or caption yourself, or ask Grok
+to write its script. Add a part manually or use **Continue with Grok** to append another part and its
+written continuation. Videos generated for a part appear under that part as well as in Posts.
+
+Grok writing uses the configured xAI source. Video generation uses the selected video source; both may
+incur provider charges.
+
 ## Bio (brand page, Accounts tab)
 
 Each brand has one bio for every social by default (one box, held to the tightest limit, TikTok's 80
