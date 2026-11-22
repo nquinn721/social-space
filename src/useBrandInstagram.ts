@@ -45,5 +45,5 @@ export function useBrandInstagram(workspace: Workspace, brandId: string | undefi
 /** Uploads a video saved on this PC and publishes it as a Reel with its description, hashtags, cover and feed choice. */
 export function publishVideoToInstagram(target: BrandInstagram, video: Video) {
   const details = detailsOf(video);
-  return publishInstagramReelFile(video.mediaSource, postText(video), target.accountId, { coverMs: details.coverMs, shareToFeed: details.shareToFeed, expectedId: target.providerId });
+  return publishInstagramReelFile(video.mediaSource, postText(video, undefined, true), target.accountId, { coverMs: details.coverMs, shareToFeed: details.shareToFeed, expectedId: target.providerId });
 }

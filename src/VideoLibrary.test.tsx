@@ -352,7 +352,7 @@ describe('approving a post', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
     expect(confirmBox).not.toHaveBeenCalled();
     expect(instagram.claimInstagramConnection).toHaveBeenCalledWith('1', 'mia');
-    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy', '1', { coverMs: undefined, shareToFeed: true, expectedId: '178' });
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith('C:\\clips\\carrot.mp4', 'Crunchy\n\n#AIgenerated', '1', { coverMs: undefined, shareToFeed: true, expectedId: '178' });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ id: 'v2', posted: ['instagram'], links: { instagram: 'https://www.instagram.com/reel/abc/' } })] }), 'Posted "Carrot crunch" to @mia on Instagram.');
   });
 
@@ -441,7 +441,7 @@ describe('approving a post', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Crunchy #bunny #snow');
     await user.click(within(dialog).getByRole('button', { name: 'Post to Instagram' }));
-    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith(fresh.mediaSource, 'Crunchy\n\n#bunny #snow', '1', { coverMs: 2500, shareToFeed: false, expectedId: '178' });
+    expect(instagram.publishInstagramReelFile).toHaveBeenCalledWith(fresh.mediaSource, 'Crunchy\n\n#bunny #snow #AIgenerated', '1', { coverMs: 2500, shareToFeed: false, expectedId: '178' });
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ categories: [expect.objectContaining({ id: 'rabbit', defaults: { caption: 'Crunchy', hashtags: ['bunny', 'snow'] } })] }), expect.any(String));
   });
 });
@@ -499,7 +499,7 @@ describe('post details', () => {
     await user.type(within(row).getByLabelText('Description'), 'Snow day');
     await user.type(within(row).getByLabelText('Hashtags'), 'bunny, #Snow bunny');
     expect(within(row).getByLabelText('YouTube title')).toHaveValue('Bunny hop');
-    await user.click(within(row).getByLabelText(/Made with AI/));
+    expect(within(row).getByLabelText(/Made with AI/)).toBeChecked();
     await user.click(within(row).getByRole('button', { name: 'Save' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [expect.objectContaining({ caption: 'Snow day', details: expect.objectContaining({ hashtags: ['bunny', 'Snow'], youtubeTitle: 'Bunny hop', madeWithAi: true, shareToFeed: true }) })] }), 'Saved the post details of "Bunny hop".');
   });
@@ -511,7 +511,7 @@ describe('post details', () => {
     await user.click(within(row).getByRole('button', { name: /Edit post/ }));
     await user.click(within(row).getByLabelText('Description'));
     await user.paste('a'.repeat(281));
-    expect(within(row).getByRole('alert')).toHaveTextContent('X post is 281 characters');
+    expect(within(row).getByRole('alert')).toHaveTextContent('X post is 295 characters');
     expect(within(row).getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 });

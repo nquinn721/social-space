@@ -718,6 +718,30 @@ const POST_SCRIPT: &str = r#"function (data) {
     return control.getAttribute('aria-checked') === 'true' || control.checked === true;
   };
 
+  /**
+   * Turns on a page's AI label switch for an AI-made video: finds the row whose text matches, opening the
+   * section it hides in first (expander) when it is not showing. True once it is on, or when there is
+   * nothing to do; gives up after 10 seconds without a switch and leaves a reminder in the panel.
+   */
+  const labelOn = (pattern, expander) => {
+    if (!data.madeWithAi || state.filled.ai === true || state.filled.ai === 'missing') return true;
+    state.aiSince = state.aiSince || now();
+    const late = now() - state.aiSince > 10000;
+    const label = byText(pattern);
+    if (!label) {
+      if (expander && !state.filled.aiMore) { const more = byText(expander); if (more && press(more)) state.filled.aiMore = true; }
+      if (late || !state.auto) state.filled.ai = 'missing';
+      return state.filled.ai === 'missing';
+    }
+    let row = label;
+    for (let i = 0; i < 5 && row && switchOn(row) === null; i++) row = row.parentElement;
+    const on = switchOn(row);
+    if (on === true) { state.filled.ai = true; return true; }
+    if (on === false && !press(row.querySelector('[role=switch], input[type=checkbox]')) && !state.auto) state.filled.ai = 'missing';
+    if (on === null && late) state.filled.ai = 'missing';
+    return state.filled.ai === 'missing';
+  };
+
   // The cover: the chosen moment of the video, drawn to a picture in the page.
   const makeCover = async () => {
     if (state.coverFile || state.coverTried || data.coverMs == null || !state.file) return;
@@ -810,7 +834,12 @@ const POST_SCRIPT: &str = r#"function (data) {
     // Edit, then the caption. Nate presses Share.
     instagram: () => {
       const caption = first(['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]']);
-      if (caption) { fillOnce('caption', ['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]'], data.text, true); state.auto = false; return; }
+      if (caption) {
+        fillOnce('caption', ['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]'], data.text, true);
+        // "Add AI label" sits under Advanced settings on the caption step.
+        if (labelOn(/^(Add )?AI label$|^Label as AI|^Made with AI$/i, /^Advanced settings$/i)) state.auto = false;
+        return;
+      }
       const ok = byText(/^OK$/i, '[role=dialog] button, [role=dialog] [role=button]');
       if (ok && press(ok)) return;
       const next = byText(/^Next$/i, '[role=dialog] [role=button], [role=dialog] button, [role=dialog] div');
@@ -819,7 +848,12 @@ const POST_SCRIPT: &str = r#"function (data) {
     // Facebook's reel composer: Next past the video and edit steps, then the description. Nate presses Publish.
     facebook: () => {
       const box = first(['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]']);
-      if (box) { fillOnce('caption', ['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]'], data.text, true); state.auto = false; return; }
+      if (box) {
+        fillOnce('caption', ['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]'], data.text, true);
+        // The reel's AI label switch, sometimes under More options.
+        if (labelOn(/^(Add )?AI (label|info)$|^Label as AI|^Made with AI$|^AI-generated$/i, /^(More options|Advanced settings)$/i)) state.auto = false;
+        return;
+      }
       const next = byText(/^Next$/i, '[role=button], button');
       if (next && next.getAttribute('aria-disabled') !== 'true' && state.nexts < 2 && now() - state.lastClick > 2500 && press(next)) state.nexts += 1;
     },
@@ -843,7 +877,11 @@ const POST_SCRIPT: &str = r#"function (data) {
       else if (state.coverMissing) list.push(data.platform === 'youtube' ? 'Thumbnail: YouTube only takes an uploaded thumbnail on a phone-verified channel, so it picks one itself for now.' : 'Cover: pick the frame at ' + at + ' under Edit cover.');
       else list.push('Cover: setting the frame at ' + at + '.');
     }
-    if (data.platform === 'tiktok' && data.madeWithAi && !state.filled.ai) list.push('Turning on "AI-generated content" under Show more.');
+    if (data.madeWithAi && data.platform === 'tiktok' && !state.filled.ai) list.push('Turning on "AI-generated content" under Show more.');
+    if (data.madeWithAi && (data.platform === 'instagram' || data.platform === 'facebook') && state.attached && state.filled.ai !== true) list.push(state.filled.ai === 'missing'
+      ? (data.platform === 'instagram' ? 'AI label: turn on "Add AI label" under Advanced settings before you share.' : 'AI label: turn on the AI label for this reel before you publish.')
+      : 'Turning on the AI label.');
+    if (data.madeWithAi && data.platform === 'youtube' && state.filled.altered === 'skipped') list.push('AI label: under Show more, set "Altered content" to Yes before you publish.');
     return list;
   };
   const status = () => {
@@ -861,7 +899,8 @@ const POST_SCRIPT: &str = r#"function (data) {
       if (!state.auto || state.filled.altered) return 'Details are filled in. Go on with Next, choose Public, then press Publish.';
       return 'Filling in the details…';
     }
-    if (reminders().length) return 'Filling in the details…';
+    if (reminders().some((line) => !/^(AI label|Cover|Thumbnail):/.test(line) || /^Cover: setting/.test(line))) return 'Filling in the details…';
+    if (reminders().length) return 'Check the note below, then press Post.';
     return 'Everything is filled in. Press Post.';
   };
 

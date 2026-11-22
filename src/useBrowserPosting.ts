@@ -41,7 +41,7 @@ export function postRequest(workspace: Workspace, video: Video, platform: Platfo
   const details = detailsOf(video);
   return {
     platform, brandId: video.brandId, videoId: video.id, ...brandLogin(workspace.developerLogins, account), handle: account?.handle ?? '',
-    videoPath: video.mediaSource, title: details.youtubeTitle || video.title, text: postText(video), madeWithAi: details.madeWithAi,
+    videoPath: video.mediaSource, title: details.youtubeTitle || video.title, text: postText(video, platform), madeWithAi: details.madeWithAi,
     madeForKids: details.madeForKids, cover: details.coverMs == null ? '' : formatMs(details.coverMs), coverMs: details.coverMs,
   };
 }
