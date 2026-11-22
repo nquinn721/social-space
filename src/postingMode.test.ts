@@ -5,8 +5,9 @@ import { brandLogin, markPosted, postRequest, wrongLogin } from './useBrowserPos
 import type { Workspace } from './model';
 
 describe('posting mode', () => {
-  it('posts Instagram through the API and the others through their page', () => {
-    expect(postMode('instagram')).toBe('api');
+  it('posts every social through its own page, since brand accounts are standalone', () => {
+    expect(postMode('instagram')).toBe('browser');
+    expect(postMode('facebook')).toBe('browser');
     expect(postMode('tiktok')).toBe('browser');
     expect(postMode('youtube')).toBe('browser');
     expect(postMode('x')).toBe('browser');
@@ -45,15 +46,18 @@ describe('browser posting', () => {
     expect(brandLogin({ tiktok: { email: 'dev@example.com' } }, { ...account, signupEmail: 'Dev@example.com' })).toEqual({ accountId: undefined, email: '' });
     expect(brandLogin(undefined, account)).toEqual({ accountId: 'a1', email: 'x+animals@example.com' });
   });
-  it('blocks only TikTok and X profiles saved with the main Gmail; YouTube channels may live under it', () => {
+  it('blocks every brand profile saved with the main Gmail; only YouTube channels may live under it', () => {
     const account = workspace.accounts[0];
     expect(wrongLogin(undefined, { ...account, signupEmail: 'softwings25@gmail.com' })).toBe(true);
+    expect(wrongLogin(undefined, { ...account, platform: 'instagram', signupEmail: 'softwings25@gmail.com' })).toBe(true);
+    expect(wrongLogin(undefined, { ...account, platform: 'facebook', signupEmail: 'softwings25@gmail.com' })).toBe(true);
     expect(wrongLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' })).toBe(false);
   });
-  it('fills the parent login of an Instagram profile or YouTube channel kept under the main Gmail', () => {
+  it('fills the Google login of a YouTube channel kept under the main Gmail, never the main Gmail anywhere else', () => {
     const account = workspace.accounts[0];
     expect(brandLogin(undefined, { ...account, platform: 'youtube', signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: 'a1', email: 'softwings25@gmail.com' });
-    expect(brandLogin(undefined, { ...account, platform: 'instagram', signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: 'a1', email: 'softwings25@gmail.com' });
+    expect(brandLogin(undefined, { ...account, platform: 'instagram', signupEmail: 'softwings25@gmail.com' })).toEqual({ accountId: undefined, email: '' });
+    expect(brandLogin(undefined, { ...account, platform: 'facebook', signupEmail: 'softwings25+mia@gmail.com' })).toEqual({ accountId: 'a1', email: 'softwings25+mia@gmail.com' });
   });
   it('marks a video posted once', () => {
     const next = markPosted(workspace, 'v1', 'tiktok')!;

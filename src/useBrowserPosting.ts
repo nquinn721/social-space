@@ -15,18 +15,16 @@ export function usesMainLogin(developerLogins: Workspace['developerLogins'], acc
   return !!account?.signupEmail && mainEmails(developerLogins).has(account.signupEmail.trim().toLowerCase());
 }
 /**
- * A TikTok or X profile saved with the main Gmail is not the brand's own account, so nothing posts through it.
- * Instagram and YouTube profiles can rightly sit under the main login (shared login, Google account
- * holding the channels): they post, and their windows sign in with that parent login.
+ * An Instagram, Facebook, TikTok or X profile saved with the main Gmail is not the brand's own standalone
+ * account, so nothing posts through it. Only YouTube channels rightly sit under the main Google account.
  */
 export function wrongLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): boolean {
   return !!account && !sharesLogins(account.platform) && usesMainLogin(developerLogins, account);
 }
 /**
- * The login a window fills for a profile. TikTok and X fill only the brand's own login, never the main
- * Gmail. An Instagram profile or YouTube channel kept under a parent login (several profiles per login)
- * fills that parent login, since it is the only way into the brand's profile; the window still keeps
- * its own brand folder, so the main app session is never touched.
+ * The login a window fills for a profile: the brand's own login, never the main Gmail. A YouTube channel
+ * kept under a Google account fills that account, since it is the only way into the channel; the window
+ * still keeps its own brand folder, so the main app session is never touched.
  */
 export function brandLogin(developerLogins: Workspace['developerLogins'], account: Account | undefined): { accountId?: string; email: string } {
   if (!account || (!sharesLogins(account.platform) && usesMainLogin(developerLogins, account))) return { accountId: undefined, email: '' };

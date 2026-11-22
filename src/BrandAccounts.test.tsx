@@ -54,17 +54,11 @@ describe('brand accounts', () => {
     const onAddSocial = vi.fn();
     render(<BrandAccounts brand={brand} accounts={[ig, tt]} loaded busy={false} marks={{}} onMark={onMark} onEditAccount={vi.fn()} onAddSocial={onAddSocial}/>);
     const instagram = screen.getByRole('listitem', { name: 'Instagram profile' });
-    expect(within(instagram).getByText('Not connected')).toBeInTheDocument();
+    // A brand's Instagram is its own standalone account: on the main Gmail it is flagged, and nothing asks for a business Page.
+    expect(within(instagram).getByText('Uses your main Gmail')).toBeInTheDocument();
+    expect(within(instagram).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+    expect(within(instagram).queryByText(/business portfolio|Facebook Page/)).not.toBeInTheDocument();
     const user = userEvent.setup();
-    await user.click(within(instagram).getByRole('button', { name: 'Connect' }));
-    expect(connectProfile).toHaveBeenCalledWith(ig);
-    // Instagram can't connect before its account steps, so they sit on the row, explained.
-    const before = within(instagram).getByRole('list', { name: 'Instagram steps before connecting' });
-    expect(within(before).getByText(/Create a new Instagram profile/)).toBeInTheDocument();
-    await user.click(within(before).getAllByRole('button', { name: 'Done' })[0]);
-    expect(onMark).toHaveBeenCalledWith('ig:page', true);
-    await user.click(within(before).getByRole('button', { name: /Open its settings/ }));
-    expect(openNeedPage).toHaveBeenCalledWith(expect.objectContaining({ id: 'ig:professional' }), [ig, tt], undefined);
     await user.click(within(instagram).getByRole('button', { name: 'Instagram details' }));
     expect(within(instagram).getByText('softwings25@gmail.com')).toBeInTheDocument();
 
@@ -93,15 +87,22 @@ describe('brand accounts', () => {
     signIns.value = {};
   });
 
-  it('flags an Instagram connection to a different account than the profile', async () => {
-    status.connections = { ig: { state: 'ok', username: 'softwings25', detail: '' } };
-    render(<BrandAccounts brand={brand} accounts={[profile('ig', 'instagram')]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
-    const instagram = screen.getByRole('listitem', { name: 'Instagram profile' });
-    expect(within(instagram).getByText('Connected as @softwings25')).toBeInTheDocument();
-    expect(within(instagram).getByText(/nothing posts here/)).toBeInTheDocument();
-    // The steps that make the right account show up in Meta are on the row.
-    expect(within(instagram).getByRole('list', { name: 'Instagram steps before connecting' })).toBeInTheDocument();
-    expect(within(instagram).getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+  it('shows a standalone Facebook account with its own sign-in, posting through the brand window', async () => {
+    status.connections = {};
+    status.passwords = { fb: true };
+    const fb = { ...profile('fb', 'facebook'), handle: 'bunnywhispers', signupEmail: 'softwings25+bunnywhispers@gmail.com' };
+    render(<BrandAccounts brand={brand} accounts={[fb]} loaded busy={false} marks={{}} onEditAccount={vi.fn()}/>);
+    const facebook = screen.getByRole('listitem', { name: 'Facebook profile' });
+    expect(within(facebook).getByText('@bunnywhispers')).toBeInTheDocument();
+    expect(within(facebook).getByText('Not checked')).toBeInTheDocument();
+    expect(within(facebook).queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(within(facebook).getByRole('button', { name: 'Facebook details' }));
+    expect(within(facebook).getByText('softwings25+bunnywhispers@gmail.com')).toBeInTheDocument();
+    expect(within(facebook).getByRole('button', { name: /Reset password/ })).toBeInTheDocument();
+    expect(within(facebook).queryByText(/business portfolio/)).not.toBeInTheDocument();
+    expect(connectProfile).not.toHaveBeenCalled();
+    expect(openNeedPage).not.toHaveBeenCalled();
   });
 
   it('resets a password on the social and saves the new one only once it worked', async () => {

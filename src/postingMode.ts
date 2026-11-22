@@ -5,12 +5,14 @@ import type { Platform } from './model';
 /**
  * How each social gets a video: 'api' posts it from the app by itself, 'browser' opens the social's own
  * upload page in an app window, for Nate to review and press Post.
- * Instagram and Facebook Page Reels post through the Graph API. TikTok (Sandbox) and YouTube (audit) post through the browser
- * until their review is approved and API uploading is built for them; X posts through the browser too.
+ * Every brand's accounts are standalone (their own login, not under the main account or a business
+ * portfolio), and Meta's API only publishes to Instagram accounts linked to a Page it manages, so Instagram
+ * and Facebook post through their own pages in the brand's window like X. TikTok (Sandbox) and YouTube
+ * (audit) post through the browser until their review is approved and API uploading is built for them.
  */
 export type PostMode = 'api' | 'browser';
 /** Socials the app can upload to by itself today. */
-export const API_UPLOADS: Platform[] = ['instagram', 'facebook'];
+export const API_UPLOADS: Platform[] = [];
 const PROVIDER: Partial<Record<Platform, DevProvider>> = { tiktok: 'tiktok', youtube: 'google' };
 
 export function postMode(platform: Platform): PostMode { return API_UPLOADS.includes(platform) ? 'api' : 'browser'; }

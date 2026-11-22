@@ -54,8 +54,7 @@ const DEFAULT_RATIO = '9:16';
 
 /** The socials a brand posts to: every social it has a profile on, in platform order. */
 export function brandSocials(workspace: Workspace, brandId: string): Platform[] {
-  // Every brand posts Reels to its Facebook Page, so Facebook always gets a tile (it asks to connect the Page until it is).
-  return ORDER.filter((platform) => platform === 'facebook' || workspace.accounts.some((account) => account.brandId === brandId && account.platform === platform));
+  return ORDER.filter((platform) => workspace.accounts.some((account) => account.brandId === brandId && account.platform === platform));
 }
 /** How far a category is: videos, and how many are up on every social of the brand. */
 export function categoryProgress(videos: Video[], socials: Platform[]) {
@@ -119,8 +118,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
   /** The one step that unblocks a social: make the profile, or fix its login or connection under Accounts. */
   function fix(status: SocialStatus) {
     const kind = status.action?.kind;
-    // A brand without a Facebook profile attaches its existing Page; the brand page does that from the same handler.
-    if ((kind === 'create' || kind === 'finish-signup' || (kind === 'connect' && status.platform === 'facebook' && !status.account)) && onCreateProfile) onCreateProfile(status.platform);
+    if ((kind === 'create' || kind === 'finish-signup') && onCreateProfile) onCreateProfile(status.platform);
     else if (kind === 'connect' && onConnectInstagram) onConnectInstagram();
     else (onShowAccounts ?? onConnectInstagram)?.();
   }
@@ -358,7 +356,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
   const openPost = () => { if (instagramLink) openInstagramPost(instagramLink).catch((reason) => setError(errorText(reason))); };
   const facebookLink = video.links?.facebook;
   const openReel = () => { if (facebookLink) openFacebookPost(facebookLink).catch((reason) => setError(errorText(reason))); };
-  const facebookReady = !job && !!onPostFacebook && !!facebook?.connected && isLocalVideo(video.mediaSource);
+  const facebookReady = !job && API_SOCIALS.includes('facebook') && !!onPostFacebook && !!facebook?.connected && isLocalVideo(video.mediaSource);
   const plan = batchPlan({ video, socials, statuses, instagramReady: automatic, facebookReady, browserAvailable: !!browser,
     isOpen: platform => !!browser?.isOpen(video.id, platform), isAsking: platform => !!browser?.isAsking(video.id, platform),
     waitingOn: platform => waitingOn?.(platform) ?? null });
@@ -371,7 +369,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       const problems = detailProblems(video, socials);
       if (problems.length) { setEditing(true); setError(problems[0]); return; }
       const ok = await confirm({ title: `Prepare "${video.title}"?`,
-        body: <><p>Review the destinations for <strong>{brandName}</strong>.</p><ul>{plan.map(item => <li key={item.platform}><strong>{getPlatform(item.platform).name}:</strong> {item.reason}</li>)}</ul><p>Check the account and publish in each window. Instagram and Facebook use their separate Post buttons.</p></>,
+        body: <><p>Review the destinations for <strong>{brandName}</strong>.</p><ul>{plan.map(item => <li key={item.platform}><strong>{getPlatform(item.platform).name}:</strong> {item.reason}</li>)}</ul><p>Check the account and publish in each window.</p></>,
         confirmLabel: 'Open posting windows' });
       if (!ok) return;
       setWorking(true); setError(''); setBatchMessage('');
@@ -499,10 +497,10 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       tone = 'todo'; line = 'Did it go up?';
       action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
         <button type="button" className="dest-link quiet" disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button>{browser.confirmationError(video.id, platform) && <span className="error-message" role="alert">{browser.confirmationError(video.id, platform)}</span>}</>;
-    } else if (status.canPost && platform === 'facebook') {
+    } else if (status.canPost && platform === 'facebook' && API_SOCIALS.includes(platform)) {
       if (facebookReady) { tone = 'ready'; line = `Posts to ${facebook?.page}`; action = <button type="button" className="dest-button primary" aria-label="Post to Facebook" disabled={busy || working || confirming} onClick={() => void approveFacebook(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
       else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected' : 'Needs a video file'; }
-    } else if (status.canPost && platform === 'instagram') {
+    } else if (status.canPost && platform === 'instagram' && API_SOCIALS.includes(platform)) {
       if (automatic) { tone = 'ready'; line = `Posts as @${instagram?.username}`; action = <button type="button" className="dest-button primary" aria-label="Post to Instagram" disabled={busy || working || confirming} onClick={() => void approve(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
       else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected, can\'t upload' : 'Needs a video file'; }
     } else if (status.canPost && browser) {
@@ -543,7 +541,6 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
     </div>
     {socials.length > 0 && !editing && <div className="dest-grid" role="group" aria-label="Where it goes">{socials.map(destination)}</div>}
     {!job && !editing && <button type="button" className="primary-button small-button" disabled={disabled || working || confirming || eligible.length === 0} onClick={() => void startBatch()}><Send size={14}/> Prepare posting windows</button>}
-    {!job && !editing && <p className="library-hint">Instagram and Facebook use their separate Post buttons.</p>}
     {batchMessage && <p className="library-hint" role="status">{batchMessage}</p>}
     {!editing && done.state !== 'making' && <PartnerReviewControls video={video} socials={socials} disabled={disabled || working}/>}
     {working && <p className="library-hint" role="status">Preparing this post. This can take a few minutes; keep the app open.</p>}
@@ -577,7 +574,7 @@ function VideoThumb({ video, playable, watching, onToggle }: { video: Video; pla
 
 /** Whether approving posts the video by itself: its Instagram post is still to do and the profile is connected through Meta. */
 function canPostAutomatically(video: Video, socials: Platform[], instagram: BrandInstagram | null | undefined, canPost: boolean) {
-  return !video.generation && canPost && socials.includes('instagram') && !video.posted.includes('instagram')
+  return !video.generation && canPost && API_SOCIALS.includes('instagram') && socials.includes('instagram') && !video.posted.includes('instagram')
     && !!instagram?.connected && instagram.canUploadFiles && isLocalVideo(video.mediaSource)
     // Never to an account other than the brand's own profile.
     && instagram.username.replace(/^@/, '').toLowerCase() === instagram.handle.replace(/^@/, '').toLowerCase();
@@ -665,7 +662,7 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
         const done = video.posted.includes(platform);
         let state: React.ReactNode;
         if (done) state = video.testPosts?.[platform] !== undefined ? <span className="pill planned"><span className="dot"/>Posted as a test</span> : <span className="pill active"><span className="dot"/>Posted</span>;
-        else if (platform === 'facebook') {
+        else if (platform === 'facebook' && API_SOCIALS.includes(platform)) {
           const status = statuses.find((item) => item.platform === platform);
           if (onApproveFacebook) state = <><span className="post-target-note">Posts by itself as a Reel on the Page {facebookPage}.</span>
             <button type="button" className="outline-button small-button" disabled={disabled || working || problems.length > 0} onClick={() => void onApproveFacebook(draft, saveDefaults).then((ok) => { if (ok) onClose(); })}><Send size={14}/> Post to Facebook</button></>;

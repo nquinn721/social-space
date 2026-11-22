@@ -82,7 +82,8 @@ the email, username and saved password, enter the details yourself, and complete
 
 ## Facebook
 
-Each brand gets a Facebook Page managed with the existing Facebook login. The wizard opens the Pages
-area in the business portfolio and can fill a clearly identified Page name field. Sign in with your
-existing Facebook account, create the Page, and review its details yourself. Social Space never creates
-a password for the Page or fills the Facebook login password.
+Each brand gets its own standalone Facebook account, not a Page under the main account or the SoftWings
+business portfolio. The wizard opens facebook.com/r.php and fills first name and surname (the brand's name,
+split at the first space), the birthday (1983-06-05, in Facebook's day/month/year menus), the brand's email
+and its generated password. Nate picks a gender, presses Sign Up and does any check; the emailed code is
+filled in and shows bottom right to copy.

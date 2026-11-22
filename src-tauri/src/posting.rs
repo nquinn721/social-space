@@ -1,8 +1,9 @@
 //! Posting a video through the social's own upload page, in a visible app window, while its API
-//! is not approved yet (TikTok Sandbox, YouTube audit) or not used (X).
+//! is not approved yet (TikTok Sandbox, YouTube audit) or not used (X, and Instagram and Facebook,
+//! whose brand accounts are standalone accounts the Meta API cannot publish to).
 //!
 //! Each brand gets its own browser profile (cookie folder) for posting, so every brand stays signed in
-//! to its own TikTok, YouTube and X account. TikTok and YouTube windows can fill upload details;
+//! to its own TikTok, YouTube, X, Instagram and Facebook account. TikTok, YouTube, Instagram and Facebook windows can fill upload details;
 //! X is a manual handoff with no page automation. Nate reviews and posts on each site himself.
 
 use std::{
@@ -98,8 +99,9 @@ pub(crate) fn upload_url(platform: Platform) -> Option<&'static str> {
         Platform::Tiktok => Some("https://www.tiktok.com/tiktokstudio/upload"),
         Platform::Youtube => Some("https://www.youtube.com/upload"),
         Platform::X => Some("https://x.com/compose/post"),
-        // Instagram posts through its API.
-        Platform::Instagram | Platform::Facebook => None,
+        // Instagram has no upload address: its home page opens "New post", which the post script presses.
+        Platform::Instagram => Some("https://www.instagram.com/"),
+        Platform::Facebook => Some("https://www.facebook.com/reels/create/"),
     }
 }
 
@@ -112,6 +114,7 @@ pub(crate) fn is_sign_in(url: &url::Url) -> bool {
         "tiktok.com" => path.starts_with("/login"),
         "x.com" | "twitter.com" => path.starts_with("/i/flow/login") || path == "/login",
         "instagram.com" => path.starts_with("/accounts/login"),
+        "facebook.com" | "m.facebook.com" => path.starts_with("/login"),
         _ => false,
     }
 }
@@ -120,7 +123,7 @@ pub(crate) fn is_sign_in(url: &url::Url) -> bool {
 fn on_social(url: &url::Url) -> bool {
     url.scheme() == "https"
         && url.host_str().is_some_and(|host| {
-            ["tiktok.com", "youtube.com", "x.com", "twitter.com", "instagram.com", "accounts.google.com"]
+            ["tiktok.com", "youtube.com", "x.com", "twitter.com", "instagram.com", "facebook.com", "accounts.google.com"]
                 .iter()
                 .any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
         })
@@ -151,7 +154,8 @@ fn is_upload_page(platform: Platform, url: &url::Url) -> bool {
         Platform::Tiktok => host.ends_with("tiktok.com") && url.path().starts_with("/tiktokstudio/upload"),
         Platform::Youtube => host == "studio.youtube.com" || (host.ends_with("youtube.com") && url.path().starts_with("/upload")),
         Platform::X => (host == "x.com" || host == "twitter.com") && !is_sign_in(url),
-        Platform::Instagram | Platform::Facebook => false,
+        Platform::Instagram => host.ends_with("instagram.com") && !is_sign_in(url),
+        Platform::Facebook => host.ends_with("facebook.com") && url.path().starts_with("/reels/create"),
     }
 }
 
@@ -356,7 +360,7 @@ fn watch(app: AppHandle, window: WebviewWindow, request: PostRequest) {
 #[tauri::command]
 pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result<String, String> {
     check(&request)?;
-    let address = upload_url(request.platform).ok_or("Instagram posts through its API, not a page.")?;
+    let address = upload_url(request.platform).ok_or("This social has no upload page.")?;
     let dir = profile_dir(&app, &request.brand_id)?;
     std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
     if !may_automate(request.platform) {
@@ -427,7 +431,7 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
             let (restore_app, restore_window, restore_brand) = (task_app.clone(), task_window.clone(), brand.clone());
             tauri::async_runtime::spawn_blocking(move || {
                 // A social this PC's folder is already signed in to keeps its own sign-in.
-                let here: Vec<Platform> = [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram].into_iter()
+                let here: Vec<Platform> = [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram, Platform::Facebook].into_iter()
                     .filter(|social| crate::sign_in_state::known_signed_in(&restore_app, &restore_brand, *social)).collect();
                 crate::browser_sessions::restore(&restore_app, &restore_window, &restore_brand, &here)
             }).await.unwrap_or(false)
@@ -467,7 +471,7 @@ fn open_signed_in(app: &AppHandle, url: url::Url, dir: PathBuf, posting: std::sy
 }
 
 /// The sign-in fill for a brand profile's window. Only a profile the app sends is filled: its own
-/// login on TikTok, or the parent login an Instagram profile or YouTube channel lives under.
+/// login (TikTok, Instagram, Facebook), or the Google login a YouTube channel lives under.
 /// Without one the sign-in page is left for Nate.
 fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, email: &str, password: Option<String>) -> Result<Option<String>, String> {
     if !may_automate(platform) { return Ok(None); }
@@ -476,7 +480,7 @@ fn brand_sign_in(account_id: &Option<String>, platform: Platform, handle: &str, 
     }
     // TikTok signs in with the profile's username so a shared email cannot select another account.
     match platform {
-        Platform::Youtube | Platform::Instagram if !email.is_empty() => crate::autofill::sign_in_script(email, email, password),
+        Platform::Youtube | Platform::Instagram | Platform::Facebook if !email.is_empty() => crate::autofill::sign_in_script(email, email, password),
         _ => crate::autofill::sign_in_script(handle.trim().trim_start_matches('@'), "", password),
     }
 }
@@ -493,7 +497,7 @@ pub(crate) fn profile_url(platform: Platform, handle: &str) -> Option<String> {
         Platform::Youtube => format!("https://www.youtube.com/@{handle}/videos"),
         Platform::X => format!("https://x.com/{handle}"),
         Platform::Instagram => format!("https://www.instagram.com/{handle}/"),
-        // A Page's username or its numeric ID.
+        // The brand's own Facebook account: its username or numeric ID.
         Platform::Facebook => format!("https://www.facebook.com/{handle}"),
     })
 }
@@ -587,8 +591,9 @@ pub(crate) fn reset_url(platform: Platform) -> Option<&'static str> {
         Platform::Tiktok => Some("https://www.tiktok.com/login/email/forget-password"),
         Platform::X => Some("https://x.com/i/flow/password_reset"),
         Platform::Instagram => Some("https://www.instagram.com/accounts/password/reset/"),
-        // YouTube and Facebook Pages sit under your own Google or Facebook login, which the app never resets.
-        Platform::Youtube | Platform::Facebook => None,
+        Platform::Facebook => Some("https://www.facebook.com/login/identify/"),
+        // YouTube channels sit under your own Google login, which the app never resets.
+        Platform::Youtube => None,
     }
 }
 
@@ -664,7 +669,7 @@ const POST_SCRIPT: &str = r#"function (data) {
   // YouTube always gets a thumbnail: the chosen moment, or else the first frame.
   if (data.coverMs == null && data.platform === 'youtube') data.coverMs = 0;
   const visible = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
-  const names = { tiktok: 'TikTok', youtube: 'YouTube', x: 'X' };
+  const names = { tiktok: 'TikTok', youtube: 'YouTube', x: 'X', instagram: 'Instagram', facebook: 'Facebook' };
   const name = names[data.platform] || data.platform;
   const ours = (el) => !!(el && el.closest && el.closest('#socialspace-post, #socialspace-fill-banner, #socialspace-code'));
   const all = (selector) => Array.from(document.querySelectorAll(selector)).filter((el) => visible(el) && !ours(el));
@@ -680,7 +685,7 @@ const POST_SCRIPT: &str = r#"function (data) {
   /** Clicks that open a section or step through the form, spaced out so the page can keep up. Never Post or Publish. */
   const press = (el) => {
     if (!el || !state.auto || now() - state.lastClick < 1500) return false;
-    if (/^(post|publish|schedule|upload|save|done)$/i.test((el.textContent || '').trim())) return false;
+    if (/^(post|publish|share|schedule|upload|save|done)$/i.test((el.textContent || '').trim())) return false;
     state.lastClick = now();
     el.click();
     return true;
@@ -801,11 +806,38 @@ const POST_SCRIPT: &str = r#"function (data) {
     x: () => {
       fillOnce('text', ['[data-testid="tweetTextarea_0"]', 'div[role="textbox"][contenteditable="true"]'], data.text, false);
     },
+    // Instagram's New post dialog: "Video posts are now shared as reels" (OK), then Next past Crop and
+    // Edit, then the caption. Nate presses Share.
+    instagram: () => {
+      const caption = first(['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]']);
+      if (caption) { fillOnce('caption', ['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]'], data.text, true); state.auto = false; return; }
+      const ok = byText(/^OK$/i, '[role=dialog] button, [role=dialog] [role=button]');
+      if (ok && press(ok)) return;
+      const next = byText(/^Next$/i, '[role=dialog] [role=button], [role=dialog] button, [role=dialog] div');
+      if (next && state.nexts < 2 && now() - state.lastClick > 2500 && press(next)) state.nexts += 1;
+    },
+    // Facebook's reel composer: Next past the video and edit steps, then the description. Nate presses Publish.
+    facebook: () => {
+      const box = first(['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]']);
+      if (box) { fillOnce('caption', ['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]'], data.text, true); state.auto = false; return; }
+      const next = byText(/^Next$/i, '[role=button], button');
+      if (next && next.getAttribute('aria-disabled') !== 'true' && state.nexts < 2 && now() - state.lastClick > 2500 && press(next)) state.nexts += 1;
+    },
+  };
+  /** Opens the page's own upload dialog when the upload box only shows up after a click (Instagram's New post). */
+  const openUpload = () => {
+    if (data.platform !== 'instagram' || fileInputs('video').length || !state.auto || now() - state.lastClick < 2000) return;
+    const menuPost = Array.from(document.querySelectorAll('svg[aria-label="Post"]')).map((svg) => svg.closest('a, [role=link], [role=button], [role=menuitem]')).find((el) => el && visible(el) && !ours(el));
+    const create = Array.from(document.querySelectorAll('svg[aria-label="New post"], svg[aria-label="Create"]')).map((svg) => svg.closest('a, [role=link], [role=button]')).find((el) => el && visible(el) && !ours(el));
+    const target = menuPost || create;
+    if (!target) return;
+    state.lastClick = now();
+    target.click();
   };
 
   const reminders = () => {
     const list = [];
-    if (data.coverMs != null && !state.filled.cover && data.platform !== 'x') {
+    if (data.coverMs != null && !state.filled.cover && (data.platform === 'tiktok' || data.platform === 'youtube')) {
       const at = data.cover || 'the start';
       if (state.coverFailed) list.push('Cover: the frame at ' + at + ' could not be made here; pick it on the page.');
       else if (state.coverMissing) list.push(data.platform === 'youtube' ? 'Thumbnail: YouTube only takes an uploaded thumbnail on a phone-verified channel, so it picks one itself for now.' : 'Cover: pick the frame at ' + at + ' under Edit cover.');
@@ -891,6 +923,8 @@ const POST_SCRIPT: &str = r#"function (data) {
     const text = (document.body && document.body.innerText) || '';
     if (data.platform === 'youtube') return state.attached && /Video published|Video scheduled|Video saved as (private|unlisted|public)/i.test(text);
     if (data.platform === 'x') return /Your post was sent/i.test(text);
+    if (data.platform === 'instagram') return state.attached && /Your (reel|post) has been shared|(Reel|Post) shared/i.test(text);
+    if (data.platform === 'facebook') return state.attached && /Your reel (is|was|has been) (now )?(published|live|shared)|Reel published/i.test(text);
     if (data.platform === 'tiktok') return state.attached && (/Your video (has been|was) (uploaded|posted)|Video (published|posted)/i.test(text) || /\/tiktokstudio\/content/.test(location.pathname));
     return false;
   };
@@ -915,6 +949,7 @@ const POST_SCRIPT: &str = r#"function (data) {
   const tick = () => {
     if (!document.body) return;
     if (!state.attached && state.file) {
+      openUpload();
       const input = fileInputs('video')[0];
       if (input) { attachTo(input, state.file); state.attached = true; }
     }
@@ -954,9 +989,8 @@ mod tests {
     }
 
     #[test]
-    fn instagram_has_no_upload_page() {
-        assert!(upload_url(Platform::Instagram).is_none());
-        for platform in [Platform::Tiktok, Platform::Youtube, Platform::X] {
+    fn every_social_has_an_upload_page() {
+        for platform in [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram, Platform::Facebook] {
             let page = url(upload_url(platform).unwrap());
             assert!(crate::browser::allowed_navigation(&page, false));
             assert!(on_social(&page));
@@ -970,6 +1004,11 @@ mod tests {
         assert!(is_sign_in(&url("https://x.com/i/flow/login")));
         assert!(!is_sign_in(&url("https://x.com/compose/post")));
         assert!(is_sign_in(&url("https://www.instagram.com/accounts/login/")));
+        assert!(is_sign_in(&url("https://www.facebook.com/login/?next=%2Freels%2Fcreate%2F")));
+        assert!(!is_sign_in(&url("https://www.facebook.com/reels/create/")));
+        assert!(is_upload_page(Platform::Facebook, &url("https://www.facebook.com/reels/create/")));
+        assert!(is_upload_page(Platform::Instagram, &url("https://www.instagram.com/")));
+        assert!(!is_upload_page(Platform::Instagram, &url("https://www.instagram.com/accounts/login/")));
         assert!(!may_fill_page(&url("https://x.com/compose/post")));
         assert!(!may_fill_page(&url("https://mobile.twitter.com/i/flow/login")));
         assert!(may_fill_page(&url("https://www.tiktok.com/tiktokstudio/upload")));
@@ -1021,6 +1060,8 @@ mod tests {
         assert!(brand_sign_in(&Some("a1".into()), Platform::X, "@animals", "x+animals@example.com", Some("secret".into())).unwrap().is_none());
         let tiktok = brand_sign_in(&Some("a1".into()), Platform::Tiktok, "@animals", "x+animals@example.com", None).unwrap().unwrap();
         assert!(tiktok.contains("\"username\":\"animals\"") && tiktok.contains("\"signInOnly\":true"));
+        let fb = brand_sign_in(&Some("a1".into()), Platform::Facebook, "bunnywhispers", "x+bunnywhispers@example.com", Some("pw".into())).unwrap().unwrap();
+        assert!(fb.contains("x+bunnywhispers@example.com") && fb.contains("\"signInOnly\":true"));
         let yt = brand_sign_in(&Some("a1".into()), Platform::Youtube, "animals", "x+animals@example.com", None).unwrap().unwrap();
         assert!(yt.contains("x+animals@example.com"));
         assert_eq!(window_verb("video-1"), "Post on");
@@ -1071,7 +1112,7 @@ fn profile_edit_note(platform: Platform) -> &'static str {
         Platform::X => "Enter the picture, name, bio and website on X yourself, then press Save yourself.",
         Platform::Tiktok => "Press Edit profile: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
         Platform::Youtube => "Open Customization, then Profile: the picture, name and description fill in. Keywords are under Settings, Channel. Press Publish or Save yourself.",
-        Platform::Facebook => "Press Edit on the Page: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
+        Platform::Facebook => "Press Edit profile: the picture, name and bio fill in as it opens. Check them, then press Save yourself.",
     }
 }
 

@@ -49,10 +49,9 @@ export const SIGNUP_FLOWS: Record<Platform, SignupStep[]> = {
     { title: 'New Google account instead', by: 'app', detail: 'Google sign-up fills name, birthday and username page by page; you pick gender, press Next and do any phone check.' },
   ],
   facebook: [
-    { title: 'SoftWings business Pages', by: 'you', detail: 'Opens the Pages list of the SoftWings business portfolio, so the business owns the new Page. Sign in to Facebook if asked.' },
-    { title: 'Create a new Facebook Page', by: 'you', detail: 'Press Add, then "Create a new Facebook Page".' },
-    { title: 'Page name and bio', by: 'app', detail: 'The Page name is filled when the field is identified. Check it, then enter the bio and pick a category yourself.' },
-    { title: 'Create Page', by: 'you', detail: 'Press Next, tick the terms box and press Create Page. Then press "I already made it" and Connect.' },
+    { title: 'Sign-up form', by: 'app', detail: 'Opens Facebook\'s own sign-up (a standalone account, not tied to your main account or a business portfolio). First name, surname, birthday, the brand\'s email and its password are filled.' },
+    { title: 'Gender and Sign Up', by: 'you', detail: 'Pick a gender and press Sign Up. Solve a check if Facebook shows one.' },
+    { title: 'Confirmation code', by: 'app', detail: 'The code Facebook emails is entered, and shows bottom right to copy. Press Continue.' },
   ],
   x: [
     { title: 'Create account', by: 'you', detail: 'Choose Create account, or use email on the first page.' },

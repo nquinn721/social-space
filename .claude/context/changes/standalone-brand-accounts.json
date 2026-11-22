@@ -1,0 +1,186 @@
+{
+  "summary": "Every brand's Instagram, Facebook, TikTok and X is its own standalone account (own email and password), never tied to the main softwings25 account, another brand's login, or the SoftWings business portfolio (Nate, 2026-11-22). Instagram and Facebook post through their own sites in the brand's window like TikTok and X; Facebook signs up at facebook.com/r.php; the business-Page steps are gone from the Accounts tab and setup tracker (0.34.0).",
+  "features": [
+    "accounts",
+    "instagram",
+    "facebook",
+    "posting",
+    "updates",
+    "connections",
+    "navigation",
+    "overview",
+    "video-library"
+  ],
+  "changes": [
+    {
+      "old": "No Page connected",
+      "new": "No profile"
+    },
+    {
+      "old": "Linked to the brand's Facebook Page in your business portfolio",
+      "new": "its own email, not your main Gmail"
+    },
+    {
+      "old": "SOFTWINGS_PAGES",
+      "new": "https://www.facebook.com/r.php"
+    },
+    {
+      "old": "Facebook Pages have no login of their own",
+      "new": "Facebook needs a separate account with its own email for each brand"
+    }
+  ],
+  "kept": [
+    {
+      "term": "Connect Facebook Page",
+      "path": "src-tauri/src/facebook.rs",
+      "reason": "Meta API connect window, kept for a social switched back to 'api' in postingMode.ts"
+    },
+    {
+      "term": "meta-business-pages",
+      "path": "src-tauri/src/setup_pages.rs",
+      "reason": "test asserting the business-portfolio page can no longer be opened"
+    }
+  ],
+  "spots": [
+    {
+      "path": "src/postingMode.ts",
+      "note": "API_UPLOADS empty: Instagram and Facebook post through the brand window"
+    },
+    {
+      "path": "src/brandStatus.ts",
+      "note": "Instagram/Facebook API branches only in 'api' mode; no Page-attach status; saved-password check for every own-login social"
+    },
+    {
+      "path": "src/brands.ts",
+      "note": "Facebook one account per email; Instagram no longer shares logins; Page wording removed"
+    },
+    {
+      "path": "src/setupNeeds.ts",
+      "note": "Instagram business-Page and Professional steps removed; own-login check on every social but YouTube; Facebook login saved"
+    },
+    {
+      "path": "src/useBrowserPosting.ts",
+      "note": "only YouTube may sign in with the main Gmail"
+    },
+    {
+      "path": "src/signupFlows.ts",
+      "note": "Facebook standalone sign-up steps"
+    },
+    {
+      "path": "src/CreateAccountWizard.tsx",
+      "note": "Facebook gets its own password and first/last name, email, birthday fill"
+    },
+    {
+      "path": "src/BrandAccounts.tsx",
+      "note": "Facebook row shows its handle, sign-in details and Reset password"
+    },
+    {
+      "path": "src/pages/AccountsPage.tsx",
+      "note": "attachFacebook (SoftWings Page) removed; Facebook chip starts a sign-up"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "Facebook tile only with a Facebook profile; API post buttons only in 'api' mode"
+    },
+    {
+      "path": "src/batchPosting.ts",
+      "note": "Instagram/Facebook join the posting windows unless in 'api' mode"
+    },
+    {
+      "path": "src/model.ts",
+      "note": "Facebook description 'Reels'"
+    },
+    {
+      "path": "src-tauri/src/posting.rs",
+      "note": "Instagram (instagram.com, New post) and Facebook (reels/create) upload pages, sign-in, reset, post script steps"
+    },
+    {
+      "path": "src-tauri/src/autofill.rs",
+      "note": "fills Facebook's preset birthday menus once"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "note": "Facebook create opens facebook.com/r.php; SOFTWINGS_PAGES removed"
+    },
+    {
+      "path": "src-tauri/src/setup_pages.rs",
+      "note": "meta-business-pages removed"
+    },
+    {
+      "path": "HANDOFF.md",
+      "note": "section 7 rewritten"
+    },
+    {
+      "path": "docs/signup-flows.md",
+      "note": "Facebook section"
+    },
+    {
+      "path": ".claude/context/features.json",
+      "note": "instagram, facebook notes"
+    },
+    {
+      "path": "package.json",
+      "note": "0.34.0"
+    },
+    {
+      "path": "package-lock.json",
+      "note": "0.34.0"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "0.34.0"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "0.34.0"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "0.34.0"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "note": "0.34.0"
+    },
+    {
+      "path": "src/BrandAccounts.test.tsx",
+      "note": "standalone Instagram/Facebook rows"
+    },
+    {
+      "path": "src/Connections.test.tsx",
+      "note": "API connect flow tested with postingMode mocked to 'api'"
+    },
+    {
+      "path": "src/CreateAccountWizard.test.tsx",
+      "note": "standalone Facebook sign-up"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "Instagram/Facebook post in the brand window; API tests switch to 'api' mode"
+    },
+    {
+      "path": "src/batchPosting.test.ts",
+      "note": "Instagram joins posting windows"
+    },
+    {
+      "path": "src/brandStatus.test.ts",
+      "note": "standalone Instagram/Facebook status"
+    },
+    {
+      "path": "src/brands.test.ts",
+      "note": "Facebook own email, Instagram no shared login"
+    },
+    {
+      "path": "src/pages/AccountsPage.test.tsx",
+      "note": "Facebook chip starts a sign-up"
+    },
+    {
+      "path": "src/postingMode.test.ts",
+      "note": "every social browser; main Gmail blocked on Instagram/Facebook"
+    },
+    {
+      "path": "src/setupNeeds.test.ts",
+      "note": "no business Page steps; Facebook own login"
+    }
+  ]
+}

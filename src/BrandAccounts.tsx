@@ -205,7 +205,7 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <BrandMark platform={account.platform}/>
           <div className="social-row-title">
             <strong>{name}</strong>
-            <small>{account.platform === 'facebook' ? (check?.state === 'ok' && check.username ? `Page: ${check.username}` : account.displayName || account.label || 'No Page yet') : account.handle ? `@${normalizeHandle(account.handle)}` : 'No username yet'}</small>
+            <small>{account.handle ? `@${normalizeHandle(account.handle)}` : 'No username yet'}</small>
           </div>
           <span className="status-chip">{state.tone === 'checking' ? <Loader2 size={12} className="spin"/> : <span className="dot"/>}{state.text}</span>
           <span className="social-row-actions">
@@ -223,17 +223,16 @@ export default function BrandAccounts({ brand, accounts, loaded, busy, marks, on
           <button type="button" className="ghost-button small-button" onClick={() => setResetting((current) => ({ ...current, [account.id]: false }))}>Cancel</button>
         </div>}
         {expanded && <div className="social-row-details">
-          {account.platform === 'facebook' ? <p className="footnote">Facebook Pages have no login of their own: the Page belongs to the SoftWings business portfolio (you manage it with your own Facebook account), and the app posts Reels to it through Meta with the Page's own key, kept in Windows Credential Manager.</p>
-          : <dl className="profile-signin" aria-label={`${name} sign-in`}>
+          <dl className="profile-signin" aria-label={`${name} sign-in`}>
             {!sharesLogins(account.platform) && account.handle && <div><dt>Username</dt><dd><CopyValue value={account.handle} label={`${name} username`}/></dd></div>}
             <div><dt>Email</dt><dd><CopyValue value={account.signupEmail ?? ''} label={`${name} email`}/></dd></div>
             <div><dt>{account.platform === 'youtube' ? 'Google password' : 'Password'}</dt><dd><PasswordCell account={account}/></dd></div>
-          </dl>}
+          </dl>
           {account.platform === 'x' && <p className="footnote">X sign-in, profile changes, and password resets are done manually on X. After changing your password, save it here with Edit details.</p>}
           {account.platform === 'youtube' && <p className="footnote">YouTube signs in with your Google account. The window only fills the password saved here, so if Google says it's wrong, change it here to your real Google password.</p>}
           <div className="social-row-links">
             {live && account.handle && <button type="button" className="ghost-button small-button" disabled={opening[account.id]} onClick={() => void viewProfile(account, true)}><ExternalLink size={14}/> Open in browser</button>}
-            {live && account.platform !== 'youtube' && account.platform !== 'facebook' && account.platform !== 'x' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
+            {live && account.platform !== 'youtube' && account.platform !== 'x' && !wrongLogin(developerLogins, account) && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void reset(account)}><KeyRound size={14}/> Reset password</button>}
             <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => onEditAccount(account)}><Pencil size={14}/> Edit details</button>
             {live && check?.state === 'ok' && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => void disconnect(account)}>Disconnect</button>}
             {!live && onAlreadyCreated && <button type="button" className="ghost-button small-button" disabled={disabled} aria-label="Mark it live" title="Made it on the social yourself? Mark it live" onClick={() => onAlreadyCreated(account)}><Check size={14}/> Mark it live</button>}

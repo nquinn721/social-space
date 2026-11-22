@@ -13,7 +13,7 @@ import { usesMainLogin } from './useBrowserPosting';
 /** How a saved connection is doing (from the check_*_connection commands). */
 export type ConnectionCheck = { state: 'none' | 'ok' | 'expired' | 'unchecked'; username: string; detail: string };
 /** Pages the tracker can open; the desktop app maps each to a fixed address. */
-export type SetupPage = 'meta-apps' | 'meta-business' | 'meta-business-pages' | 'instagram-settings' | 'google-consent' | 'google-youtube-api' | 'google-quota'
+export type SetupPage = 'meta-apps' | 'meta-business' | 'instagram-settings' | 'google-consent' | 'google-youtube-api' | 'google-quota'
   | 'youtube-audit' | 'youtube-verify' | 'tiktok-apps' | 'x-portal' | 'x-products'
   | 'tiktok-login' | 'google-project' | 'google-credentials' | 'google-new-client' | 'x-signup';
 export type NeedStatus = 'done' | 'todo' | 'problem' | 'checking';
@@ -93,10 +93,6 @@ const APP_STEPS: Record<Platform, ManualStep[]> = {
 
 /** Account settings each profile needs on its social, which the app cannot see. */
 const PROFILE_STEPS: Partial<Record<Platform, ManualStep[]>> = {
-  instagram: [
-    { key: 'page', title: 'Linked to the brand\'s Facebook Page in your business portfolio', why: 'Meta only offers an Instagram account to the app when it is a professional account linked to a Facebook Page in your business portfolio. In business settings → Pages: Add → Create a new Facebook Page named like the brand (if it has none), then pick the Page → Connect assets → Instagram account → "Create a new Instagram profile" for a new brand (it comes out professional and linked), or "Log into Instagram" for an account that exists. The same Page is where the brand\'s Facebook Reels go.', page: { id: 'meta-business-pages', label: 'Open Pages' } },
-    { key: 'professional', title: 'Professional account (Business)', why: 'Only for an Instagram account made outside the Page: switch it in its own window, More (☰) → Settings → Account type and tools → Switch to professional account → Business. A profile created from the Page already is one.', page: { id: 'instagram-settings', label: 'Open its settings', brandWindow: true } },
-  ],
   youtube: [
     { key: 'verified', title: 'Channel verified by phone', why: 'Needed for custom thumbnails and videos over 15 minutes.', page: { id: 'youtube-verify', label: 'Open verification' }, optional: true },
   ],
@@ -108,9 +104,9 @@ const manualNeed = (id: string, platform: Platform, step: ManualStep, marks: Rec
 
 /**
  * Everything needed for posting, grouped by social, for the profiles given. What counts depends on how the
- * social posts today: Instagram through its API (developer app, account settings, connection), TikTok,
- * YouTube and X through their own upload page (the profile, its own login, its saved sign-in). Developer-app
- * steps for those three only matter once they post through their API, so they are kept as "later".
+ * social posts today. Every brand account is standalone and posts through its own upload page (the profile, its
+ * own login, its saved sign-in). Developer-app steps only matter once a social posts through its API, so they
+ * are kept as "later".
  */
 export function setupNeeds({ accounts, brands, apps, connections, passwords, marks, developerLogins }: SetupInputs): NeedGroup[] {
   const brandName = (account: Account) => brands.find((brand) => brand.id === account.brandId)?.name ?? account.label;
@@ -136,14 +132,13 @@ export function setupNeeds({ accounts, brands, apps, connections, passwords, mar
         continue;
       }
       const mainLogin = usesMainLogin(developerLogins, account);
-      if (platform === 'tiktok' || platform === 'x') {
+      if (platform !== 'youtube') {
         needs.push({ id: `${account.id}:own-login`, platform, accountId: account.id, title: `${who}its own email, not your main Gmail`, manual: false, action: { kind: 'sign-in', account },
           why: mainLogin ? `${name} needs a separate email for each account. This profile is saved with your main Gmail, so its window won't sign in as the brand.` : `${name} needs a separate email for each account; this one has its own.`,
           status: mainLogin ? 'problem' : 'done' });
       }
       // YouTube channels live under the main Google account, so there is no brand login to save there.
-      // Facebook Pages have no login of their own either: they belong to the SoftWings business portfolio.
-      if (platform !== 'facebook' && !(platform === 'youtube' && mainLogin)) {
+      if (!(platform === 'youtube' && mainLogin)) {
         const saved = passwords[account.id];
         needs.push({ id: `${account.id}:sign-in`, platform, accountId: account.id, title: `${who}username and password saved`, optional: !browser || platform === 'youtube',
           why: browser ? 'The posting window fills the sign-in from it. Kept in Windows Credential Manager and the encrypted backup.' : 'Kept in Windows Credential Manager and in the encrypted backup, so the sign-in is never lost.',

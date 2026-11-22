@@ -36,11 +36,16 @@ export function sharedBioLimit(platforms: Platform[]) {
   return limits.reduce((tightest, item) => item.limit < tightest.limit ? item : tightest, limits[0] ?? { platform: 'youtube' as Platform, limit: BIO_LIMITS.youtube });
 }
 
-/** Existing Google and Facebook sign-ins must never receive brand login details. */
+/** An existing Google sign-in must never receive brand login details. */
 export function wizardFormFields(account: Account, verificationCode?: string): FormFields {
   const name = account.displayName || account.label;
   if (account.platform === 'youtube') return { channelName: name };
-  if (account.platform === 'facebook') return { pageName: name };
+  // Facebook's own sign-up asks for a first name and surname: the brand's name, split at the first space.
+  if (account.platform === 'facebook') {
+    const [firstName, ...rest] = name.trim().split(/\s+/);
+    const fields: FormFields = { firstName, lastName: rest.join(' ') || undefined, email: account.signupEmail, birthday: account.status === 'active' ? account.birthday : DEFAULT_SIGNUP_BIRTHDAY, verificationCode };
+    return Object.fromEntries(Object.entries(fields).filter(([, value]) => value)) as FormFields;
+  }
   // Sign-ups always use the standard birthday, whatever an older profile saved.
   return { ...formFieldsFor(account, verificationCode), birthday: account.status === 'active' ? account.birthday : DEFAULT_SIGNUP_BIRTHDAY };
 }
@@ -139,7 +144,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
         if (cancelled) return;
         setWindowId(id);
         if (page.account.platform === 'x') return;
-        const existingLogin = page.account.platform === 'youtube' || page.account.platform === 'facebook';
+        const existingLogin = page.account.platform === 'youtube';
         await fillSiteForm(id, wizardFormFields(page.account), existingLogin
           ? { accountId: page.account.id, includePassword: false, keepFilling: true }
           : page.action === 'create'
@@ -195,7 +200,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     if (!resume?.length) return;
     void run(async () => {
       for (const item of resume) {
-        if (item.platform === 'youtube' || item.platform === 'facebook') continue;
+        if (item.platform === 'youtube') continue;
         if (item.platform === 'instagram' && item.signupEmail?.trim() && existing.some((other) => other.id !== item.id && other.platform === 'instagram' && other.signupEmail?.trim().toLowerCase() === item.signupEmail?.trim().toLowerCase())) {
           throw new Error('This planned Instagram account uses another account’s sign-up email. Edit its email before creating a separate account.');
         }
@@ -242,9 +247,9 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
       const made = plans.map((plan): Account => ({ ...createAccount(plan.platform, label, shownHandle, 'planned', ''), displayName: shownName, bio: bio.trim(), website: website.trim(), signupEmail: plan.email, imagePath, ...(birthday ? { birthday } : {}), ...(prefill?.brandId ? { brandId: prefill.brandId } : {}) }));
       for (const item of made) await onSave(item);
       setAccounts(made);
-      // Each new brand account gets its own saved password. Existing Google and Facebook logins manage channels and Pages.
+      // Each new brand account gets its own saved password. An existing Google login manages YouTube channels.
       const fresh = made.filter((_, index) => plans[index].mode === 'new');
-      for (const item of fresh.filter((item) => item.platform !== 'youtube' && item.platform !== 'facebook')) await ensureAccountPassword(item.id);
+      for (const item of fresh.filter((item) => item.platform !== 'youtube')) await ensureAccountPassword(item.id);
       setCurrent(0);
       setStep('signup');
       openSignup(made[0]);
@@ -258,7 +263,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     try { await navigator.clipboard.writeText(value); copied = true; } catch { /* clipboard blocked: the toast still has Copy */ }
     setCode({ value, copied });
     if (!account || !windowId) return;
-    if (account.platform === 'x' || account.platform === 'youtube' || account.platform === 'facebook') { setNote(copied ? `Code copied. Enter it on ${getPlatform(account.platform).name} yourself.` : `Enter the code on ${getPlatform(account.platform).name} yourself.`); return; }
+    if (account.platform === 'x' || account.platform === 'youtube') { setNote(copied ? `Code copied. Enter it on ${getPlatform(account.platform).name} yourself.` : `Enter the code on ${getPlatform(account.platform).name} yourself.`); return; }
     try {
       await fillSiteForm(windowId, wizardFormFields(account, value), { accountId: account.id, includePassword: 'ifSaved', keepFilling: true });
       setNote(`Entered code ${value}${copied ? ' and copied it' : ''}. Check it, then press the button on the page.`);
@@ -266,7 +271,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   };
   const refill = (code?: string) => { if (code) return enterCode(code); return run(async () => {
     if (!account || !windowId || account.platform === 'x') return;
-    const existingLogin = account.platform === 'youtube' || account.platform === 'facebook';
+    const existingLogin = account.platform === 'youtube';
     await fillSiteForm(windowId, wizardFormFields(account, code), { accountId: account.id, includePassword: existingLogin ? false : code ? 'ifSaved' : true, keepFilling: true });
     setNote(code ? `Entered code ${code}. Check it, then press the button on the page.` : 'Filled the empty fields on the current page.');
   }); };
@@ -398,8 +403,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <h3>Sign-up details</h3>
                 <div className="credential-row"><span>Email</span><code>{account.signupEmail}</code><button type="button" className="icon-button" aria-label="Copy email" onClick={() => void copy('Email', account.signupEmail ?? '')}><Copy size={15}/></button></div>
                 {account.handle && <div className="credential-row"><span>Username</span><code>{account.handle}</code><button type="button" className="icon-button" aria-label="Copy username" onClick={() => void copy('Username', account.handle)}><Copy size={15}/></button></div>}
-                {account.platform === 'youtube' || account.platform === 'facebook'
-                  ? <p>Sign in with your existing {account.platform === 'youtube' ? 'Google' : 'Facebook'} account.</p>
+                {account.platform === 'youtube'
+                  ? <p>Sign in with your existing Google account.</p>
                   : <div className="credential-row"><span>Password</span><code>{showPass && password ? password : '••••••••••••••••'}</code><button type="button" className="icon-button" disabled={busy} aria-label={showPass ? 'Hide password' : 'Show password'} onClick={() => void togglePassword()}>{showPass ? <EyeOff size={15}/> : <Eye size={15}/>}</button><button type="button" className="icon-button" disabled={busy} aria-label="Copy password" onClick={() => void copyPassword()}><Copy size={15}/></button></div>}
                 {account.birthday && <div className="credential-row"><span>Birthday</span><code>{account.birthday}</code><button type="button" className="icon-button" aria-label="Copy birthday" onClick={() => void copy('Birthday', account.birthday ?? '')}><Copy size={15}/></button></div>}
               </section>

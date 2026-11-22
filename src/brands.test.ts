@@ -43,10 +43,10 @@ describe('brand model', () => {
     expect(planPresence(full, 'instagram', 'Massage With Mia', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+massagewithmia@gmail.com' });
   });
 
-  it('does not infer a Facebook Page limit from local counts', () => {
-    const pages = Array.from({ length: 101 }, (_, n) => account(String(n), 'facebook', `Brand ${n}`));
-    expect(planPresence(pages, 'facebook', 'New brand', BASE)).toMatchObject({ mode: 'attach', email: BASE });
-    expect(presenceIssues(pages)).toEqual([]);
+  it('gives every brand its own standalone Facebook account with its own email', () => {
+    const others = [account('1', 'facebook', 'Old brand', 'softwings25+oldbrand@gmail.com')];
+    expect(planPresence(others, 'facebook', 'Bunny Whispers', BASE)).toMatchObject({ mode: 'new', email: 'softwings25+bunnywhispers@gmail.com' });
+    expect(presenceIssues([account('1', 'facebook', 'One', BASE), account('2', 'facebook', 'Two', BASE)]).map((issue) => issue.accountId)).toEqual(['2']);
   });
 
   it('asks for a different Google account after 100 saved YouTube channels instead of inventing a Gmail alias', () => {
@@ -74,40 +74,44 @@ describe('brand model', () => {
     expect(plusAddress('me+old@outlook.com', 'mia')).toBe('me+mia@outlook.com');
   });
 
-  it('shares a password with the login a profile joins, or with its own brand, never across brands', () => {
+  it('shares a password only within its own brand, never across brands', () => {
     const ig1 = { ...account('ig1', 'instagram', 'One'), brandId: 'b1' };
     const ig2 = { ...account('ig2', 'instagram', 'Two'), brandId: 'b2' };
     const tt2 = { ...account('tt2', 'tiktok', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
-    expect(passwordGroup([ig1, ig2, tt2], ig2)).toEqual(['ig1', 'ig2']);
-    expect(passwordGroup([ig1, ig2, tt2], tt2)).toEqual(['tt2']);
+    expect(passwordGroup([ig1, ig2, tt2], ig2)).toEqual(['tt2', 'ig2']);
+    expect(passwordGroup([ig1, ig2, tt2], tt2)).toEqual(['ig2', 'tt2']);
     const yt2 = { ...account('yt2', 'youtube', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
     // YouTube signs in with the main Google account: no made-up password, and never one TikTok copies.
     expect(passwordGroup([ig1, ig2, tt2, yt2], yt2)).toEqual([]);
-    expect(passwordGroup([ig1, ig2, tt2, yt2], tt2)).toEqual(['tt2']);
+    expect(passwordGroup([ig1, ig2, tt2, yt2], tt2)).toEqual(['ig2', 'tt2']);
   });
 
   it('knows a profile joining another brand login is not a sign-up', () => {
     const ig1 = { ...account('ig1', 'instagram', 'One'), brandId: 'b1' };
     const ig2 = { ...account('ig2', 'instagram', 'Two'), brandId: 'b2' };
     const tt2 = { ...account('tt2', 'tiktok', 'Two', 'softwings25+two@gmail.com'), brandId: 'b2' };
-    expect(addsToLogin([ig1, ig2, tt2], ig2)).toBe(true);
+    // Instagram accounts are standalone: a second brand on the same email is never "added to" the first.
+    expect(addsToLogin([ig1, ig2, tt2], ig2)).toBe(false);
+    const yt1 = { ...account('yt1', 'youtube', 'One'), brandId: 'b1' };
+    const yt2 = { ...account('yt2', 'youtube', 'Two'), brandId: 'b2' };
+    expect(addsToLogin([yt1, yt2], yt2)).toBe(true);
     expect(addsToLogin([ig2, tt2], ig2)).toBe(false);
     expect(addsToLogin([ig1, ig2, tt2], tt2)).toBe(false);
     expect(addsToLogin([ig1, { ...ig2, signupEmail: 'other@gmail.com' }], { ...ig2, signupEmail: 'other@gmail.com' })).toBe(false);
   });
 
-  it('flags shared emails on TikTok and X and duplicate usernames', () => {
+  it('flags shared emails on TikTok, X and Instagram and duplicate usernames', () => {
     const issues = presenceIssues([account('1', 'tiktok', 'One', BASE, 'same'), account('2', 'tiktok', 'Two', BASE, 'same'), account('3', 'instagram', 'One'), account('4', 'instagram', 'Two')]);
     expect(issues.filter((issue) => issue.accountId === '2').map((issue) => issue.text)).toEqual([
       'Another TikTok account already uses softwings25@gmail.com. TikTok needs a different email for each account.',
       '@same is used by another TikTok profile here. Each needs its own username.',
     ]);
-    expect(issues.some((issue) => issue.accountId === '4')).toBe(false);
+    expect(issues.some((issue) => issue.accountId === '4')).toBe(true);
   });
 
   it('describes where a profile signs in, in plain words', () => {
     const workspace = migrateWorkspace({ accounts: [account('1', 'instagram', 'MassageMentor'), account('2', 'instagram', 'Massage With Mia'), account('3', 'tiktok', 'Massage With Mia', 'softwings25+mia@gmail.com')] });
-    expect(loginText(workspace.accounts[1], workspace)).toBe('Signs in with softwings25@gmail.com, shared with MassageMentor.');
+    expect(loginText(workspace.accounts[1], workspace)).toBe('Its own Instagram account, signed up with softwings25@gmail.com.');
     expect(loginText(workspace.accounts[2], workspace)).toBe('Its own TikTok account, signed up with softwings25+mia@gmail.com.');
   });
 

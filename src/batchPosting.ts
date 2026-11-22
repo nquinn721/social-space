@@ -1,5 +1,6 @@
 import type { Platform, Video } from './model';
 import type { SocialStatus } from './brandStatus';
+import { postMode } from './postingMode';
 
 export type BatchMethod = 'browser' | 'manual' | 'blocked' | 'posted';
 export type BatchDestination = { platform: Platform; method: BatchMethod; reason: string; accountId?: string; accountSnapshot?: string };
@@ -21,8 +22,8 @@ export function batchPlan(input: BatchPlanInput): BatchDestination[] {
     if (input.isAsking(platform)) return item('blocked', 'Confirm whether the earlier post went up first');
     if (input.isOpen(platform)) return item('blocked', 'Posting window is already open');
     if (!status?.canPost) return item('blocked', status?.detail ?? 'Account status is unavailable');
-    if (platform === 'instagram') return item('blocked', input.instagramReady ? 'Use the separate Instagram Post button after reviewing the account' : 'Instagram connection or video is not ready');
-    if (platform === 'facebook') return item('blocked', input.facebookReady ? 'Use the separate Facebook Post button after reviewing the Page' : 'Facebook Page or video is not ready');
+    if (platform === 'instagram' && postMode(platform) === 'api') return item('blocked', input.instagramReady ? 'Use the separate Instagram Post button after reviewing the account' : 'Instagram connection or video is not ready');
+    if (platform === 'facebook' && postMode(platform) === 'api') return item('blocked', input.facebookReady ? 'Use the separate Facebook Post button after reviewing the Page' : 'Facebook Page or video is not ready');
     if (!input.browserAvailable) return item('blocked', 'Posting window is unavailable');
     if (!status.account?.id) return item('blocked', 'Choose an active brand account first');
     if (platform === 'x') return item('manual', 'Opens X; you attach the video, paste the caption, and post');

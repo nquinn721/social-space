@@ -30,6 +30,13 @@ vi.mock('./videoSourcesService', () => ({
 }));
 vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(async () => null), publishInstagramReelFile: vi.fn(), openInstagramPost: vi.fn(async () => {}) }));
 import * as instagram from './instagramService';
+// Every social posts through its brand window by default; "approving a post" switches Instagram and Facebook
+// to API posting to keep that path working for when it is turned back on.
+const postingApi = vi.hoisted(() => [] as string[]);
+vi.mock('./postingMode', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./postingMode')>();
+  return { ...actual, API_UPLOADS: postingApi, postMode: (platform: string) => postingApi.includes(platform) ? 'api' : 'browser' };
+});
 vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }), cachedPostSuggestion: vi.fn(async () => { throw new Error('offline'); }) }));
 import * as ai from './assistant/postSuggest';
 const mocked = vi.mocked(sources);
@@ -116,15 +123,15 @@ describe('video library', () => {
     expect(categoryProgress(base.videos!, ['instagram', 'tiktok'])).toEqual({ total: 1, everywhere: 0 });
     setup();
     expect(screen.getByRole('button', { name: 'Rabbit 1' })).toHaveAttribute('aria-pressed', 'true');
-    // Facebook always has a tile: every brand posts Reels to its Page.
-    expect(screen.getByText('1 video · 3 posts to make')).toBeInTheDocument();
+    // Only the socials the brand has a profile on get a tile: no Facebook without a Facebook account.
+    expect(screen.getByText('1 video · 2 posts to make')).toBeInTheDocument();
   });
 
   it("shows where a video is up, never marks one posted from a logo, and unmarks after asking", async () => {
     const { onSave, onOpen, user } = setup();
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
-    expect(within(video).getByText('Posted on 1 of 4')).toBeInTheDocument();
-    expect(within(video).getByRole('button', { name: 'Connect Facebook Page (Facebook)' })).toBeInTheDocument();
+    expect(within(video).getByText('Posted on 1 of 3')).toBeInTheDocument();
+    expect(within(video).queryByText('Facebook')).not.toBeInTheDocument();
     expect(within(video).getByRole('group', { name: 'Where it goes' })).toHaveTextContent('TikTok');
     expect(within(video).queryByRole('button', { name: 'TikTok' })).not.toBeInTheDocument();
     await user.click(within(video).getByRole('button', { name: /Edit post/ }));
@@ -241,7 +248,24 @@ describe('video library', () => {
   });
 });
 
+describe('posting to standalone Instagram and Facebook accounts', () => {
+  it('opens Instagram and Facebook in the brand window, like TikTok, with no Meta connection', async () => {
+    const fresh: Video = { ...bunny, id: 'v3', title: 'Hay day', mediaSource: 'C:\\clips\\hay.mp4', caption: 'Hay', posted: [] };
+    const own = (id: string, platform: Account['platform']) => ({ ...profile(id, platform), signupEmail: `softwings25+mia@gmail.com` });
+    const { user } = setup({ ...base, accounts: [own('1', 'instagram'), own('4', 'facebook')], videos: [fresh] });
+    const row = screen.getByRole('listitem', { name: 'Hay day' });
+    expect(within(row).queryByRole('button', { name: /Connect/ })).not.toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Post on Instagram' }));
+    expect(invoke).toHaveBeenCalledWith('open_posting_window', { request: expect.objectContaining({ platform: 'instagram', brandId: 'mia', accountId: '1', email: 'softwings25+mia@gmail.com', videoPath: 'C:\\clips\\hay.mp4' }) });
+    await user.click(within(row).getByRole('button', { name: 'Post on Facebook' }));
+    expect(invoke).toHaveBeenCalledWith('open_posting_window', { request: expect.objectContaining({ platform: 'facebook', accountId: '4', email: 'softwings25+mia@gmail.com' }) });
+    expect(instagram.publishInstagramReelFile).not.toHaveBeenCalled();
+  });
+});
+
 describe('approving a post', () => {
+  beforeEach(() => { postingApi.splice(0, postingApi.length, 'instagram', 'facebook'); });
+  afterEach(() => { postingApi.splice(0); });
   const fresh: Video = { ...bunny, id: 'v2', title: 'Carrot crunch', mediaSource: 'C:\\clips\\carrot.mp4', caption: 'Crunchy', posted: [] };
   const workspace = { ...base, videos: [fresh] };
   const connected = () => vi.mocked(instagram.claimInstagramConnection).mockResolvedValue({ id: '178', username: 'mia', login: 'facebook' });

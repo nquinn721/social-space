@@ -318,13 +318,14 @@ describe('verification code detection', () => {
     expect(profile.ensureAccountPassword).not.toHaveBeenCalled();
     expect(profile.ensureSharedPassword).not.toHaveBeenCalled();
   });
-  it('uses the existing Facebook login without generating or filling a Page password', async () => {
-    const planned: Account = { id: 'fb', platform: 'facebook', label: 'Mia', handle: 'mia', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL };
+  it('signs a brand up for its own standalone Facebook account with its own email and password', async () => {
+    const planned: Account = { id: 'fb', platform: 'facebook', label: 'Bunny Whispers', handle: 'bunnywhispers', status: 'planned', notes: '', signupEmail: 'softwings25+bunnywhispers@gmail.com' };
     render(<CreateAccountWizard resume={[planned]} onSave={vi.fn()} onClose={vi.fn()}/>);
-    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-embed-4', { pageName: 'Mia' }, expect.objectContaining({ accountId: 'fb', includePassword: false })));
-    expect(profile.ensureAccountPassword).not.toHaveBeenCalled();
-    expect(screen.getByText('Sign in with your existing Facebook account.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Copy password' })).not.toBeInTheDocument();
+    await waitFor(() => expect(profile.embedPlatformPage).toHaveBeenCalledWith('facebook', 'create', expect.anything()));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-embed-4', { firstName: 'Bunny', lastName: 'Whispers', email: 'softwings25+bunnywhispers@gmail.com', birthday: '1983-06-05' }, expect.objectContaining({ accountId: 'fb', includePassword: true })));
+    expect(profile.ensureAccountPassword).toHaveBeenCalledWith('fb');
+    expect(screen.getByRole('button', { name: 'Copy password' })).toBeInTheDocument();
+    expect(screen.queryByText(/existing Facebook account/)).not.toBeInTheDocument();
   });
   it('requires another Google account when 100 saved channels are already planned', async () => {
     const existing: Account[] = Array.from({ length: 100 }, (_, i) => ({ id: `y${i}`, platform: 'youtube', label: `Brand ${i}`, handle: `brand${i}`, status: 'active', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL }));
