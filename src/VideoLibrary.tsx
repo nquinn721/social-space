@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { AlertCircle, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Link2, Loader2, Pencil, Play, Plus, RotateCw, Send, Sparkles, Trash2, X } from 'lucide-react';
-import { getPlatform, PLATFORMS, type Platform, type PlatformAction, type PostDetails, type Video, type VideoCategory, type Workspace } from './model';
+import { AlertCircle, AppWindow, Check, ChevronDown, ExternalLink, Film, FolderOpen, Link2, Loader2, Pencil, Play, Plus, RotateCw, Send, Sparkles, Trash2, Type, X } from 'lucide-react';
+import { getPlatform, PLATFORMS, type Platform, type PlatformAction, type PostDetails, type TextEdit, type Video, type VideoCategory, type Workspace } from './model';
 import { chooseVideoFile } from './queueService';
 import { BrandMark, errorText, PageHeader } from './ui';
 import { ASPECT_RATIOS, PROVIDERS } from './videoProviders';
@@ -25,6 +25,7 @@ import { earlierPartMissing, videoPartLabel, waitingOnEarlierPart } from './seri
 import { batchPlan, preparationSignature, type BatchDestination } from './batchPosting';
 import { beginAttempt, clearAttempt, readAttempt, recordPublished } from './publishAttempt';
 import VideoIdeasDialog from './VideoIdeasDialog';
+import VideoTextEditor from './VideoTextEditor';
 import { useVideoIdeas } from './useVideoIdeas';
 import './library.css';
 import './series.css';
@@ -221,6 +222,21 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
       }
     } finally { batchGuard.current = false; setBatchBusy(false); }
   }
+  /**
+   * Records a video saved by the text editor: a new video in the same category with the post text carried over,
+   * or, when changing the text of a text video that isn't posted anywhere yet, that same video with the new file.
+   */
+  function saveTextVideo(video: Video, path: string, edit: TextEdit) {
+    const current = latestWorkspace.current;
+    const list = current.videos ?? [];
+    const existing = list.find((item) => item.id === video.id);
+    if (existing?.textEdit && existing.posted.length === 0) {
+      return onSave({ ...current, videos: list.map((item) => item.id === video.id ? { ...item, mediaSource: path, textEdit: edit } : item) }, `Saved the new text on "${video.title}".`);
+    }
+    const made: Video = { id: crypto.randomUUID(), brandId: video.brandId, categoryId: video.categoryId, title: `${video.title} with text`, mediaSource: path, caption: video.caption, posted: [], createdAt: Date.now(),
+      ...(video.details ? { details: video.details } : {}), ...(video.prompt ? { prompt: video.prompt } : {}), textEdit: edit };
+    return onSave({ ...current, videos: [...list, made] }, `Saved "${made.title}" in ${current.categories?.find((item) => item.id === video.categoryId)?.name ?? 'the category'}.`);
+  }
   function removeVideo(video: Video) {
     const note = video.generation?.status === 'working' ? ' The source may still finish it, but it will not be saved here.' : ' This does not delete it from any social or from your PC.';
     if (disabled || !window.confirm(`Remove "${video.title}" from ${category?.name}?${note}`)) return;
@@ -229,6 +245,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
 
   const header = fixedBrand ? null : <PageHeader title="Video library" description="Each brand's videos, grouped into categories. Add a file or make one with AI, then post it to the brand's socials."/>;
   if (!brand) return <>{header}<section className="card empty-state"><div className="empty-icon"><Film size={22}/></div><strong>No brands yet</strong><p>Create accounts for a brand first. Its categories and videos show up here.</p></section></>;
+  const brandNotes = [brand.notes, ...workspace.accounts.filter((account) => account.brandId === brand.id).map((account) => account.bio ?? '')].filter(Boolean).join('\n').slice(0, 3000);
   const counts = Object.fromEntries(STAGES.map(({ id }) => [id, inCategory.filter((video) => videoStage(video, socials) === id).length])) as Record<Stage, number>;
 
   return <>
@@ -259,7 +276,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
               <button type="button" className="outline-button" aria-expanded={panel === 'add'} onClick={() => setPanel(panel === 'add' ? null : 'add')}><Plus size={15}/> Add a file</button>
             </div>
           </div>
-          {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} brandNotes={[brand.notes, ...workspace.accounts.filter((account) => account.brandId === brand.id).map((account) => account.bio ?? '')].filter(Boolean).join('\n').slice(0, 3000)} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
+          {panel === 'make' && <MakeVideo key={category.id} brandName={brand.name} brandNotes={brandNotes} category={category} disabled={disabled} onMake={generations.make} onClose={() => setPanel(null)} onManageSources={onManageSources}/>}
           {panel === 'add' && <AddVideo key={category.id} brandId={brand.id} category={category} disabled={disabled} onSave={(video) => save({ videos: [...videos, video] }, `Added "${video.title}" to ${category.name}.`)} onClose={() => setPanel(null)}/>}
           {socials.length === 0 && <p className="library-hint">{brand.name} has no social profiles yet, so there is nowhere to post. Add them under Accounts.</p>}
           {inCategory.length > 0 && <div className="segmented library-stages" role="group" aria-label="Stage">
@@ -270,7 +287,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
             : shown.length === 0 ? <div className="library-empty">Nothing in {STAGES.find((item) => item.id === stage)?.label} right now.</div> : <ul className="library-videos">
             {shown.map((video) => <VideoRow key={video.id} video={video} socials={socials} busy={busy || batchBusy} disabled={disabled || batchBusy} progress={generations.progress[video.id]}
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
-              category={category} brandName={brand.name} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
+              category={category} brandName={brand.name} brandNotes={brandNotes} onSaveText={(path, edit) => saveTextVideo(video, path, edit)} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
               instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix} onPreparePosts={preparePosts} onResolveAttempt={resolveAttempt}
               part={videoPartLabel(workspace, video)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
           </ul>}
@@ -321,7 +338,7 @@ function useAutoFill(workspace: Workspace, brandId: string | undefined, onSave: 
 const API_SOCIALS: Platform[] = API_UPLOADS;
 type BrowserPosting = ReturnType<typeof useBrowserPosting>;
 
-type RowProps = { video: Video; category: VideoCategory; brandName: string; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void;
+type RowProps = { video: Video; category: VideoCategory; brandName: string; brandNotes?: string; onSaveText?: (path: string, edit: TextEdit) => Promise<boolean | undefined>; socials: Platform[]; busy: boolean; disabled: boolean; progress?: string; onToggle: (platform: Platform) => void; onOpen: Props['onOpen']; onRemove: () => void; onRetry: () => void;
   onSavePost?: (draft: Video, saveDefaults: boolean) => Promise<boolean | undefined>;
   instagram?: BrandInstagram | null; onPost?: (draft: Video, saveDefaults: boolean) => Promise<void>; onConnectInstagram?: () => void;
   /** The brand's Facebook Page, and posting a Reel to it through the API. */
@@ -335,12 +352,13 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; soci
  * One video as a post: its picture and text on the left, and a tile for every social of the brand that
  * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
  */
-function VideoRow({ video, category, brandName, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, onPreparePosts, onResolveAttempt }: RowProps) {
+function VideoRow({ video, category, brandName, brandNotes = '', onSaveText, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, onPreparePosts, onResolveAttempt }: RowProps) {
   const job = video.generation;
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
   const [watching, setWatching] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [addingText, setAddingText] = useState(false);
   const [working, setWorking] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [manualBusy, setManualBusy] = useState(false);
@@ -525,6 +543,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
           <div className="library-video-titleline">{part && <span className="series-badge">{part}</span>}{playable ? <button type="button" className="library-video-title" onClick={() => setWatching(!watching)}>{video.title}</button> : <strong className="library-video-title">{video.title}</strong>}</div>
           <span className={`progress-pill state-${done.state}`}>{progressLabel(done)}</span>
           <div className="vcard-tools">
+            {playable && onSaveText && <button type="button" className="ghost-button small-button" disabled={disabled} title="Put animated text on this video" onClick={() => setAddingText(true)}><Type size={14}/> {video.textEdit ? 'Edit text' : 'Add text'}</button>}
             {!job && onSavePost && <button type="button" className="ghost-button small-button" aria-expanded={editing} onClick={() => setEditing(!editing)}><Pencil size={14}/> Edit post</button>}
             {job && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={onRetry}><RotateCw size={14}/> {job.status === 'failed' ? 'Try again' : 'Check now'}</button>}
             <button type="button" className="icon-button" aria-label={`Remove ${video.title}`} title="Remove from Social Space" disabled={disabled} onClick={onRemove}><Trash2 size={15}/></button>
@@ -550,6 +569,7 @@ function VideoRow({ video, category, brandName, socials, busy, disabled, progres
       error={error || (readAttempt(video.id, 'instagram') || readAttempt(video.id, 'facebook') ? 'Close the editor and check the posting status before trying again.' : '')} working={working} onSave={onSavePost} onApprove={onPost && !readAttempt(video.id, 'instagram') ? approve : undefined} facebookPage={facebook?.connected ? facebook.page : undefined} onApproveFacebook={facebookReady && !readAttempt(video.id, 'facebook') ? approveFacebook : undefined} onConnectInstagram={onConnectInstagram} onClose={() => { setEditing(false); setError(''); }}
       statuses={statuses} onFix={onFix} onPostOnPage={browser ? async (draft, platform, defaults) => { if (await postOnPage(draft, platform, defaults)) setEditing(false); } : undefined} marks={marks}/>}
     {playable && watching && <VideoPlayer path={video.mediaSource} title={video.title}/>}
+    {addingText && onSaveText && <VideoTextEditor video={video} brandName={brandName} brandNotes={brandNotes} categoryName={category.name} onSaved={onSaveText} onClose={() => setAddingText(false)}/>}
   </li>;
 }
 

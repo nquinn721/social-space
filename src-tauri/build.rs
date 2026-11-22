@@ -25,6 +25,7 @@ fn main() {
         "open_video",
         "save_generated_video",
         "preview_video_file",
+        "save_edited_video",
         "open_video_file",
         "connect_x",
         "x_connection",

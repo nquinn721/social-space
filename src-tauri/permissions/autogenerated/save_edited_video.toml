@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-edited-video"
+description = "Enables the save_edited_video command without any pre-configured scope."
+commands.allow = ["save_edited_video"]
+
+[[permission]]
+identifier = "deny-save-edited-video"
+description = "Denies the save_edited_video command without any pre-configured scope."
+commands.deny = ["save_edited_video"]

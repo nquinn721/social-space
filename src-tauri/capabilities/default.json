@@ -32,6 +32,7 @@
     "allow-open-video",
     "allow-save-generated-video",
     "allow-preview-video-file",
+    "allow-save-edited-video",
     "allow-open-video-file",
     "allow-connect-x",
     "allow-x-connection",

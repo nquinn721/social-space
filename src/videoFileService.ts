@@ -11,3 +11,8 @@ export async function videoPreviewUrl(path: string): Promise<string> { desktopOn
 export async function openVideoFile(path: string): Promise<void> { desktopOnly(); return invoke('open_video_file', { path, reveal: false }); }
 /** Shows the video selected in File Explorer. */
 export async function showVideoInFolder(path: string): Promise<void> { desktopOnly(); return invoke('open_video_file', { path, reveal: true }); }
+/** Saves a video made with the text editor into the brand's category folder and returns its path. */
+export async function saveEditedVideo(bytes: Uint8Array, video: { brand: string; category: string; title: string; ext: string }): Promise<string> {
+  desktopOnly();
+  return invoke<string>('save_edited_video', bytes, { headers: { 'x-video': encodeURIComponent(JSON.stringify(video)) } });
+}

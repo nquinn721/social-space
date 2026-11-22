@@ -56,6 +56,74 @@ pub fn open_video_file(path: String, reveal: bool) -> Result<(), String> {
     command.spawn().map(|_| ()).map_err(|_| "Could not open File Explorer.".to_string())
 }
 
+/// Largest edited video the app saves. Short social clips are a few MB; this only stops a runaway recording.
+const MAX_EDITED_BYTES: usize = 1024 * 1024 * 1024;
+
+#[derive(serde::Deserialize)]
+struct EditedVideo {
+    brand: String,
+    category: String,
+    title: String,
+    ext: String,
+}
+
+/// Reads the `x-video` header: the brand, category, title and file type, as URI-encoded JSON.
+fn edited_video_meta(header: Option<&str>) -> Result<EditedVideo, String> {
+    let raw = header.ok_or("The video's details are missing.")?;
+    let decoded = url::form_urlencoded::parse(format!("v={raw}").as_bytes())
+        .next()
+        .map(|(_, value)| value.into_owned())
+        .ok_or("The video's details could not be read.")?;
+    let meta: EditedVideo = serde_json::from_str(&decoded).map_err(|_| "The video's details could not be read.".to_string())?;
+    if !matches!(meta.ext.as_str(), "mp4" | "webm") {
+        return Err("Only MP4 and WebM videos can be saved.".into());
+    }
+    Ok(meta)
+}
+
+/// `dir/name.ext`, or `dir/name (2).ext` and so on when that file already exists.
+fn unique_file(dir: &Path, name: &str, ext: &str) -> PathBuf {
+    let mut path = dir.join(format!("{name}.{ext}"));
+    let mut n = 2;
+    while path.exists() {
+        path = dir.join(format!("{name} ({n}).{ext}"));
+        n += 1;
+    }
+    path
+}
+
+/// Saves a video recorded by the text editor into `Videos\SocialSpace\<brand>\<category>` and returns its path.
+/// The body is the file's bytes; the `x-video` header names the brand, category, title and type.
+#[tauri::command]
+pub fn save_edited_video(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<String, String> {
+    let meta = edited_video_meta(request.headers().get("x-video").and_then(|value| value.to_str().ok()))?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("The video arrived in the wrong form.".into());
+    };
+    if bytes.is_empty() {
+        return Err("The recorded video is empty.".into());
+    }
+    if bytes.len() > MAX_EDITED_BYTES {
+        return Err("The video is too large to save.".into());
+    }
+    let dir = app
+        .path()
+        .video_dir()
+        .map_err(|_| "Could not find your Videos folder.".to_string())?
+        .join("SocialSpace")
+        .join(crate::video_gen::safe_name(&meta.brand, "Brand"))
+        .join(crate::video_gen::safe_name(&meta.category, "Category"));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    let path = unique_file(&dir, &crate::video_gen::safe_name(&meta.title, "Video with text"), &meta.ext);
+    let partial = path.with_extension(format!("{}.part", meta.ext));
+    std::fs::write(&partial, bytes).map_err(|e| format!("Could not save the video: {e}"))?;
+    if let Err(e) = std::fs::rename(&partial, &path) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(format!("Could not save the video: {e}"));
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,6 +141,26 @@ mod tests {
         assert!(video_file(script.to_str().unwrap()).is_err());
         assert!(video_file("clip.mp4").is_err());
         assert!(video_file(dir.join("missing.mp4").to_str().unwrap()).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn edited_video_meta_reads_encoded_json_and_only_video_types() {
+        let meta = edited_video_meta(Some("%7B%22brand%22%3A%22Bunny%20%26%20Co%22%2C%22category%22%3A%22Quotes%2B%22%2C%22title%22%3A%22Hop%20%E2%9C%A8%22%2C%22ext%22%3A%22mp4%22%7D")).unwrap();
+        assert_eq!(meta.brand, "Bunny & Co");
+        assert_eq!(meta.category, "Quotes+");
+        assert_eq!(meta.title, "Hop \u{2728}");
+        assert!(edited_video_meta(Some("%7B%22brand%22%3A%22a%22%2C%22category%22%3A%22b%22%2C%22title%22%3A%22c%22%2C%22ext%22%3A%22bat%22%7D")).is_err());
+        assert!(edited_video_meta(None).is_err());
+    }
+
+    #[test]
+    fn unique_file_numbers_existing_names() {
+        let dir = std::env::temp_dir().join(format!("socialspace-unique-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(unique_file(&dir, "a", "mp4"), dir.join("a.mp4"));
+        std::fs::write(dir.join("a.mp4"), b"x").unwrap();
+        assert_eq!(unique_file(&dir, "a", "mp4"), dir.join("a (2).mp4"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

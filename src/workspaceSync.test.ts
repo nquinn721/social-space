@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, Series, Workspace } from './model';
-import { mergeList, mergeShared, mergeWorkspaces, sharedOf, type SharedWorkspace } from './workspaceSync';
+import { mergeList, mergeShared, mergeWorkspaces, sharedOf, withShared, type SharedWorkspace } from './workspaceSync';
 
 const account = (id: string, extra: Partial<Account> = {}): Account => ({ id, platform: 'instagram', label: 'Animals', handle: id, status: 'active', notes: '', brandId: 'b1', ...extra });
 const base: Workspace = {
@@ -133,4 +133,12 @@ describe('sharedOf', () => {
     const full: Required<Workspace> = { ...base, categories: base.categories!, videos: base.videos!, setup: { 'x:app:plan': 1 }, developerLogins: { x: { email: 'a@b.c' } }, series: [] };
     expect(Object.keys(sharedOf(full)).sort()).toEqual(Object.keys(full).sort());
   });
+});
+
+it('keeps the text editor\'s local source file on this PC only', () => {
+  const local: Workspace = { businessName: '', brands: [{ id: 'b', name: 'B', notes: '' }], accounts: [], channels: [], categories: [{ id: 'c', brandId: 'b', name: 'C' }],
+    videos: [{ id: 'v', brandId: 'b', categoryId: 'c', title: 'T', mediaSource: 'C:\\a with text.mp4', caption: '', posted: [], createdAt: 1, textEdit: { sourcePath: 'C:\\a.mp4', overlays: [] } }] };
+  const shared = sharedOf(local);
+  expect(shared.videos[0].textEdit?.sourcePath).toBe('');
+  expect(withShared(local, shared).videos?.[0].textEdit?.sourcePath).toBe('C:\\a.mp4');
 });
