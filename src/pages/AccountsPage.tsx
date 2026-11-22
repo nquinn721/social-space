@@ -145,23 +145,6 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     } finally { setAdding(false); }
   }
 
-  /**
-   * A brand's Page already made in the SoftWings business portfolio: saves the brand's Facebook profile as live,
-   * then connects it at once (Meta's window picks the Page named like the brand).
-   */
-  async function attachFacebook(group: BrandGroup) {
-    if (adding || !onSave) return;
-    setAdding(true);
-    try {
-      const { brand } = group;
-      const account: Account = { ...createAccount('facebook', brand.name, '', 'active', ''), brandId: brand.id, displayName: brand.name };
-      const saved = await onSave({ ...workspace, accounts: [...workspace.accounts, account] }, `Facebook Page added to ${brand.name}. Connect it in the Meta window.`);
-      if (saved === false) return;
-      showBrandTab('accounts');
-      setAccountRequest({ platform: 'facebook', kind: 'connect', at: Date.now() });
-    } finally { setAdding(false); }
-  }
-
   const actions = <>
     <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
     <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
@@ -174,8 +157,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     /** The one step that unblocks a social: make its profile, finish its sign-up, or open Accounts to fix the login. */
     const fixStatus = (status: SocialStatus) => {
       const kind = status.action?.kind;
-      if (kind === 'connect' && status.platform === 'facebook' && !status.account && onSave) void attachFacebook(open);
-      else if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
+      if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
       else if (kind === 'finish-signup' && status.account && onSignUp) startSignUp(status.account);
       else {
         showBrandTab('accounts');

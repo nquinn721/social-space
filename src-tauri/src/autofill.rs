@@ -316,11 +316,13 @@ const FILL_SCRIPT: &str = r#"function (data) {
     }
     if (data.fields.birthday) {
       const [year, month, day] = data.fields.birthday.split('-').map(Number);
-      const unset = (el) => el.selectedIndex <= 0 || el.value === '' || el.value === '0';
+      // Facebook's sign-up preselects today's date in its birthday_day/month/year menus: those are set once too.
+      const unset = (el) => el.selectedIndex <= 0 || el.value === '' || el.value === '0' || (/^birthday_/.test(el.name || '') && !done.has(el));
       const choose = (el, pick) => {
         const option = Array.from(el.options).find(pick);
         if (!option) return false;
         Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, option.value);
+        done.add(el);
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
         el.style.outline = '2px solid #8b5cf6';

@@ -124,7 +124,8 @@
   {
     "id": "instagram",
     "notes": [
-      "The Meta app is set up in the guided developer-app setup (DevAppSetupGuide.tsx, steps in devAppGuides.ts), which replaced InstagramAppSetup.tsx in 75522b4."
+      "The Meta app is set up in the guided developer-app setup (DevAppSetupGuide.tsx, steps in devAppGuides.ts), which replaced InstagramAppSetup.tsx in 75522b4.",
+      "Since 0.34.0 every brand's Instagram is a standalone account (own email, never the main Gmail, no business Page link) and posts through instagram.com in the brand's window (posting.rs presses New post); the Meta API path is kept for 'api' mode in postingMode.ts."
     ],
     "paths": [
       "src-tauri/src/instagram.rs",
@@ -135,7 +136,7 @@
       "src/DevAppSetupGuide.tsx",
       "src/devAppGuides.ts"
     ],
-    "summary": "Connect a brand's Instagram and publish photos/reels through Meta's API",
+    "summary": "A brand's standalone Instagram account, posted to through its brand window (Meta API kept for later)",
     "terms": [
       "instagram",
       "meta",
@@ -147,14 +148,14 @@
   {
     "id": "facebook",
     "notes": [
-      "A brand's Facebook profile is its Page (no login of its own, it belongs to the SoftWings business portfolio, business_id 591387440571702). Connect reuses the Meta app and Login for Business configuration from instagram_login.rs; the configuration needs pages_show_list, pages_read_engagement, pages_manage_posts. Pages can't be created by API, so the wizard embeds the SoftWings business Pages settings (Add, Create a new Facebook Page) with name and bio filled in."
+      "Since 0.34.0 (Nate, 2026-11-22) a brand's Facebook is its own standalone account with its own email and password (sign-up at facebook.com/r.php), never a Page under the main account or the SoftWings business portfolio. It posts Reels through facebook.com/reels/create in the brand's window (posting.rs). The Page-token API code in facebook.rs stays for a social switched back to 'api' in postingMode.ts."
     ],
     "paths": [
       "src-tauri/src/facebook.rs",
       "src/facebookService.ts",
       "src/useBrandFacebook.ts"
     ],
-    "summary": "Connect a brand's Facebook Page and publish Reels to it through Meta's Graph API",
+    "summary": "A brand's standalone Facebook account: sign-up, sign-in and Reels posted through its brand window",
     "terms": [
       "facebook",
       "page",

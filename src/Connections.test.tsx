@@ -16,6 +16,13 @@ vi.mock('./videoSourcesService', () => ({ listVideoSources: vi.fn(async () => ({
 vi.mock('./socialConnectService', () => ({ YOUTUBE_REDIRECT_URI: 'http://127.0.0.1:49174/socialspace/youtube', TIKTOK_REDIRECT_URI: 'http://localhost:49175/socialspace/tiktok/', youtubeConnection: vi.fn(async () => null), tiktokConnection: vi.fn(async () => null), connectYoutube: vi.fn(), connectTiktok: vi.fn(), disconnectYoutube: vi.fn(), disconnectTiktok: vi.fn() }));
 vi.mock('./devAppsService', () => ({ listDeveloperApps: vi.fn(), saveDeveloperApp: vi.fn() }));
 vi.mock('./service', () => ({ openPlatformAction: vi.fn() }));
+// Brand accounts post through their brand windows today; these tests keep the API connection flow working
+// for when a social is switched back to API posting.
+vi.mock('./postingMode', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./postingMode')>();
+  const api = ['instagram', 'facebook'];
+  return { ...actual, API_UPLOADS: api, postMode: (platform: string) => api.includes(platform) ? 'api' : 'browser' };
+});
 
 const profile = (id: string, platform: Account['platform'], handle: string, brandId: string, status: Account['status'] = 'active'): Account => ({ id, platform, label: brandId, handle, status, notes: '', brandId });
 const brands = [{ id: 'mia', name: 'Massage With Mia', notes: '' }, { id: 'lisa', name: 'MassageMentor', notes: '' }];

@@ -15,14 +15,14 @@ describe('setup needs', () => {
     expect(groups[1].needs[0]).toMatchObject({ id: 'youtube:app', status: 'todo', action: { kind: 'setup-app', provider: 'google' } });
   });
 
-  it('tracks YouTube publishing, audit and quota, and Instagram account prerequisites', () => {
+  it('tracks YouTube publishing, audit and quota, and no business Page steps for Instagram', () => {
     const inputs = base([profile('ig', 'instagram'), profile('yt', 'youtube')]);
     expect(find(inputs, 'youtube:app:published')?.title).toMatch(/Consent screen published/);
     expect(find(inputs, 'youtube:app:audit')?.why).toMatch(/Private/);
     expect(find(inputs, 'youtube:app:quota')?.optional).toBe(true);
-    expect(find(inputs, 'ig:professional')?.title).toBe('Animals (@animals): Professional account (Business)');
-    expect(find(inputs, 'ig:professional')?.page?.brandWindow).toBe(true);
-    expect(find(inputs, 'ig:page')?.page?.id).toBe('meta-business-pages');
+    expect(find(inputs, 'ig:professional')).toBeUndefined();
+    expect(find(inputs, 'ig:page')).toBeUndefined();
+    expect(find(inputs, 'ig:own-login')).toBeDefined();
   });
 
   it('tracks X plan and TikTok review and audit', () => {
@@ -32,12 +32,13 @@ describe('setup needs', () => {
     expect(find(inputs, 'tiktok:app:audit')?.why).toMatch(/private/);
   });
 
-  it('tracks a Facebook Page through the Meta app: Page permissions, its connection, and no login of its own', () => {
-    const inputs = base([profile('fb', 'facebook')], { connections: { fb: { state: 'ok', username: 'Animals', detail: 'Posts Reels to this Page.' } } });
-    expect(find(inputs, 'facebook:app')).toMatchObject({ status: 'done', later: false });
-    expect(find(inputs, 'facebook:app:pages')?.why).toMatch(/pages_manage_posts/);
-    expect(find(inputs, 'fb:sign-in')).toBeUndefined();
-    expect(find(inputs, 'fb:connected')).toMatchObject({ status: 'done', why: 'Connected to the Page Animals. Posts Reels to this Page.' });
+  it('tracks a standalone Facebook account by its own login, with the Meta app only for later API posting', () => {
+    const inputs = base([{ ...profile('fb', 'facebook'), signupEmail: 'softwings25+animals@gmail.com' }], { passwords: { fb: false } });
+    expect(find(inputs, 'facebook:app')).toMatchObject({ later: true });
+    expect(find(inputs, 'fb:own-login')).toMatchObject({ status: 'done' });
+    expect(find(inputs, 'fb:sign-in')).toMatchObject({ status: 'todo', optional: false });
+    expect(find(inputs, 'fb:connected')).toMatchObject({ later: true });
+    expect(find(base([{ ...profile('fb', 'facebook'), signupEmail: 'softwings25@gmail.com' }]), 'fb:own-login')?.status).toBe('problem');
   });
 
   it('shows connection health from the check, including a connection the social stopped accepting', () => {

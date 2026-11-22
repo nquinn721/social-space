@@ -50,15 +50,19 @@ describe('brands page', () => {
     expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
   });
 
-  it('attaches a brand\'s existing Facebook Page from its chip as a live Facebook profile', async () => {
+  it('starts a standalone Facebook account for a brand from its chip, with its own email, never a business Page', async () => {
     const onSave = vi.fn(async () => true);
-    renderPage({ onSave });
+    const onSignUp = vi.fn();
+    renderPage({ onSave, onSignUp });
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Open Soft Wings' }));
-    await user.click(screen.getByRole('listitem', { name: /Facebook: No Page connected/ }));
+    await user.click(screen.getByRole('listitem', { name: /Facebook: No profile/ }));
     await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
     const saved = (onSave.mock.calls[0] as unknown as [Workspace])[0];
-    expect(saved.accounts.find((item) => item.platform === 'facebook')).toMatchObject({ status: 'active', label: 'Soft Wings', displayName: 'Soft Wings', handle: '' });
+    const facebook = saved.accounts.find((item) => item.platform === 'facebook');
+    expect(facebook).toMatchObject({ status: 'planned', label: 'Soft Wings', handle: 'softwings' });
+    expect(facebook?.signupEmail).toMatch(/\+softwings@/);
+    await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ platform: 'facebook' })]));
   });
 
   it('creates every not-created profile of a brand at once', async () => {

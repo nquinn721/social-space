@@ -107,27 +107,19 @@ video to every social the brand has: TikTok, YouTube (Shorts), X, Instagram (Ree
 - App review tracking: `appReviews.ts` and `ReviewNotice.tsx` watch the TikTok and Google review emails. Test
   mode badges show while reviews are pending.
 
-## 7. Meta setup (Instagram + Facebook)
+## 7. Instagram and Facebook (standalone accounts)
 
-- **Requirement:** Meta only offers the app an Instagram account that is **Professional** and **linked to a
-  Facebook Page in the SoftWings business portfolio**.
-  - Business portfolio: SoftWings, `business_id=591387440571702`. Nate's other portfolio, "The Collective", is
-    unrelated.
-  - Everything runs from Nate's personal Facebook login.
-- **Meta app:** "SocialSpace", app id 1766190812180262.
-  - Facebook Login for Business config "Instagram API (Unified Login)", config id 2027375241290807.
-  - It asks for instagram_basic, instagram_content_publish, instagram_manage_comments,
-    instagram_manage_messages, pages_show_list, pages_read_engagement, pages_manage_posts and the ads scopes.
-  - Its assets are Instagram accounts, Pages and Ad accounts.
-- **Setting up a new brand:**
-  1. Create its Page **inside SoftWings**: business.facebook.com/latest/settings/pages?business_id=591387440571702
-     → Add → Create a new Facebook Page. Never use facebook.com/pages/create, which makes a loose personal Page.
-  2. On that Page, open Connect assets → Instagram account → **Create a new Instagram profile**. It comes out
-     Professional and linked. For an account that already exists, use "Log into Instagram" instead.
-  3. In the app, on the brand's Instagram row press Connect or Reconnect, and tick the Page and the Instagram
-     account. Then press Connect Facebook Page on the Facebook row.
-- Each brand stores its own Instagram account id and Page, and posts only to its own profile. Since 0.30.0 the
-  app refuses to save an Instagram account whose handle doesn't match the brand row ("Wrong Instagram account").
+- **Rule (Nate, 2026-11-22, since 0.34.0):** every brand's Instagram, Facebook, TikTok and X is its own
+  standalone account with its own email (a plus-address of the base inbox) and generated password. None is tied
+  to the main softwings25 account, to another brand's login, or to a Page in the SoftWings business portfolio.
+- Because Meta's API only publishes to Professional Instagram accounts linked to a Page it manages, Instagram and
+  Facebook post through their own sites in the brand's window, like TikTok and X (`postingMode.ts`:
+  `API_UPLOADS` is empty). Instagram opens instagram.com and presses New post; Facebook opens
+  facebook.com/reels/create. The post script attaches the video, steps through Next and fills the caption.
+  Nate presses Share / Publish.
+- Facebook sign-up opens facebook.com/r.php and fills first name, surname, birthday, email and password.
+- The Meta API code (`instagram*.rs`, `facebook.rs`, Connect buttons) is kept for a social switched back to
+  'api' in `postingMode.ts`. Meta app "SocialSpace", app id 1766190812180262.
 
 ## 8. AI
 

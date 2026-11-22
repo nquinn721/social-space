@@ -16,9 +16,10 @@ import { browserSession } from './browserSession';
  * login it uses, whether Instagram is connected, whether the sign-in is saved. Every page reads this
  * instead of writing its own guesses, so the labels and the next step agree everywhere.
  *
- * Posting model: Instagram and Facebook (Page Reels) post through the Graph API (need their connection). TikTok, YouTube and X post
- * through their own upload page in a per-brand app window (needs the profile and its login). YouTube
- * channels live under the main Google account on purpose, so that is never a problem.
+ * Posting model: every brand account is a standalone account with its own login, and every social posts
+ * through its own upload page in a per-brand app window (needs the profile and its login). A social switched
+ * to 'api' in postingMode uses its connection instead. YouTube channels live under the main Google account on
+ * purpose, so that is never a problem.
  */
 export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'connect' | 'reconnect' | 'sign-in' | 'verify-session' | 'no-password' | 'ready';
 export type Tone = 'ok' | 'ready' | 'todo' | 'problem' | 'muted' | 'checking';
@@ -54,12 +55,10 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
   const account = workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform && item.status === 'active')
     ?? workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform);
   const base = { platform, account, via: via(platform) };
-  // Brand Pages are made in the SoftWings business portfolio, so a brand without one here only needs its Page attached.
-  if (!account && platform === 'facebook') return { ...base, kind: 'no-profile', tone: 'todo', label: 'No Page connected', detail: 'Connect the brand\'s Facebook Page (made in the SoftWings business portfolio) so videos post there as Reels.', action: { kind: 'connect', label: 'Connect Facebook Page', short: 'Connect' }, canPost: false };
   if (!account) return { ...base, kind: 'no-profile', tone: 'muted', label: 'No profile', detail: `This brand has no ${name} profile.`, action: { kind: 'create', label: `Create ${name} profile`, short: 'Create' }, canPost: false };
   if (account.status !== 'active') return { ...base, kind: 'not-created', tone: 'todo', label: 'Not created yet', detail: `Saved here, but the ${name} account isn't made yet.`, action: { kind: 'finish-signup', label: 'Finish sign-up', short: 'Sign up' }, canPost: false };
   if (wrongLogin(workspace.developerLogins, account)) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs its own email per account, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };
-  if (platform === 'instagram') {
+  if (platform === 'instagram' && via(platform) === 'api') {
     const check = inputs.connections?.[account.id];
     if (!check) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking the Instagram connection.', canPost: false };
     const connectedAs = check.username.replace(/^@/, '');
@@ -73,9 +72,7 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
     if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Instagram connection ran out.', action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
     return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect it through Meta so the app can post Reels for it.', action: { kind: 'connect', label: 'Connect Instagram', short: 'Connect' }, canPost: false };
   }
-  if (platform === 'facebook') {
-    // A Facebook profile is the brand's Page. It has no login of its own (it sits under your Facebook account),
-    // so only its Page connection matters.
+  if (platform === 'facebook' && via(platform) === 'api') {
     const check = inputs.connections?.[account.id];
     if (!check) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking the Facebook Page connection.', canPost: false };
     if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` to the Page ${check.username}` : ''}. ${viaText(platform)}`, canPost: true };
@@ -97,7 +94,7 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
       : session === 'matched' ? `Last seen as @${signIn?.handle}. The session may expire or change.` : `A ${name} sign-in was detected at the last check; its username was not available.`;
     return { ...base, kind: 'ready', tone: 'ok', label: 'Signed in', detail, canPost: true };
   }
-  if (session === 'not-checked' && platform === 'tiktok' && inputs.passwords && inputs.passwords[account.id] === false) {
+  if (session === 'not-checked' && platform !== 'youtube' && platform !== 'x' && inputs.passwords && inputs.passwords[account.id] === false) {
     return { ...base, kind: 'no-password', tone: 'todo', label: 'Login not saved', detail: 'The window can only fill the sign-in after its username and password are saved.', action: { kind: 'save-login', label: 'Save its login', short: 'Save login' }, canPost: true };
   }
   return { ...base, kind: 'verify-session', tone: 'todo', label: 'Not checked', detail: `Open ${name} to check the sign-in.`, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: true };
@@ -165,7 +162,7 @@ export function progressLabel(progress: VideoProgress): string {
  */
 export function useSavedPasswords(accounts: Account[]): Record<string, boolean | undefined> {
   const [passwords, setPasswords] = useState<Record<string, boolean | undefined>>({});
-  const ids = accounts.filter((account) => account.status === 'active' && account.platform !== 'youtube' && account.platform !== 'instagram' && account.platform !== 'facebook').map((account) => account.id).join('|');
+  const ids = accounts.filter((account) => account.status === 'active' && account.platform !== 'youtube').map((account) => account.id).join('|');
   useEffect(() => {
     if (!ids || !isTauri()) return;
     let live = true;
