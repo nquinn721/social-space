@@ -551,6 +551,7 @@ pub fn run() {
             embedded::set_embedded_bounds,
             embedded::close_embedded_page,
             autofill::fill_site_form,
+            autofill::site_username,
             posting::open_posting_window,
             posting::open_profile_page,
             posting::open_profile_editor,

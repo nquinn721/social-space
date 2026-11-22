@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addsToLogin, DEFAULT_SIGNUP_BIRTHDAY, passwordGroup, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
+import { addsToLogin, DEFAULT_SIGNUP_BIRTHDAY, numberedHandle, passwordGroup, loginText, migrateWorkspace, planPresence, plusAddress, presenceIssues, renamedProfile } from './brands';
 import type { Account } from './model';
 
 const BASE = 'softwings25@gmail.com';
@@ -111,12 +111,21 @@ describe('brand model', () => {
     expect(loginText(workspace.accounts[2], workspace)).toBe('Its own TikTok account, signed up with softwings25+mia@gmail.com.');
   });
 
-  it('does not guess new birthdays or change saved birthdays', () => {
-    const planned = { ...account('1', 'tiktok', 'Mia'), birthday: '1995-06-15' };
+  it('signs up profiles not created yet with June 5 1983, and keeps created ones as they are', () => {
+    const planned = { ...account('1', 'tiktok', 'Mia'), birthday: '1990-02-22' };
+    const bare = account('3', 'instagram', 'Mia');
     const live = { ...account('2', 'instagram', 'Mia'), status: 'active' as const, birthday: '1995-06-15' };
-    const migrated = migrateWorkspace({ accounts: [planned, live] });
-    expect(DEFAULT_SIGNUP_BIRTHDAY).toBe('');
-    expect(migrated.accounts.map((item) => item.birthday)).toEqual(['1995-06-15', '1995-06-15']);
+    const migrated = migrateWorkspace({ accounts: [planned, bare, live] });
+    expect(DEFAULT_SIGNUP_BIRTHDAY).toBe('1983-06-05');
+    expect(migrated.accounts.map((item) => item.birthday)).toEqual(['1983-06-05', '1983-06-05', '1995-06-15']);
+  });
+
+  it('adds numbers to a taken username, within each social\'s length limit', () => {
+    expect(numberedHandle('bunnywhispers', 'bunnywhispers', 'instagram')).toBe('bunnywhispers1');
+    expect(numberedHandle('bunnywhispers', 'bunnywhispers1', 'instagram')).toBe('bunnywhispers2');
+    expect(numberedHandle('bunnywhispers', 'bunnywhispers24', 'tiktok')).toBe('bunnywhispers25');
+    expect(numberedHandle('@bunnywhispers', 'someoneelse', 'instagram')).toBe('bunnywhispers1');
+    expect(numberedHandle('bunnywhisperskindquotes', 'bunnywhisperskindquotes', 'x')).toBe('bunnywhispersk1');
   });
 
   it('gives profiles not created yet the new brand name as username and email tag', () => {

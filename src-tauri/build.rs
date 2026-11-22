@@ -90,6 +90,7 @@ fn main() {
         "set_embedded_bounds",
         "close_embedded_page",
         "fill_site_form",
+        "site_username",
         "open_posting_window",
         "open_profile_page",
         "open_profile_editor",

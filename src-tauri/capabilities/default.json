@@ -97,6 +97,7 @@
     "allow-set-embedded-bounds",
     "allow-close-embedded-page",
     "allow-fill-site-form",
+    "allow-site-username",
     "allow-open-posting-window",
     "allow-open-profile-page",
     "allow-open-profile-editor",

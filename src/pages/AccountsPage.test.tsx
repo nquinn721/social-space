@@ -101,7 +101,7 @@ describe('brands page', () => {
     const saved = (onSave.mock.calls[0] as unknown as [Workspace])[0];
     const tiktok = saved.accounts.find((item) => item.platform === 'tiktok');
     expect(tiktok).toMatchObject({ label: 'Soft Wings', handle: 'softwings', bio: 'Wings.', status: 'planned', signupEmail: 'softwings25+softwings@gmail.com' });
-    expect(tiktok?.birthday).toBeUndefined();
+    expect(tiktok?.birthday).toBe('1983-06-05');
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: tiktok!.id })]));
     expect(ensureSharedPassword).not.toHaveBeenCalled();
   });

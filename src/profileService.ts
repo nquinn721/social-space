@@ -20,6 +20,10 @@ export async function fillSiteForm(windowLabel: string, fields: FormFields, opti
     : options.includePassword ?? false;
   return invoke('fill_site_form', { windowLabel, fields, imagePath: options.imagePath || null, accountId: options.accountId ?? null, includePassword, keepFilling: options.keepFilling ?? false, replace: options.replace ?? false });
 }
+/** What a sign-up page's username box holds, and whether the page says that name is taken. */
+export type SiteUsername = { value: string | null; taken: boolean };
+/** Reads the username on a sign-up page in an app window; with set, puts that username in the box first. Never presses a button. */
+export async function siteUsername(windowLabel: string, set?: string): Promise<SiteUsername> { desktopOnly(); return invoke('site_username', { windowLabel, set: set ?? null }); }
 export type Bounds = { x: number; y: number; width: number; height: number };
 /** Shows a platform page inside the app window, over the given area, and returns its id for filling. */
 export async function embedPlatformPage(platform: Platform, action: PlatformAction, bounds: Bounds): Promise<string> { desktopOnly(); return invoke('embed_platform_page', { platform, action, bounds }); }

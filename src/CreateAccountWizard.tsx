@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { AppWindow, Check, ChevronRight, Copy, Eye, EyeOff, ImagePlus, RefreshCw, SkipForward, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { suggestProfile } from './assistant/suggest';
-import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, planPresence } from './brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, numberedHandle, planPresence } from './brands';
 import { BIO_LIMITS, createAccount, getPlatform, normalizeHandle, PLATFORMS, type Account, type AccountProfile, type Platform } from './model';
-import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureAccountPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, type Bounds, type FormFields } from './profileService';
+import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage, ensureAccountPassword, fillSiteForm, formFieldsFor, revealAccountPassword, setEmbeddedBounds, siteUsername, type Bounds, type FormFields } from './profileService';
 import InboxList from './InboxList';
 import { ADD_PROFILE_FLOWS, SIGNUP_FLOWS } from './signupFlows';
 import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
@@ -22,6 +22,10 @@ const STEPS: { id: Step; label: string }[] = [{ id: 'details', label: 'Details' 
 type Outcome = 'created' | 'skipped';
 /** During sign-up the inbox checks often, so a new code is entered on the page within seconds. */
 const SIGNUP_INBOX_MS = 6_000;
+/** How often the sign-up page is checked for "this username is not available". */
+export const USERNAME_CHECK_MS = 2_500;
+/** Socials whose sign-up page has a username box the app fills. */
+const CHECKS_USERNAME: Platform[] = ['instagram', 'tiktok'];
 const SENDER_WORDS: Record<Platform, RegExp> = { instagram: /\binstagram\b/i, tiktok: /\btiktok\b/i, youtube: /\b(youtube|google)\b/i, x: /\bx(\.com)?\b|\btwitter\b/i, facebook: /\bfacebook\b|\bmeta\b/i };
 /** Whether an email looks like it came from this social, so its code goes to the right sign-up page. */
 export function isMailFrom(platform: Platform, mail: { from: string; subject: string }) { return SENDER_WORDS[platform].test(`${mail.from} ${mail.subject}`); }
@@ -37,7 +41,8 @@ export function wizardFormFields(account: Account, verificationCode?: string): F
   const name = account.displayName || account.label;
   if (account.platform === 'youtube') return { channelName: name };
   if (account.platform === 'facebook') return { pageName: name };
-  return formFieldsFor(account, verificationCode);
+  // Sign-ups always use the standard birthday, whatever an older profile saved.
+  return { ...formFieldsFor(account, verificationCode), birthday: account.status === 'active' ? account.birthday : DEFAULT_SIGNUP_BIRTHDAY };
 }
 
 /** A page to show in the wizard's site area. nonce makes "Reopen" load it again. */
@@ -76,7 +81,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
   const [pictureIdea, setPictureIdea] = useState<PictureIdea | null>(null);
-  const [birthday, setBirthday] = useState(prefill?.birthday ?? DEFAULT_SIGNUP_BIRTHDAY);
+  const [birthday, setBirthday] = useState(DEFAULT_SIGNUP_BIRTHDAY);
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
   const [accounts, setAccounts] = useState<Account[]>(resume ?? []);
@@ -111,6 +116,9 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const showPass = Boolean(account && revealedPassword && revealedPassword.accountId === account.id);
   const password = showPass ? revealedPassword!.value : '';
   const name = account ? getPlatform(account.platform).name : '';
+  /** Each profile's username as planned, so numbers are added to it (bunnywhispers1, 2 …), never stacked. */
+  const originalHandles = useRef<Record<string, string>>({});
+  const usernameSetAt = useRef(0);
   const steps = account ? (addsProfile(account) && ADD_PROFILE_FLOWS[account.platform]) || SIGNUP_FLOWS[account.platform] : [];
   const stepIndex = STEPS.findIndex((item) => item.id === step);
   useEffect(() => {
@@ -152,6 +160,36 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     return () => { observer?.disconnect(); window.removeEventListener('resize', place); };
   }, [windowId]);
   useEffect(() => () => { void closeEmbeddedPage().catch(() => undefined); }, []);
+  // Each social tries the brand's username first. If its page says that name is taken, the app puts the
+  // next numbered one in the box and saves it as this social's username; the other socials keep the original.
+  useEffect(() => {
+    const target = account;
+    if (step !== 'signup' || !target || !windowId || !target.handle || !CHECKS_USERNAME.includes(target.platform)) return;
+    originalHandles.current[target.id] ??= target.handle;
+    let stopped = false;
+    let checking = false;
+    const check = async () => {
+      // A name just put in the box gets a moment for the site to check it.
+      if (stopped || checking || Date.now() - usernameSetAt.current < USERNAME_CHECK_MS * 2) return;
+      checking = true;
+      try {
+        const seen = await siteUsername(windowId);
+        // Only a name the app put there; one typed on the page by hand is left alone.
+        if (stopped || !seen.taken || !seen.value || normalizeHandle(seen.value).toLowerCase() !== target.handle.toLowerCase()) return;
+        const next = numberedHandle(originalHandles.current[target.id], normalizeHandle(seen.value), target.platform);
+        usernameSetAt.current = Date.now();
+        await siteUsername(windowId, next);
+        if (stopped) return;
+        const updated = { ...target, handle: next };
+        await onSave(updated);
+        setAccounts((list) => list.map((item) => item.id === updated.id ? updated : item));
+        setNote(`@${normalizeHandle(seen.value)} is taken on ${getPlatform(target.platform).name}, so it now tries @${next} and saves that as its username.`);
+      } catch { /* the page is changing or closed; the next check tries again */ }
+      finally { checking = false; }
+    };
+    const timer = setInterval(() => void check(), USERNAME_CHECK_MS);
+    return () => { stopped = true; clearInterval(timer); };
+  }, [step, account?.id, account?.handle, windowId]);
   // Saved accounts that are not created yet go straight to their first sign-up page.
   useEffect(() => {
     if (!resume?.length) return;
@@ -259,7 +297,13 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const advance = (outcome: Outcome) => run(async () => {
     if (!account) return;
     if (outcome === 'created') {
-      const active = { ...account, status: 'active' as const };
+      // The username the page ended up with (numbered, or typed by hand) is the one saved for this social.
+      let handle = account.handle;
+      if (windowId && CHECKS_USERNAME.includes(account.platform)) {
+        const seen = await siteUsername(windowId).catch(() => null);
+        if (seen?.value && /^[A-Za-z0-9._]+$/.test(normalizeHandle(seen.value))) handle = normalizeHandle(seen.value);
+      }
+      const active = { ...account, handle, status: 'active' as const };
       await onSave(active);
       setAccounts((list) => list.map((item) => item.id === active.id ? active : item));
     }
@@ -317,7 +361,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 <summary>Sign-in details <span>handled for you</span></summary>
                 <div className="field-row">
                   <div><label htmlFor="wizard-email">Sign-up email</label><input id="wizard-email" type="email" required maxLength={320} value={signupEmail} onChange={(event) => setSignupEmail(event.target.value)}/></div>
-                  <div><label htmlFor="wizard-birthday">Birthday <span>optional; enter the correct date for sign-up</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
+                  <div><label htmlFor="wizard-birthday">Birthday <span>used on every sign-up</span></label><input id="wizard-birthday" type="date" max={new Date().toISOString().slice(0, 10)} value={birthday} onChange={(event) => setBirthday(event.target.value)}/></div>
                 </div>
                 <p className="signin-hint">TikTok and X get suggested plus-addresses, like you+brand@gmail.com. Check whether the service accepts each address. <button type="button" className="text-button" disabled={busy || !label.trim()} onClick={() => void makeGmail()}>Make a new Gmail instead</button></p>
                 {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}

@@ -855,6 +855,12 @@
           "markdownDescription": "Enables the set_embedded_bounds command without any pre-configured scope."
         },
         {
+          "description": "Enables the site_username command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-site-username",
+          "markdownDescription": "Enables the site_username command without any pre-configured scope."
+        },
+        {
           "description": "Enables the submit_for_review command without any pre-configured scope.",
           "type": "string",
           "const": "allow-submit-for-review",
@@ -1609,6 +1615,12 @@
           "type": "string",
           "const": "deny-set-embedded-bounds",
           "markdownDescription": "Denies the set_embedded_bounds command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the site_username command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-site-username",
+          "markdownDescription": "Denies the site_username command without any pre-configured scope."
         },
         {
           "description": "Denies the submit_for_review command without any pre-configured scope.",
