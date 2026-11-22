@@ -237,9 +237,12 @@
   {
     "id": "video-library",
     "menu": [
-      "Video sources"
+      "Video sources",
+      "Add text"
     ],
-    "notes": [],
+    "notes": [
+      "Add text (VideoTextEditor.tsx): animated text per scene on a library video, written by Grok (assistant/overlayWriter.ts) or by hand, drawn by textOverlays.ts in the preview and when saving (canvas + MediaRecorder in the webview, then save_edited_video in video_files.rs). The result is a new video with textEdit (source file + texts) so the text can be changed again."
+    ],
     "paths": [
       "src/VideoLibrary.tsx",
       "src/VideoIdeasDialog.tsx",
@@ -257,10 +260,23 @@
       "src-tauri/src/kling.rs",
       "src-tauri/src/grok.rs",
       "src/videoSourcesService.ts",
-      "src/batchPosting.ts"
+      "src/batchPosting.ts",
+      "src/VideoTextEditor.tsx",
+      "src/textOverlays.ts",
+      "src/videoEditor.css",
+      "src/assistant/overlayWriter.ts"
     ],
-    "screens": [{"name": "Video prompt suggestions", "path": "src/VideoIdeasDialog.tsx"}],
-    "summary": "Brand video library: categories, Grok prompt suggestions, AI generation (Kling, Grok), post details, local files",
+    "screens": [
+      {
+        "name": "Video prompt suggestions",
+        "path": "src/VideoIdeasDialog.tsx"
+      },
+      {
+        "name": "Add text",
+        "path": "src/VideoTextEditor.tsx"
+      }
+    ],
+    "summary": "Brand video library: categories, Grok prompt suggestions, AI generation (Kling, Grok), animated text on videos, post details, local files",
     "terms": [
       "video",
       "library",
@@ -268,7 +284,10 @@
       "grok",
       "generate",
       "category",
-      "caption"
+      "caption",
+      "text",
+      "overlay",
+      "animation"
     ]
   },
   {
@@ -421,7 +440,9 @@
   },
   {
     "id": "series",
-    "menu": ["Stories"],
+    "menu": [
+      "Stories"
+    ],
     "notes": [],
     "paths": [
       "src/SeriesPanel.tsx",
@@ -432,7 +453,12 @@
       "src-tauri/src/video_gen.rs",
       "src-tauri/src/grok.rs"
     ],
-    "screens": [{"name": "Stories", "path": "src/SeriesPanel.tsx"}],
+    "screens": [
+      {
+        "name": "Stories",
+        "path": "src/SeriesPanel.tsx"
+      }
+    ],
     "summary": "Stories across multiple videos, with editable narratives, Grok continuations, parts and character reference pictures",
     "terms": [
       "series",

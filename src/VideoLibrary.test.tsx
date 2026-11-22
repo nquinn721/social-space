@@ -39,6 +39,8 @@ vi.mock('./postingMode', async (importOriginal) => {
 });
 vi.mock('./assistant/postSuggest', () => ({ suggestPost: vi.fn(async () => { throw new Error('offline'); }), cachedPostSuggestion: vi.fn(async () => { throw new Error('offline'); }) }));
 import * as ai from './assistant/postSuggest';
+vi.mock('./VideoTextEditor', () => ({ default: ({ onSaved, onClose }: { onSaved: (path: string, edit: unknown) => Promise<boolean | undefined>; onClose: () => void }) => <div role="dialog" aria-label="Text editor">
+  <button type="button" onClick={() => void onSaved('C:\\Videos\\Bunny hop with text.mp4', { sourcePath: 'C:\\clips\\bunny.mp4', sourceVideoId: 'v1', overlays: [{ id: 'o', text: 'Hop!', start: 0, end: 2, animation: 'pop', position: 'middle', size: 'medium', style: 'outline' }] }).then((ok) => { if (ok) onClose(); })}>Save stub</button></div> }));
 const mocked = vi.mocked(sources);
 afterEach(() => { cleanup(); vi.useRealTimers(); localStorage.clear(); });
 beforeEach(() => { vi.clearAllMocks(); });
@@ -238,6 +240,29 @@ describe('video library', () => {
     expect(files.showVideoInFolder).toHaveBeenCalledWith(bunny.mediaSource);
     await user.click(within(row).getByRole('button', { name: 'Hide Bunny hop' }));
     expect(within(row).queryByLabelText('Bunny hop', { selector: 'video' })).not.toBeInTheDocument();
+  });
+
+  it('adds text to a video and saves it as a new video in the category, keeping the original', async () => {
+    const { onSave, user } = setup({ ...base, videos: [{ ...bunny, caption: 'Hop hop', prompt: 'a bunny hops' }] });
+    const video = screen.getByRole('listitem', { name: 'Bunny hop' });
+    await user.click(within(video).getByRole('button', { name: /Add text/ }));
+    await user.click(screen.getByRole('button', { name: 'Save stub' }));
+    const [next, message] = onSave.mock.calls[0];
+    expect(message).toBe('Saved "Bunny hop with text" in Rabbit.');
+    expect(next.videos).toHaveLength(2);
+    expect(next.videos?.[1]).toMatchObject({ title: 'Bunny hop with text', mediaSource: 'C:\\Videos\\Bunny hop with text.mp4', categoryId: 'rabbit', caption: 'Hop hop', prompt: 'a bunny hops', posted: [], textEdit: { sourceVideoId: 'v1' } });
+    expect(screen.queryByRole('dialog', { name: 'Text editor' })).not.toBeInTheDocument();
+  });
+
+  it('changes the text of a text video in place while it is not posted anywhere', async () => {
+    const withText: Video = { ...bunny, id: 't1', title: 'Bunny hop with text', posted: [], textEdit: { sourcePath: 'C:\\clips\\bunny.mp4', sourceVideoId: 'v1', overlays: [] } };
+    const { onSave, user } = setup({ ...base, videos: [withText] });
+    const video = screen.getByRole('listitem', { name: 'Bunny hop with text' });
+    await user.click(within(video).getByRole('button', { name: /Edit text/ }));
+    await user.click(screen.getByRole('button', { name: 'Save stub' }));
+    const [next] = onSave.mock.calls[0];
+    expect(next.videos).toHaveLength(1);
+    expect(next.videos?.[0]).toMatchObject({ id: 't1', mediaSource: 'C:\\Videos\\Bunny hop with text.mp4' });
   });
 
   it('shortens long prompts into a title', () => {

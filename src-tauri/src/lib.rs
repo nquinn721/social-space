@@ -125,6 +125,9 @@ struct Video {
     series_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     episode: Option<u32>,
+    /// For a video made with the text editor: the video without text and the texts, as the interface edits them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    text_edit: Option<serde_json::Value>,
 }
 
 /// An AI generation in progress for a library video.
@@ -483,6 +486,7 @@ pub fn run() {
             video_gen::open_video,
             video_gen::save_generated_video,
             video_files::preview_video_file,
+            video_files::save_edited_video,
             video_files::open_video_file,
             x_integration::connect_x,
             x_integration::x_connection,
@@ -714,6 +718,20 @@ mod tests {
     }
 
     #[test]
+    fn text_edit_round_trips_and_old_videos_load_without_it() {
+        let json = serde_json::json!({"businessName": "", "accounts": [], "brands": [{"id": "b", "name": "Mia"}],
+            "categories": [{"id": "c", "brandId": "b", "name": "Quotes"}],
+            "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Old"},
+                {"id": "w", "brandId": "b", "categoryId": "c", "title": "With text", "textEdit": {"sourcePath": "C:\\a.mp4", "overlays": [{"id": "o", "text": "Hop on", "start": 0, "end": 2.5, "animation": "pop", "position": "middle", "size": "medium", "style": "outline"}]}}]});
+        let workspace: Workspace = serde_json::from_value(json).unwrap();
+        assert!(workspace.videos[0].text_edit.is_none());
+        let saved = serde_json::to_value(&workspace).unwrap();
+        assert!(saved["videos"][0].get("textEdit").is_none());
+        assert_eq!(saved["videos"][1]["textEdit"]["overlays"][0]["text"], "Hop on");
+        assert_eq!(saved["videos"][1]["textEdit"]["overlays"][0]["animation"], "pop");
+    }
+
+    #[test]
     fn series_round_trip_and_episodes_need_their_series() {
         let json = serde_json::json!({"businessName": "", "accounts": [], "brands": [{"id": "b", "name": "Mia"}],
             "categories": [{"id": "c", "brandId": "b", "name": "Stories"}],
@@ -744,7 +762,7 @@ mod tests {
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
         let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), series_id: None, episode: None });
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), series_id: None, episode: None, text_edit: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());

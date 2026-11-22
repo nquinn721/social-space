@@ -29,7 +29,10 @@ export function sharedOf(workspace: Workspace): SharedWorkspace {
     businessName: workspace.businessName, brands: workspace.brands, accounts: workspace.accounts, channels: workspace.channels,
     categories: workspace.categories ?? [], setup: workspace.setup ?? {}, developerLogins: workspace.developerLogins ?? {}, series: workspace.series ?? [],
     // A file on this PC means nothing on the other; a web link does.
-    videos: (workspace.videos ?? []).map((video) => (isLocalVideo(video.mediaSource) ? { ...video, mediaSource: '' } : video)),
+    videos: (workspace.videos ?? []).map((video) => {
+      const shared = isLocalVideo(video.mediaSource) ? { ...video, mediaSource: '' } : video;
+      return video.textEdit && isLocalVideo(video.textEdit.sourcePath) ? { ...shared, textEdit: { ...video.textEdit, sourcePath: '' } } : shared;
+    }),
   };
 }
 
@@ -117,10 +120,14 @@ export function adoptRemoteIds(local: Workspace, remote: SharedWorkspace): Works
  */
 export function withShared(local: Workspace, shared: SharedWorkspace): Workspace {
   // Each video keeps the file this PC has for it; one made on the other PC has none here yet.
-  const files = new Map((local.videos ?? []).map((video) => [video.id, video.mediaSource]));
+  const files = new Map((local.videos ?? []).map((video) => [video.id, video]));
   const videos = (shared.videos ?? []).map((video) => {
-    const mine = files.get(video.id);
-    return mine && isLocalVideo(mine) && !video.mediaSource ? { ...video, mediaSource: mine } : video;
+    const own = files.get(video.id);
+    const mine = own?.mediaSource;
+    const withFile = mine && isLocalVideo(mine) && !video.mediaSource ? { ...video, mediaSource: mine } : video;
+    // The text editor's video without text is a file on this PC too.
+    const source = own?.textEdit?.sourcePath;
+    return withFile.textEdit && !withFile.textEdit.sourcePath && source && isLocalVideo(source) ? { ...withFile, textEdit: { ...withFile.textEdit, sourcePath: source } } : withFile;
   });
   const brands = [...shared.brands];
   const categories = [...shared.categories];
