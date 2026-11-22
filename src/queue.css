@@ -1,0 +1,33 @@
+/* Post queue page: today's walk-through on top, then each brand's socials. */
+.queue-walk { margin-bottom: 16px; border-color: var(--accent-line); background: var(--splash-soft); }
+.queue-walk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.queue-walk-count { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-text); }
+.queue-walk-done { display: flex; align-items: center; gap: 8px; color: var(--success); border-color: var(--success-line); background: var(--success-soft); }
+.queue-step { display: flex; align-items: center; gap: 14px; }
+.queue-step-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.queue-step-text strong { font-size: 15px; }
+.queue-step-text > span { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue-step-text small { color: var(--text-2); }
+.queue-step-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.queue-brand { margin-bottom: 14px; }
+.queue-brand-head { justify-content: space-between; }
+.queue-lanes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.queue-lane { display: grid; grid-template-columns: auto minmax(130px, 180px) auto 1fr; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--tone, var(--border)); border-radius: var(--radius); background: var(--surface-2); }
+.queue-lane-name { display: flex; flex-direction: column; min-width: 0; }
+.queue-lane-name small { color: var(--tone, var(--text-3)); font-size: 12px; }
+.queue-pips { display: flex; align-items: center; gap: 4px; }
+.queue-pips span { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--border-strong); }
+.queue-pips span.filled { background: var(--success); border-color: var(--success); }
+.queue-pips small { margin-left: 6px; color: var(--text-3); font-size: 12px; white-space: nowrap; }
+.queue-next { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text-2); }
+.queue-next small { font-size: 12.5px; }
+.queue-next ol { counter-reset: next; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.queue-next li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; counter-increment: next; }
+.queue-next li::before { content: counter(next) ". "; color: var(--text-3); }
+.queue-next li.current { color: var(--accent-text); font-weight: 600; }
+.queue-next .series-badge { margin-right: 6px; }
+@media (max-width: 760px) {
+  .queue-lane { grid-template-columns: auto 1fr; }
+  .queue-pips, .queue-next { grid-column: 2; }
+  .queue-step { flex-wrap: wrap; }
+}

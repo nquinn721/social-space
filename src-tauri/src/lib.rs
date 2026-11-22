@@ -120,6 +120,9 @@ struct Video {
     /// Sandbox, YouTube before the audit), with when (ms). Moved over once the app is approved.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     test_posts: BTreeMap<String, u64>,
+    /// When it went up on each social (ms), for the post queue's limit of posts a day per account.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    posted_at: BTreeMap<String, u64>,
     /// The series this video is an episode of, and which episode (1 is the first).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     series_id: Option<String>,
@@ -762,7 +765,7 @@ mod tests {
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
         let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), series_id: None, episode: None, text_edit: None });
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), posted_at: Default::default(), series_id: None, episode: None, text_edit: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());

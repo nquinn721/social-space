@@ -330,7 +330,7 @@
       "src/ui.tsx",
       "src/main.tsx"
     ],
-    "summary": "App shell: the side nav (Overview, Brands, Inbox, Settings, Updates), the views from VIEWS in model.ts, messages and the brand page routing",
+    "summary": "App shell: the side nav (Overview, Brands, Queue, Inbox, Settings, Updates), the views from VIEWS in model.ts, messages and the brand page routing",
     "terms": [
       "view",
       "nav",
@@ -387,9 +387,12 @@
   {
     "id": "posting",
     "menu": [
-      "Posting"
+      "Posting",
+      "Queue"
     ],
-    "notes": [],
+    "notes": [
+      "Queue (sidebar) is the post queue: postQueue.ts orders each brand's finished videos per social (oldest first, series parts in order), caps each account at DAILY_LIMIT (3) posts a day from Video.postedAt, and QueuePage's Post today's videos walks through the due posts one upload window at a time. queue.rs/queueService.ts is the older Instagram API job file, only used to cancel jobs when a brand is removed."
+    ],
     "paths": [
       "src/PostingSettings.tsx",
       "src/postingMode.ts",
@@ -404,7 +407,10 @@
       "src/batchPosting.ts",
       "src/browserSession.ts",
       "src-tauri/src/embedded.rs",
-      "src/deletionSafety.ts"
+      "src/deletionSafety.ts",
+      "src/pages/QueuePage.tsx",
+      "src/postQueue.ts",
+      "src/queue.css"
     ],
     "summary": "How each social posts: by API or through its own upload page in a brand's signed-in app window, the post queue, and sign-in state per brand",
     "terms": [
@@ -412,7 +418,15 @@
       "post",
       "queue",
       "upload",
-      "sign in"
+      "sign in",
+      "daily limit",
+      "postedAt"
+    ],
+    "screens": [
+      {
+        "name": "Post queue",
+        "path": "src/pages/QueuePage.tsx"
+      }
     ]
   },
   {

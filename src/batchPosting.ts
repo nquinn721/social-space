@@ -9,6 +9,8 @@ export type BatchPlanInput = {
   instagramReady: boolean; facebookReady: boolean; browserAvailable: boolean;
   isOpen: (platform: Platform) => boolean; isAsking: (platform: Platform) => boolean;
   waitingOn: (platform: Platform) => string | null;
+  /** Why the account takes no more posts today (the post queue's daily limit), or null. */
+  dailyLimit?: (platform: Platform) => string | null;
 };
 
 /** The plan never treats a browser window or an uncertain result as a published post. */
@@ -19,6 +21,8 @@ export function batchPlan(input: BatchPlanInput): BatchDestination[] {
     if (input.video.posted.includes(platform)) return item('posted', 'Already posted');
     const waiting = input.waitingOn(platform);
     if (waiting) return item('blocked', waiting);
+    const full = input.dailyLimit?.(platform);
+    if (full) return item('blocked', full);
     if (input.isAsking(platform)) return item('blocked', 'Confirm whether the earlier post went up first');
     if (input.isOpen(platform)) return item('blocked', 'Posting window is already open');
     if (!status?.canPost) return item('blocked', status?.detail ?? 'Account status is unavailable');

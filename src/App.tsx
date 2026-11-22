@@ -6,13 +6,14 @@ import { pictureFileFor } from './brandImageService';
 import AssistantPanel from './assistant/AssistantPanel';
 import OverviewPage from './pages/OverviewPage';
 import AccountsPage from './pages/AccountsPage';
+import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword, hasAccountPassword } from './profileService';
 import { isTauri } from '@tauri-apps/api/core';
 import { deleteQueueJob, listQueue } from './queueService';
 import { prepareProfileRemoval, removedProfileIds } from './deletionSafety';
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Bot, Check, ChevronRight, Home, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
+import { AlertTriangle, Bot, Check, ChevronRight, Home, ListOrdered, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText, renamedProfile } from './brands';
 import appIcon from './assets/app-icon.png';
@@ -29,8 +30,8 @@ import type { DevProvider } from './devAppsService';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 /** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
-const NAV_ITEMS: NavItem[] = [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'inbox', label: 'Inbox', icon: Mail }];
-const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', inbox: 'Inbox', updates: 'Updates', settings: 'Settings' };
+const NAV_ITEMS: NavItem[] = [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'queue', label: 'Queue', icon: ListOrdered }, { id: 'inbox', label: 'Inbox', icon: Mail }];
+const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', queue: 'Post queue', inbox: 'Inbox', updates: 'Updates', settings: 'Settings' };
 /** Which brand page is open, and on which tab. */
 export type OpenBrand = { id: string; tab: 'content' | 'series' | 'accounts' } | null;
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
@@ -252,6 +253,7 @@ function App() {
         {message && <div role={messageIsError ? 'alert' : 'status'} className={messageIsError ? 'notice notice-error' : 'notice'}>{messageIsError ? <AlertTriangle size={16}/> : <Check size={16}/>}{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
         {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
+        {view === 'queue' && <QueuePage workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
         {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync} reviews={{ marks: workspace.setup, onSet: setReview, watch: reviewWatch, busy: busy || !loaded }}/>}
