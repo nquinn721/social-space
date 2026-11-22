@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-disconnect"
+description = "Enables the ayrshare_disconnect command without any pre-configured scope."
+commands.allow = ["ayrshare_disconnect"]
+
+[[permission]]
+identifier = "deny-ayrshare-disconnect"
+description = "Denies the ayrshare_disconnect command without any pre-configured scope."
+commands.deny = ["ayrshare_disconnect"]

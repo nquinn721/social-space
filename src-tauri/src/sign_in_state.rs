@@ -165,14 +165,6 @@ pub fn known_signed_in(app: &AppHandle, brand: &str, platform: Platform) -> bool
     read(&path).get(brand).and_then(|map| map.get(key(platform))).map_or(false, |state| state.signed_in)
 }
 
-/// Every brand's last known sign-ins on this PC: brand id → social → state.
-#[tauri::command]
-pub fn posting_sign_ins(app: AppHandle) -> Result<Brands, String> {
-    let path = state_path(&app).ok_or("Could not find the app's data folder.")?;
-    let _guard = FILE_LOCK.lock().map_err(|_| "Could not read the sign-ins.")?;
-    Ok(read(&path))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

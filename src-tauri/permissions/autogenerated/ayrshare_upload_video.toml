@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-upload-video"
+description = "Enables the ayrshare_upload_video command without any pre-configured scope."
+commands.allow = ["ayrshare_upload_video"]
+
+[[permission]]
+identifier = "deny-ayrshare-upload-video"
+description = "Denies the ayrshare_upload_video command without any pre-configured scope."
+commands.deny = ["ayrshare_upload_video"]

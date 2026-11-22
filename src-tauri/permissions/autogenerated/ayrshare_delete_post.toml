@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-delete-post"
+description = "Enables the ayrshare_delete_post command without any pre-configured scope."
+commands.allow = ["ayrshare_delete_post"]
+
+[[permission]]
+identifier = "deny-ayrshare-delete-post"
+description = "Denies the ayrshare_delete_post command without any pre-configured scope."
+commands.deny = ["ayrshare_delete_post"]

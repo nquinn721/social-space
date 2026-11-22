@@ -124,6 +124,25 @@ pub fn save_edited_video(app: AppHandle, request: tauri::ipc::Request<'_>) -> Re
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Lets you pick a video file on this PC for the library.
+#[tauri::command]
+pub async fn choose_video_file() -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        rfd::FileDialog::new()
+            .set_title("Choose a video")
+            .add_filter("Video", &["mp4", "mov", "m4v", "webm"])
+            .pick_file()
+            .map(|path| {
+                path.to_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| "The selected path is not valid Unicode.".to_string())
+            })
+            .transpose()
+    })
+    .await
+    .map_err(|_| "Could not open the video picker.".to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

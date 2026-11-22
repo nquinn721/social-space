@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-save-x-keys"
+description = "Enables the ayrshare_save_x_keys command without any pre-configured scope."
+commands.allow = ["ayrshare_save_x_keys"]
+
+[[permission]]
+identifier = "deny-ayrshare-save-x-keys"
+description = "Denies the ayrshare_save_x_keys command without any pre-configured scope."
+commands.deny = ["ayrshare_save_x_keys"]

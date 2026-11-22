@@ -3,34 +3,27 @@ use std::{collections::{BTreeMap, HashSet}, fs, io::Write, path::Path, sync::Mut
 use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 mod account_passwords;
+mod ayrshare;
 mod backup;
 mod brand_images;
 mod browser_sessions;
 mod autofill;
 mod browser;
 mod email;
-mod facebook;
 mod embedded;
 mod gmail_session;
 mod hub;
 mod grok;
 mod grok_ai;
-mod dev_apps;
-mod instagram;
-mod instagram_login;
-mod social_connect;
 mod kling;
 mod posting;
 mod sign_in_state;
-mod queue;
 mod review;
-mod setup_pages;
 mod team_sync;
 mod updater;
 mod video_files;
 mod video_gen;
 mod video_sources;
-mod x_integration;
 
 const WORKSPACE_FILE: &str = "workspace.json";
 const MAX_ACCOUNTS: usize = 200;
@@ -67,6 +60,9 @@ struct Workspace {
     /// episodes), as the interface edits them. Only their id and brand are checked here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     series: Vec<serde_json::Value>,
+    /// How posting through Ayrshare runs: whether the queue schedules by itself and at which times of day.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    posting: Option<serde_json::Value>,
 }
 
 /// A developer-site sign-in tracked by the app: it uses the main email, not a brand's.
@@ -131,6 +127,12 @@ struct Video {
     /// For a video made with the text editor: the video without text and the texts, as the interface edits them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     text_edit: Option<serde_json::Value>,
+    /// Its Ayrshare post on each social: the post id, when it goes out, and its last known state.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    scheduled: BTreeMap<String, serde_json::Value>,
+    /// The video's file uploaded to Ayrshare (its URL and when), so every social reuses one upload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    media: Option<serde_json::Value>,
 }
 
 /// An AI generation in progress for a library video.
@@ -170,6 +172,9 @@ struct Brand {
     /// The brand's picture (and YouTube banner) used on every profile; see brand_images.rs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     image: Option<BrandImage>,
+    /// The brand's Ayrshare profile (its reference and title; the profile key is in Credential Manager).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ayrshare: Option<serde_json::Value>,
 }
 
 /// Names of pictures in the brand pictures folder (`<sha256>.jpg`), not paths, so they sync.
@@ -462,7 +467,6 @@ pub fn run() {
         .manage(StorageLock::default())
         .manage(video_gen::GenerateLock::default())
         .manage(video_sources::SourcesLock::default())
-        .setup(|app| { queue::start_scheduler(app.handle().clone()); Ok(()) })
         .invoke_handler(tauri::generate_handler![
             load_workspace,
             save_workspace,
@@ -491,49 +495,21 @@ pub fn run() {
             video_files::preview_video_file,
             video_files::save_edited_video,
             video_files::open_video_file,
-            x_integration::connect_x,
-            x_integration::x_connection,
-            x_integration::disconnect_x,
-            x_integration::claim_x_connection,
-            instagram::claim_instagram_connection,
-            dev_apps::developer_apps,
-            social_connect::connect_youtube,
-            social_connect::youtube_connection,
-            social_connect::disconnect_youtube,
-            social_connect::connect_tiktok,
-            social_connect::tiktok_connection,
-            social_connect::disconnect_tiktok,
-            social_connect::check_youtube_connection,
-            social_connect::check_tiktok_connection,
-            x_integration::check_x_connection,
-            setup_pages::open_setup_page,
-            dev_apps::save_developer_app,
-            dev_apps::remove_developer_app,
-            dev_apps::save_production_app,
-            dev_apps::use_production_app,
-            x_integration::post_to_x,
-            instagram::connect_instagram,
-            instagram_login::instagram_app_ready,
-            instagram_login::save_instagram_app,
-            instagram_login::connect_instagram_app,
-            instagram_login::finish_instagram_connection,
-            instagram::instagram_connection,
-            instagram::disconnect_instagram,
-            instagram::publish_instagram_reel,
-            instagram::publish_instagram_photo,
-            instagram::publish_instagram_reel_file,
-            instagram::open_instagram_post,
-            facebook::connect_facebook_page,
-            facebook::facebook_connection,
-            facebook::disconnect_facebook,
-            facebook::publish_facebook_reel_file,
-            facebook::open_facebook_post,
-            instagram::choose_instagram_video,
-            queue::list_queue,
-            queue::add_queue_job,
-            queue::complete_queue_job,
-            queue::delete_queue_job,
-            queue::choose_video_file,
+            ayrshare::ayrshare_status,
+            ayrshare::ayrshare_save_key,
+            ayrshare::ayrshare_disconnect,
+            ayrshare::ayrshare_save_x_keys,
+            ayrshare::ayrshare_remove_x_keys,
+            ayrshare::ayrshare_create_profile,
+            ayrshare::ayrshare_use_profile,
+            ayrshare::ayrshare_forget_profile,
+            ayrshare::ayrshare_brand_socials,
+            ayrshare::ayrshare_open_linking,
+            ayrshare::ayrshare_upload_video,
+            ayrshare::ayrshare_post,
+            ayrshare::ayrshare_history,
+            ayrshare::ayrshare_delete_post,
+            video_files::choose_video_file,
             grok_ai::grok_models,
             grok_ai::grok_chat,
             grok_ai::generate_profile_image,
@@ -551,17 +527,14 @@ pub fn run() {
             gmail_session::connect_gmail_session,
             gmail_session::open_gmail_message,
             embedded::embed_platform_page,
-            embedded::embed_setup_page,
             embedded::set_embedded_bounds,
             embedded::close_embedded_page,
             autofill::fill_site_form,
             autofill::site_username,
-            posting::open_posting_window,
             posting::open_profile_page,
             posting::open_profile_editor,
             posting::open_password_reset,
             posting::save_reset_password,
-            sign_in_state::posting_sign_ins,
             autofill::choose_image_file,
             autofill::load_image_preview,
             account_passwords::ensure_account_password,
@@ -656,6 +629,7 @@ mod tests {
             setup: Default::default(),
             developer_logins: Default::default(),
             series: vec![],
+            posting: None,
         };
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
@@ -710,7 +684,7 @@ mod tests {
 
     #[test]
     fn accounts_must_belong_to_a_saved_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![], posting: None };
         workspace.accounts[0].brand_id = Some("b".into());
         let json = serde_json::to_string(&workspace).unwrap();
         assert!(json.contains(r#""brandId":"b""#));
@@ -732,6 +706,26 @@ mod tests {
         assert!(saved["videos"][0].get("textEdit").is_none());
         assert_eq!(saved["videos"][1]["textEdit"]["overlays"][0]["text"], "Hop on");
         assert_eq!(saved["videos"][1]["textEdit"]["overlays"][0]["animation"], "pop");
+    }
+
+    #[test]
+    fn ayrshare_fields_round_trip_and_old_workspaces_load_without_them() {
+        let json = serde_json::json!({"businessName": "", "accounts": [], "brands": [{"id": "b", "name": "Mia", "ayrshare": {"refId": "r1", "title": "Mia"}}],
+            "categories": [{"id": "c", "brandId": "b", "name": "Quotes"}],
+            "posting": {"autoSchedule": true, "times": ["09:00", "13:00", "18:00"]},
+            "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Old"},
+                {"id": "w", "brandId": "b", "categoryId": "c", "title": "Queued", "media": {"url": "https://cdn.example/v.mp4", "at": 1},
+                 "scheduled": {"tiktok": {"id": "p1", "at": 1700000000000u64, "state": "scheduled"}}}]});
+        let workspace: Workspace = serde_json::from_value(json).unwrap();
+        assert!(workspace.videos[0].scheduled.is_empty() && workspace.videos[0].media.is_none());
+        let saved = serde_json::to_value(&workspace).unwrap();
+        assert_eq!(saved["brands"][0]["ayrshare"]["refId"], "r1");
+        assert_eq!(saved["posting"]["times"][2], "18:00");
+        assert_eq!(saved["videos"][1]["scheduled"]["tiktok"]["id"], "p1");
+        assert_eq!(saved["videos"][1]["media"]["url"], "https://cdn.example/v.mp4");
+        assert!(saved["videos"][0].get("scheduled").is_none());
+        let old: Workspace = serde_json::from_value(serde_json::json!({"businessName": "", "accounts": []})).unwrap();
+        assert!(old.posting.is_none());
     }
 
     #[test]
@@ -764,8 +758,8 @@ mod tests {
 
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), posted_at: Default::default(), series_id: None, episode: None, text_edit: None });
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![], posting: None };
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), posted_at: Default::default(), series_id: None, episode: None, text_edit: None, scheduled: Default::default(), media: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());
@@ -778,7 +772,7 @@ mod tests {
 
     #[test]
     fn videos_can_carry_an_ai_generation_in_progress() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![] };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![], posting: None };
         let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
         workspace.videos.push(serde_json::from_value(json).unwrap());
         assert!(validate_workspace(&workspace).is_ok());
@@ -861,6 +855,7 @@ mod tests {
             setup: Default::default(),
             developer_logins: Default::default(),
             series: vec![],
+            posting: None,
         };
         write_workspace(&path, &workspace).unwrap();
         assert_eq!(read_workspace(&path).unwrap(), workspace);
