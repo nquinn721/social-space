@@ -14,10 +14,19 @@ export function videoStage(video: Video, socials: Platform[]): Stage {
   return 'review';
 }
 
-export const DEFAULT_DETAILS: PostDetails = { hashtags: [], youtubeTitle: '', madeWithAi: false, shareToFeed: true, madeForKids: false };
-/** A video's post details, with defaults filled in. Videos made in the app start labeled as AI-made. */
+/** Everything the app holds is labeled as AI-made unless Nate turns it off for an upload of his own. */
+export const DEFAULT_DETAILS: PostDetails = { hashtags: [], youtubeTitle: '', madeWithAi: true, shareToFeed: true, madeForKids: false };
+/**
+ * Whether the app itself made the video with AI: a video source made it (or is making it), it is a part of
+ * a series, or it was made with the text editor. Such a video is always labeled as AI-made.
+ */
+export function madeInApp(video: Video): boolean {
+  return Boolean(video.generation || video.prompt || video.seriesId || video.textEdit);
+}
+/** A video's post details, with defaults filled in. Videos made in the app are always labeled as AI-made. */
 export function detailsOf(video: Video): PostDetails {
-  return { ...DEFAULT_DETAILS, ...video.details, youtubeTitle: video.details?.youtubeTitle || video.title.slice(0, YOUTUBE_TITLE_LIMIT) };
+  const details = { ...DEFAULT_DETAILS, ...video.details, youtubeTitle: video.details?.youtubeTitle || video.title.slice(0, YOUTUBE_TITLE_LIMIT) };
+  return madeInApp(video) ? { ...details, madeWithAi: true } : details;
 }
 
 /**
@@ -50,9 +59,25 @@ export function parseHashtags(text: string): string[] {
 }
 export const hashtagText = (tags: string[]) => tags.map((tag) => `#${tag}`).join(' ');
 
-/** The text that goes out with the video: its description, then its hashtags. */
-export function postText(video: Video): string {
-  return [video.caption.trim(), hashtagText(detailsOf(video).hashtags)].filter(Boolean).join('\n\n');
+/** The hashtag that discloses an AI-made video where a social has no AI label of its own to set. */
+export const AI_TAG = 'AIgenerated';
+/**
+ * Socials whose upload page has no AI label switch, so the disclosure goes in the text. TikTok
+ * ("AI-generated content"), YouTube ("Altered or synthetic content"), Instagram and Facebook ("AI label")
+ * get their own label set by the posting window.
+ */
+export const TEXT_LABEL_SOCIALS: Platform[] = ['x'];
+
+/**
+ * The text that goes out with the video: its description, then its hashtags. With labelInText (or for a
+ * social in TEXT_LABEL_SOCIALS), an AI-made video also gets #AIgenerated, unless it already has it.
+ */
+export function postText(video: Video, platform?: Platform, labelInText = false): string {
+  const details = detailsOf(video);
+  const tags = [...details.hashtags];
+  const label = details.madeWithAi && (labelInText || (platform != null && TEXT_LABEL_SOCIALS.includes(platform)));
+  if (label && !tags.some((tag) => tag.toLowerCase() === AI_TAG.toLowerCase())) tags.push(AI_TAG);
+  return [video.caption.trim(), hashtagText(tags)].filter(Boolean).join('\n\n');
 }
 
 export const YOUTUBE_TITLE_LIMIT = 100;
@@ -67,10 +92,10 @@ export const LIMITS: Record<Platform, { text: number; hashtags?: number; label: 
 
 /** Problems that would stop a social from taking this video as it is, for the brand's socials only. */
 export function detailProblems(video: Video, socials: Platform[]): string[] {
-  const text = postText(video);
   const details = detailsOf(video);
   const problems: string[] = [];
   for (const platform of socials) {
+    const text = postText(video, platform);
     const limit = LIMITS[platform];
     if (text.length > limit.text) problems.push(`${limit.label} is ${text.length} characters; the limit is ${limit.text.toLocaleString()}.`);
     if (limit.hashtags && details.hashtags.length > limit.hashtags) problems.push(`${limit.label} allows ${limit.hashtags} hashtags; this has ${details.hashtags.length}.`);

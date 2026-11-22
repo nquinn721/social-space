@@ -1,0 +1,75 @@
+{
+  "summary": "AI labels on every social (0.37.1): every video starts labeled as AI-made (uploads too, which Nate can turn off); videos the app made (video source, series part, text editor) are always labeled and their checkbox is locked on. Posting windows already set TikTok's AI-generated content and YouTube's altered content; they now also turn on Instagram's and Facebook's AI label switch (with a reminder in the panel if the switch isn't found), X posts get #AIgenerated in the text, and Instagram/Facebook API posts get #AIgenerated since the API has no label.",
+  "features": [
+    "posting",
+    "video-library",
+    "partner-review",
+    "updates",
+    "facebook",
+    "instagram"
+  ],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    {
+      "path": "src/postDetails.ts",
+      "note": "DEFAULT_DETAILS.madeWithAi true, madeInApp, detailsOf forces the label, AI_TAG/TEXT_LABEL_SOCIALS and postText(video, platform, labelInText)"
+    },
+    {
+      "path": "src/useBrowserPosting.ts",
+      "note": "postRequest passes the platform to postText so X gets #AIgenerated"
+    },
+    {
+      "path": "src/useBrandInstagram.ts",
+      "note": "API reel text carries #AIgenerated"
+    },
+    {
+      "path": "src/useBrandFacebook.ts",
+      "note": "API reel text carries #AIgenerated"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "Made with AI checkbox locked on for in-app videos; uploads start labeled"
+    },
+    {
+      "path": "src-tauri/src/posting.rs",
+      "note": "POST_SCRIPT labelOn for Instagram (Advanced settings > Add AI label) and Facebook; reminders for a missing label and YouTube altered content"
+    },
+    {
+      "path": "src/postDetails.test.ts",
+      "note": "AI label tests"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "expectations for the label and #AIgenerated"
+    },
+    {
+      "path": "src/usePartnerReview.test.tsx",
+      "note": "expectation for #AIgenerated"
+    },
+    {
+      "path": "package.json",
+      "note": "0.37.1"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "0.37.1"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "0.37.1"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "0.37.1"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "note": "0.37.1"
+    },
+    {
+      "path": "package-lock.json",
+      "note": "0.37.1"
+    }
+  ]
+}

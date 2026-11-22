@@ -37,5 +37,5 @@ export function useBrandFacebook(workspace: Workspace, brandId: string | undefin
 
 /** Uploads a video saved on this PC and publishes it as a Reel on the brand's Page, with its description and hashtags. */
 export function publishVideoToFacebook(target: BrandFacebook, video: Video) {
-  return publishFacebookReelFile(video.mediaSource, postText(video), target.accountId, target.pageId);
+  return publishFacebookReelFile(video.mediaSource, postText(video, undefined, true), target.accountId, target.pageId);
 }

@@ -9,7 +9,7 @@ import { DESKTOP_ONLY, listVideoSources, type SourcesState } from './videoSource
 import { useVideoGenerations } from './useVideoGenerations';
 import { publishVideoToInstagram, useBrandInstagram, type BrandInstagram } from './useBrandInstagram';
 import { isLocalVideo, openVideoFile, showVideoInFolder, videoPreviewUrl } from './videoFileService';
-import { detailProblems, detailsOf, formatMs, newPost, hashtagText, LIMITS, parseHashtags, postText, startingPost, STAGES, videoStage, YOUTUBE_TITLE_LIMIT, type Stage } from './postDetails';
+import { AI_TAG, detailProblems, detailsOf, madeInApp, formatMs, newPost, hashtagText, LIMITS, parseHashtags, postText, startingPost, STAGES, videoStage, YOUTUBE_TITLE_LIMIT, type Stage } from './postDetails';
 import { cachedPostSuggestion, suggestPost, type PostSuggestion } from './assistant/postSuggest';
 import { GhostInput, GhostTextarea } from './GhostText';
 import { useConfirm } from './ConfirmDialog';
@@ -675,7 +675,7 @@ function PostPanel({ video, category, brandName, socials, busy, disabled, instag
     {socials.includes('youtube') && <><label htmlFor={id('yt-title')}>YouTube title</label><input id={id('yt-title')} maxLength={YOUTUBE_TITLE_LIMIT} value={details.youtubeTitle} onChange={(event) => set({ youtubeTitle: event.target.value })}/></>}
     {isLocalVideo(video.mediaSource) && <CoverPicker path={video.mediaSource} value={details.coverMs} onChange={(coverMs) => set({ coverMs })}/>}
     <div className="details-checks">
-      <label className="check-row"><input type="checkbox" checked={details.madeWithAi} onChange={(event) => set({ madeWithAi: event.target.checked })}/> Made with AI (labeled as AI-generated on YouTube and TikTok)</label>
+      <label className="check-row" title={madeInApp(video) ? 'Made in Social Space with AI, so it is always labeled.' : undefined}><input type="checkbox" checked={details.madeWithAi || madeInApp(video)} disabled={madeInApp(video)} onChange={(event) => set({ madeWithAi: event.target.checked })}/> Made with AI: labeled as AI on every social (AI label on YouTube, TikTok, Instagram and Facebook; #{AI_TAG} on X)</label>
       {socials.includes('instagram') && <label className="check-row"><input type="checkbox" checked={details.shareToFeed} onChange={(event) => set({ shareToFeed: event.target.checked })}/> Also show the Instagram Reel in the main feed</label>}
       {socials.includes('youtube') && <label className="check-row"><input type="checkbox" checked={details.madeForKids} onChange={(event) => set({ madeForKids: event.target.checked })}/> Made for kids (YouTube asks this of every video)</label>}
     </div>
@@ -784,7 +784,7 @@ function AddVideo({ brandId, category, disabled, onSave, onClose }: AddProps) {
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!title.trim() || disabled) return;
-    const start = newPost(category, false);
+    const start = newPost(category, true);
     const video: Video = { id: crypto.randomUUID(), brandId, categoryId: category.id, title: title.trim(), mediaSource: mediaSource.trim(), posted: [], createdAt: Date.now(), ...start, caption: caption.trim() || start.caption };
     void onSave(video).then((ok) => { if (ok) onClose(); });
   }
