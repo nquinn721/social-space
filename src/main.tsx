@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import './fun.css';
+import './today.css';
 import { applyStoredLook } from './look';
 
 applyStoredLook();

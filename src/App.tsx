@@ -1,41 +1,44 @@
 import { hasUpdate, HeaderUpdateButton, UpdateBanner, updateNavLabel, UpdatesPage, useAppUpdates } from './AppUpdates';
-import InboxList from './InboxList';
 import CreateAccountWizard, { type WizardPrefill } from './CreateAccountWizard';
 import AccountDrawer from './AccountDrawer';
 import { pictureFileFor } from './brandImageService';
 import AssistantPanel from './assistant/AssistantPanel';
-import OverviewPage from './pages/OverviewPage';
+import TodayPage from './pages/TodayPage';
 import AccountsPage from './pages/AccountsPage';
-import QueuePage from './pages/QueuePage';
+import CalendarPage from './pages/CalendarPage';
+import ResultsPage from './pages/ResultsPage';
+import CommentsPage from './pages/CommentsPage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword, hasAccountPassword } from './profileService';
 import { isTauri } from '@tauri-apps/api/core';
 import { deletePost } from './ayrshareService';
 import { AyrshareProvider } from './useAyrshare';
+import { ResultsProvider } from './useResults';
+import { AyrshareStatusPill, CommentCount } from './SidebarStatus';
 import { prepareProfileRemoval, removedProfileIds } from './deletionSafety';
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Bot, Check, ChevronRight, Home, ListOrdered, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
+import { AlertTriangle, BarChart3, Bot, CalendarDays, Check, ChevronRight, MessageCircle, RotateCw, Settings2, Sun, UsersRound, X as Close } from 'lucide-react';
 import { EMPTY_WORKSPACE, getPlatform, PLATFORMS, type Account, type Brand, type Platform, type PlatformAction, type View, type Workspace } from './model';
 import { loginText, renamedProfile } from './brands';
 import appIcon from './assets/app-icon.png';
 import { loadWorkspace, openPlatformAction, saveWorkspace } from './service';
-import { initialOf, PageHeader } from './ui';
+import { initialOf } from './ui';
 import { PartnerReviewProvider, usePartnerReview } from './usePartnerReview';
 import { useTeamSync } from './useTeamSync';
 import { mergeWorkspaces } from './workspaceSync';
-import ThemePicker from './ThemePicker';
 import { celebrate, isCelebration } from './look';
 
-type NavItem = { id: View; label: string; icon: typeof Home };
-/** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
-const NAV_ITEMS: NavItem[] = [{ id: 'overview', label: 'Overview', icon: Home }, { id: 'accounts', label: 'Brands', icon: UsersRound }, { id: 'queue', label: 'Queue', icon: ListOrdered }, { id: 'inbox', label: 'Inbox', icon: Mail }];
-const TITLES: Record<View, string> = { overview: 'Overview', accounts: 'Brands', queue: 'Post queue', inbox: 'Inbox', updates: 'Updates', settings: 'Settings' };
+type NavItem = { id: View; label: string; icon: typeof Sun };
+/** Today, each brand (its videos, stories, schedule, results and socials), and what Ayrshare posts, measures and hears back. */
+const NAV_ITEMS: NavItem[] = [{ id: 'today', label: 'Today', icon: Sun }, { id: 'brands', label: 'Brands', icon: UsersRound }, { id: 'calendar', label: 'Calendar', icon: CalendarDays }, { id: 'results', label: 'Results', icon: BarChart3 }, { id: 'comments', label: 'Comments', icon: MessageCircle }];
+const TITLES: Record<View, string> = { today: 'Today', brands: 'Brands', calendar: 'Calendar', results: 'Results', comments: 'Comments', updates: 'Updates', settings: 'Settings' };
+export type BrandTab = 'content' | 'series' | 'schedule' | 'results' | 'accounts';
 /** Which brand page is open, and on which tab. */
-export type OpenBrand = { id: string; tab: 'content' | 'series' | 'accounts' } | null;
+export type OpenBrand = { id: string; tab: BrandTab } | null;
 type Wizard = { platforms: Platform[]; prefill?: WizardPrefill; resume?: Account[] };
 
 function App() {
-  const [view, setView] = useState<View>('overview');
+  const [view, setView] = useState<View>('today');
   const [workspace, setWorkspace] = useState<Workspace>(EMPTY_WORKSPACE);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -186,7 +189,6 @@ function App() {
     } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the profile.'}${canceled ? ` ${canceled} scheduled ${canceled === 1 ? 'post was' : 'posts were'} already cancelled in Ayrshare.` : ''}`); }
     finally { removingProfile.current = false; setBusy(false); }
   }
-  const addAccount = () => { setEditingAccount(null); setShowAccount(true); };
   const editAccount = (account: Account) => { setEditingAccount(account); setShowAccount(true); };
   const createAccounts = (platforms?: Platform[], prefill?: WizardPrefill) => setWizard({ platforms: platforms ?? PLATFORMS.map((item) => item.id), prefill });
   /** Goes straight to the sign-up pages of accounts that are saved but not created yet. */
@@ -199,23 +201,23 @@ function App() {
   const signUp = (accounts: Account[]) => { setShowAccount(false); setEditingAccount(null); setWizard({ platforms: accounts.map((item) => item.platform), resume: accounts }); };
   function navigate(next: View, section?: string) {
     setView(next);
-    if (next !== 'accounts') setOpenBrand(null);
-    if (next !== 'accounts') setBrandsStart((current) => current.tab === 'brands' ? current : { ...current, tab: 'brands' });
+    if (next !== 'brands') setOpenBrand(null);
+    if (next !== 'brands') setBrandsStart((current) => current.tab === 'brands' ? current : { ...current, tab: 'brands' });
     if (section) window.setTimeout(() => document.getElementById(section)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
     else document.documentElement.scrollTop = 0;
   }
-  const navButton = ({ id, label, icon: Icon }: NavItem) => <button key={id} className={`nav-item ${view === id ? 'selected' : ''}`} aria-current={view === id ? "page" : undefined} aria-label={label} title={label} onClick={() => { navigate(id); if (id === 'accounts') setOpenBrand(null); }}>
-    <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.brands.length > 0 && <span className="nav-badge">{workspace.brands.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
+  const navButton = ({ id, label, icon: Icon }: NavItem) => <button key={id} className={`nav-item ${view === id ? 'selected' : ''}`} aria-current={view === id ? "page" : undefined} aria-label={label} title={label} onClick={() => { navigate(id); if (id === 'brands') setOpenBrand(null); }}>
+    <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'brands' && workspace.brands.length > 0 && <span className="nav-badge">{workspace.brands.length}</span>}{id === 'comments' && <CommentCount/>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
   </button>;
 
-  return <AyrshareProvider workspace={workspace} loaded={loaded} update={update} notify={showMessage}><PartnerReviewProvider value={review}><div className="app-shell">
+  return <AyrshareProvider workspace={workspace} loaded={loaded} update={update} notify={showMessage}><ResultsProvider workspace={workspace}><PartnerReviewProvider value={review}><div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img className="brand-symbol" src={appIcon} alt=""/><div><strong>Social <span>Space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation"><div className="nav-group">{NAV_ITEMS.map(navButton)}</div></nav>
       <div className="sidebar-bottom">
         {!updatesManaged && navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
-        <ThemePicker/>
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
+        <AyrshareStatusPill workspace={workspace}/>
         <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>{teamSync.status?.enabled ? 'Shared with your partner' : 'Stored on this PC'}</small></div></div>
       </div>
     </aside>
@@ -231,18 +233,19 @@ function App() {
       <div className="page-content">
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
         {message && <div role={messageIsError ? 'alert' : 'status'} className={messageIsError ? 'notice notice-error' : 'notice'}>{messageIsError ? <AlertTriangle size={16}/> : <Check size={16}/>}{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
-        {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
-        {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
-        {view === 'queue' && <QueuePage workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }} onOpenSettings={() => navigate('settings', 'posting')}/>}
-        {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
+        {view === 'today' && <TodayPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('brands'); }} onNewBrand={() => createAccounts()}/>}
+        {view === 'brands' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
+        {view === 'calendar' && <CalendarPage workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('brands'); }} onOpenSettings={() => navigate('settings', 'ayrshare')}/>}
+        {view === 'results' && <ResultsPage workspace={workspace} onOpenSettings={() => navigate('settings', 'ayrshare')}/>}
+        {view === 'comments' && <CommentsPage workspace={workspace} onOpenSettings={() => navigate('settings', 'ayrshare')}/>}
         {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
-        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync}/>}
+        {view === 'settings' && <SettingsPage workspace={workspace} onNavigate={(next) => navigate(next)} businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync}/>}
       </div>
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
     {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} existing={workspace.accounts} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
     {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined} pictureFile={editingAccount ? pictureFileFor(editingAccount, workspace.brands.find((brand) => brand.id === editingAccount.brandId)) : undefined}/>}
-  </div></PartnerReviewProvider></AyrshareProvider>;
+  </div></PartnerReviewProvider></ResultsProvider></AyrshareProvider>;
 }
 export default App;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-usage"
+description = "Enables the ayrshare_usage command without any pre-configured scope."
+commands.allow = ["ayrshare_usage"]
+
+[[permission]]
+identifier = "deny-ayrshare-usage"
+description = "Denies the ayrshare_usage command without any pre-configured scope."
+commands.deny = ["ayrshare_usage"]

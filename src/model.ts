@@ -1,7 +1,7 @@
 import type { Channel } from './channelModel';
 export type Platform = 'x' | 'instagram' | 'tiktok' | 'youtube' | 'facebook';
-export type View = 'overview' | 'accounts' | 'queue' | 'inbox' | 'updates' | 'settings';
-export const VIEWS: View[] = ['overview', 'accounts', 'queue', 'inbox', 'updates', 'settings'];
+export type View = 'today' | 'brands' | 'calendar' | 'results' | 'comments' | 'updates' | 'settings';
+export const VIEWS: View[] = ['today', 'brands', 'calendar', 'results', 'comments', 'updates', 'settings'];
 /** identity: where name and username are edited (Instagram's Accounts Center). */
 export type PlatformAction = 'create' | 'addProfile' | 'manage' | 'post' | 'developer' | 'identity';
 /** platformId: the account's own ID on the social (e.g. the Instagram account ID), when known. */

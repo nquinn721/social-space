@@ -3,13 +3,16 @@
     "id": "accounts",
     "menu": [
       "Brands",
+      "Videos",
+      "Stories",
+      "Socials",
       "Details",
       "Sign up",
       "Profile",
       "Find your idea"
     ],
     "notes": [
-      "Brands is the top-nav entry; Details, Sign up and Profile are the steps of the Create accounts wizard (CreateAccountWizard.tsx), whose sign-up pages are embedded by embedded.rs."
+      "Brands is the top-nav entry: brand cards show linked socials, scheduled/ready/views and the next post; a brand page has tabs Videos, Stories, Schedule, Results and Socials (BrandAccounts, profiles, picture). There is no 'Add an existing account' since 0.40.0. Details, Sign up and Profile are the steps of the Create accounts wizard (CreateAccountWizard.tsx), whose sign-up pages are embedded by embedded.rs."
     ],
     "paths": [
       "src/pages/AccountsPage.tsx",
@@ -58,7 +61,7 @@
   {
     "id": "email",
     "menu": [
-      "Inbox",
+      "Sign-up email",
       "Email inbox"
     ],
     "notes": [],
@@ -70,7 +73,7 @@
       "src-tauri/src/email.rs",
       "src-tauri/src/gmail_session.rs"
     ],
-    "summary": "Read-only inbox for verification codes: IMAP or the user's Gmail sign-in",
+    "summary": "Read-only inbox for sign-up verification codes (pop-up during sign-up and in the wizard): IMAP or the user's Gmail sign-in",
     "terms": [
       "email",
       "inbox",
@@ -135,9 +138,7 @@
   },
   {
     "id": "profile-images",
-    "menu": [
-      "Pictures"
-    ],
+    "menu": [],
     "notes": [],
     "paths": [
       "src/ProfileImageStudio.tsx",
@@ -145,8 +146,7 @@
       "src-tauri/src/grok_ai.rs",
       "src/BrandPicture.tsx",
       "src/brandImageService.ts",
-      "src-tauri/src/brand_images.rs",
-      "src/PictureSettings.tsx"
+      "src-tauri/src/brand_images.rs"
     ],
     "summary": "Brand and profile pictures and YouTube banners: made and refined with xAI Grok Imagine (the Grok video source key), stored by hash under brand-images/",
     "terms": [
@@ -267,15 +267,16 @@
   {
     "id": "navigation",
     "notes": [
-      "Each top-nav entry's menu label is owned by the feature behind it (overview, accounts, email, settings)."
+      "Each top-nav entry's menu label is owned by the feature behind it (overview = Today, accounts = Brands, calendar, results, comments, settings). There is no Inbox page since 0.40.0: verification codes pop up during sign-up."
     ],
     "paths": [
       "src/App.tsx",
       "src/model.ts",
       "src/ui.tsx",
-      "src/main.tsx"
+      "src/main.tsx",
+      "src/SidebarStatus.tsx"
     ],
-    "summary": "App shell: the side nav (Overview, Brands, Queue, Inbox, Settings, Updates), the views from VIEWS in model.ts, messages and the brand page routing",
+    "summary": "App shell: the side nav (Today, Brands, Calendar, Results, Comments; Updates and Settings at the bottom with the Ayrshare status pill), the views from VIEWS in model.ts, messages and the brand page routing (brand tabs Videos, Stories, Schedule, Results, Socials)",
     "terms": [
       "view",
       "nav",
@@ -285,36 +286,47 @@
   {
     "id": "overview",
     "menu": [
-      "Overview"
+      "Today",
+      "Needs you",
+      "Going out today"
     ],
     "notes": [],
     "paths": [
-      "src/pages/OverviewPage.tsx",
+      "src/pages/TodayPage.tsx",
+      "src/today.css",
+      "src/useFillSlots.ts",
+      "src/calendar.ts",
       "src/brandStatus.ts"
     ],
     "screens": [
       {
-        "name": "Overview",
-        "path": "src/pages/OverviewPage.tsx"
+        "name": "Today",
+        "path": "src/pages/TodayPage.tsx"
       }
     ],
-    "summary": "Overview page: whether the inbox and Grok are ready, and posts waiting for approval per brand",
+    "summary": "Today page (first in the sidebar): what goes out today, stats for the week (scheduled, posted, views, new comments), Schedule N ready videos, and Needs you (setup, socials to link, failed posts, comments, videos Grok is making)",
     "terms": [
+      "today",
       "overview",
-      "dashboard"
+      "dashboard",
+      "needs you"
     ]
   },
   {
     "id": "settings",
     "menu": [
       "Settings",
-      "Workspace"
+      "Workspace",
+      "Grok",
+      "Writing",
+      "More"
     ],
     "notes": [
       "Each section's menu label is owned by the feature behind it; Workspace (the business name) is this page's own."
     ],
     "paths": [
-      "src/pages/SettingsPage.tsx"
+      "src/pages/SettingsPage.tsx",
+      "src/today.css"
     ],
     "screens": [
       {
@@ -322,7 +334,7 @@
         "path": "src/pages/SettingsPage.tsx"
       }
     ],
-    "summary": "Settings page: one scrolling page of section cards (workspace name, posting through Ayrshare, email, partner review, shared accounts, video sources, pictures, assistant)",
+    "summary": "Settings page: Ayrshare (key, profiles, posts this month, posting times, AI label, X keys), Grok (video sources and the writing model), Look, then More (workspace name, sign-up email, partner review, shared accounts)",
     "terms": [
       "settings",
       "workspace"
@@ -331,15 +343,16 @@
   {
     "id": "posting",
     "menu": [
-      "Posting",
-      "Queue",
+      "Ayrshare",
       "Set up posting",
       "Link socials",
-      "X (Twitter)"
+      "X (Twitter)",
+      "Schedule",
+      "Posting times"
     ],
     "notes": [
-      "Since 0.39.0 every post goes out through Ayrshare (ayrshare.rs, ayrshareService.ts, useAyrshare.tsx): one API key under Settings \u2192 Posting (AyrshareSettings.tsx), one Ayrshare profile per brand (its key in Credential Manager as profile-<brandId>, Brand.ayrshare keeps refId/title), and the brand's socials linked on Ayrshare's page opened in the brand's window (posting.rs open_link_window fills each social's sign-in). X needs Nate's own X app keys (BYO since 2026-03-31).",
-      "Queue (sidebar): postQueue.ts orders each brand's finished videos per social, and planSchedule puts them into the next free posting time (PostingSettings times, at most DAILY_LIMIT 3 a day per account, at most HORIZON_DAYS 21 ahead so Ayrshare's uploads stay). useAyrshare's auto-scheduler sends one at a time while the app is open; Ayrshare posts them on time. Video.scheduled holds each post's Ayrshare id and state; applyHistory (ayrsharePosting.ts) reads Ayrshare's history back as the truth."
+      "Since 0.39.0 every post goes out through Ayrshare (ayrshare.rs, ayrshareService.ts, useAyrshare.tsx): one API key under Settings → Ayrshare (AyrshareSettings.tsx), one Ayrshare profile per brand (its key in Credential Manager as profile-<brandId>, Brand.ayrshare keeps refId/title), and the brand's socials linked on Ayrshare's page opened in the brand's window (posting.rs open_link_window fills each social's sign-in). X needs Nate's own X app keys (BYO since 2026-03-31).",
+      "The queue: postQueue.ts orders each brand's finished videos per social, and planSchedule puts them into the next free posting time (PostingSettings times, at most DAILY_LIMIT 3 a day per account, at most HORIZON_DAYS 21 ahead so Ayrshare's uploads stay). useAyrshare's auto-scheduler sends one at a time while the app is open; useFillSlots does the same on demand (Today, Calendar). Each brand's Schedule tab (BrandSchedule.tsx) shows its lanes. Video.scheduled holds each post's Ayrshare id and state; applyHistory (ayrsharePosting.ts) reads Ayrshare's history back as the truth."
     ],
     "paths": [
       "src-tauri/src/ayrshare.rs",
@@ -355,10 +368,12 @@
       "src/VideoLibrary.tsx",
       "src-tauri/src/embedded.rs",
       "src/deletionSafety.ts",
-      "src/pages/QueuePage.tsx",
       "src/postQueue.ts",
       "src/queue.css",
-      "src/BrandAccounts.tsx"
+      "src/BrandAccounts.tsx",
+      "src/BrandSchedule.tsx",
+      "src/useFillSlots.ts",
+      "src/useNow.ts"
     ],
     "summary": "Posting and scheduling through Ayrshare: the API key, each brand's Ayrshare profile and linked socials, Post now, the auto-scheduling queue, and post states read back from Ayrshare",
     "terms": [
@@ -374,12 +389,12 @@
     ],
     "screens": [
       {
-        "name": "Post queue",
-        "path": "src/pages/QueuePage.tsx"
+        "name": "Ayrshare",
+        "path": "src/AyrshareSettings.tsx"
       },
       {
-        "name": "Posting",
-        "path": "src/AyrshareSettings.tsx"
+        "name": "Schedule",
+        "path": "src/BrandSchedule.tsx"
       }
     ]
   },
@@ -438,24 +453,23 @@
   {
     "id": "look",
     "menu": [
-      "Colors",
-      "Pick your vibe",
-      "Animations"
+      "Look",
+      "Animations and confetti"
     ],
     "notes": [
-      "Sidebar Colors menu (ThemePicker.tsx) sets html[data-theme] (Neon, Sunset, Ocean, Candy, Forest) and html[data-motion] (Animations on/off) in localStorage, never the workspace. fun.css holds the themes, aurora background and all animations; it turns every animation off under prefers-reduced-motion or data-motion=calm. look.ts celebrate() throws confetti; App fires it for success messages that isCelebration() accepts (posted on, scheduled, live, created)."
+      "Settings → Look (LookSettings.tsx) sets html[data-theme] (Neon, Sunset, Ocean, Candy, Forest) and html[data-motion] (animations on/off) in localStorage, never the workspace. fun.css holds the themes, aurora background and all animations; it turns every animation off under prefers-reduced-motion or data-motion=calm. look.ts celebrate() throws confetti; App fires it for success messages that isCelebration() accepts (posted on, scheduled, live, created)."
     ],
     "paths": [
       "src/look.ts",
-      "src/ThemePicker.tsx",
+      "src/LookSettings.tsx",
       "src/fun.css",
       "src/main.tsx",
       "src/App.tsx"
     ],
     "screens": [
       {
-        "name": "Colors",
-        "path": "src/ThemePicker.tsx"
+        "name": "Look",
+        "path": "src/LookSettings.tsx"
       }
     ],
     "summary": "The app's look: color themes, animations and confetti celebrations",
@@ -466,6 +480,109 @@
       "confetti",
       "celebrate",
       "motion"
+    ]
+  },
+  {
+    "id": "calendar",
+    "menu": [
+      "Calendar",
+      "Fill open slots",
+      "Move to",
+      "Unschedule",
+      "Didn't post"
+    ],
+    "notes": [
+      "Week grid of everything Ayrshare will post (calendar.ts postsBetween groups a video's socials at the same minute), dashed open slots at the posting times, brand filter and colours, Fill open slots (useFillSlots), and a post's detail to move it (cancel + schedule again, Ayrshare has no move) or unschedule."
+    ],
+    "paths": [
+      "src/pages/CalendarPage.tsx",
+      "src/calendar.ts",
+      "src/useFillSlots.ts",
+      "src/today.css"
+    ],
+    "screens": [
+      {
+        "name": "Calendar",
+        "path": "src/pages/CalendarPage.tsx"
+      }
+    ],
+    "summary": "Calendar page: the week of scheduled, posted and failed posts, open posting slots, posting times and Fill open slots",
+    "terms": [
+      "calendar",
+      "week",
+      "open slot",
+      "move",
+      "unschedule"
+    ]
+  },
+  {
+    "id": "results",
+    "menu": [
+      "Results",
+      "Views per day",
+      "By social",
+      "Top videos",
+      "7 days",
+      "30 days"
+    ],
+    "notes": [
+      "ResultsProvider (useResults.tsx) reads Ayrshare analytics every 30 min: /analytics/social per brand (followers) and /analytics/post per post of the last 30 days (ayrshare_post_analytics, ayrshare_social_analytics in ayrshare.rs). results.ts reads each social's field names. Numbers and daily follower totals are cached in localStorage (socialspace.results.v1). Also a brand's Results tab."
+    ],
+    "paths": [
+      "src/pages/ResultsPage.tsx",
+      "src/results.ts",
+      "src/useResults.tsx",
+      "src-tauri/src/ayrshare.rs",
+      "src/ayrshareService.ts"
+    ],
+    "screens": [
+      {
+        "name": "Results",
+        "path": "src/pages/ResultsPage.tsx"
+      }
+    ],
+    "summary": "Results page: views, likes, new followers and comments from Ayrshare per range, brand and social, and the top videos",
+    "terms": [
+      "results",
+      "analytics",
+      "views",
+      "likes",
+      "followers"
+    ]
+  },
+  {
+    "id": "comments",
+    "menu": [
+      "Comments",
+      "To answer",
+      "Answered",
+      "Draft with Grok",
+      "Send reply",
+      "Skip",
+      "All"
+    ],
+    "notes": [
+      "Comments on posts of the last 14 days from Ayrshare GET /comments/:id (ayrshare_comments); replies go out with /comments/reply/:commentId (ayrshare_reply_comment, searchPlatformId, TikTok needs videoId). Grok drafts each reply (assistant/replyWriter.ts). Answered/skipped marks are kept on this PC; a reply from the brand's own account also counts as answered."
+    ],
+    "paths": [
+      "src/pages/CommentsPage.tsx",
+      "src/useResults.tsx",
+      "src/results.ts",
+      "src/assistant/replyWriter.ts",
+      "src-tauri/src/ayrshare.rs",
+      "src/SidebarStatus.tsx"
+    ],
+    "screens": [
+      {
+        "name": "Comments",
+        "path": "src/pages/CommentsPage.tsx"
+      }
+    ],
+    "summary": "Comments page: new comments from every social with Grok-drafted replies sent through Ayrshare",
+    "terms": [
+      "comments",
+      "reply",
+      "grok draft"
     ]
   }
 ]

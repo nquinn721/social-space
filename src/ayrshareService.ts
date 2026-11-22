@@ -61,3 +61,13 @@ export async function postHistory(brandId: string): Promise<HistoryPost[]> {
 export async function deletePost(brandId: string, id: string): Promise<void> { desktopOnly(); return invoke('ayrshare_delete_post', { brandId, id }); }
 /** Opens a live post (its link from Ayrshare) in the default browser. */
 export async function openPostLink(url: string): Promise<void> { desktopOnly(); return invoke('ayrshare_open_post', { url }); }
+
+// ---------- results, comments and usage ----------
+export type AyrshareUsage = { posts: number; quota: number | null; profiles: number | null };
+export async function postAnalytics(brandId: string, id: string): Promise<Record<string, unknown>> { desktopOnly(); return invoke('ayrshare_post_analytics', { brandId, id }); }
+export async function socialAnalytics(brandId: string, platforms: Platform[]): Promise<Record<string, unknown>> { desktopOnly(); return invoke('ayrshare_social_analytics', { brandId, platforms }); }
+export async function postComments(brandId: string, id: string): Promise<Record<string, unknown>> { desktopOnly(); return invoke('ayrshare_comments', { brandId, id }); }
+export async function replyToComment(brandId: string, commentId: string, platform: Platform, text: string, videoId?: string): Promise<void> {
+  desktopOnly(); await invoke('ayrshare_reply_comment', { brandId, commentId, platform, text, videoId: videoId ?? null });
+}
+export async function ayrshareUsage(): Promise<AyrshareUsage> { desktopOnly(); return invoke('ayrshare_usage'); }

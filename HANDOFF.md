@@ -59,9 +59,15 @@ video to every social the brand has: TikTok, YouTube (Shorts), X, Instagram (Ree
 - A **Brand** (e.g. "Massage with Mia") **is** the account on each social: one account per social, named after
   the brand. No profile may be named "softwings". Nate expects about 5 or 6 brands.
 - Categories or segments (e.g. bunny videos, goat videos) live inside a brand and post to that brand's accounts.
-- UI: the sidebar has Overview, Brands, Queue, Inbox, Updates and Settings. Each brand page has the tabs Posts,
-  Stories and Accounts.
-  - Accounts starts with the brand's Posting panel (Ayrshare: connect, set up posting, link socials), then one
+- UI (0.40.0, the design Nate approved 2026-11-22): the sidebar has Today, Brands, Calendar, Results and
+  Comments, with Updates, Settings and an Ayrshare status pill at the bottom. There is no Inbox page and no
+  "Add an existing account". Each brand page has the tabs Videos, Stories, Schedule, Results and Socials.
+  - Today: what goes out today, week stats, Schedule N ready videos, and Needs you.
+  - Calendar: the week, open slots at the posting times, Fill open slots, move or unschedule a post.
+  - Results and Comments read Ayrshare analytics and comments every 30 minutes (`useResults.tsx`); Grok
+    drafts each reply (`assistant/replyWriter.ts`), Nate edits and sends it through Ayrshare.
+  - Settings: Ayrshare (key, profiles, posts this month, posting times, AI label, X keys), Grok, Look, then More.
+  - Socials starts with the brand's Posting panel (Ayrshare: connect, set up posting, link socials), then one
   line per social with its status from Ayrshare, View, and Details.
   - Each video has Post details: caption, hashtags, cover frame, YouTube title and an AI flag.
 - Series (`SeriesPanel.tsx`, `series.ts`, `seriesWriter.ts`) are stories across several videos, written by
@@ -100,7 +106,7 @@ the developer apps, app reviews and upload windows are gone.
   `posting.rs`), which fills each social's sign-in with the brand's saved login. Nate signs in and allows.
 - **Posting:** `useAyrshare.tsx` uploads the file once (`/media/upload` or a presigned URL; kept 90 days, reused
   via `Video.media`), then posts with the caption, YouTube title, cover frame and each social's AI flag
-  (`ayrsharePosting.ts`). Post now posts at once; the Queue schedules with `scheduleDate`.
+  (`ayrsharePosting.ts`). Post now posts at once; the queue schedules with `scheduleDate`.
 - **Queue:** `postQueue.ts` plans each brand's finished videos into the next posting time (default 9:00,
   13:00, 18:00; at most 3 a day per account; at most 21 days ahead). With automatic scheduling on, the app
   schedules them one at a time while it is open, and Ayrshare posts them on time even when it is closed.
@@ -179,7 +185,8 @@ Goal: post "Neck Relief with Mia: Part 1 of 3" for the brand **Massage with Mia*
 | Navigation and pages | `src/App.tsx`, `src/model.ts` (`VIEWS`), `src/pages/` |
 | Brands and accounts | `src/pages/AccountsPage.tsx`, `BrandAccounts.tsx`, `brandStatus.ts`, `brands.ts`, `CreateAccountWizard.tsx` |
 | Posting (Ayrshare) | `ayrshare.rs`, `ayrshareService.ts`, `ayrsharePosting.ts`, `useAyrshare.tsx`, `AyrshareSettings.tsx`, `VideoLibrary.tsx`, `postDetails.ts` |
-| Queue | `postQueue.ts`, `pages/QueuePage.tsx` |
+| Queue and calendar | `postQueue.ts`, `calendar.ts`, `useFillSlots.ts`, `pages/CalendarPage.tsx`, `BrandSchedule.tsx` |
+| Today, Results, Comments | `pages/TodayPage.tsx`, `pages/ResultsPage.tsx`, `pages/CommentsPage.tsx`, `results.ts`, `useResults.tsx` |
 | Brand windows | `posting.rs`, `brandWindowService.ts` |
 | Browser windows and autofill | `browser.rs`, `autofill.rs`, `embedded.rs`, `sign_in_state.rs`, `browser_sessions.rs` |
 | Credentials and backup | `account_passwords.rs`, `backup.rs`, `AccountCredentials.tsx` |

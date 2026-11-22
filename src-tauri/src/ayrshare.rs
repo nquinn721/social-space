@@ -547,6 +547,140 @@ pub async fn ayrshare_delete_post(brand_id: String, id: String) -> Result<(), St
     Err(if message.is_empty() { "Ayrshare could not cancel the post.".into() } else { format!("Ayrshare could not cancel the post: {message}") })
 }
 
+// ---------- results and comments ----------
+
+/// An Ayrshare post ID: letters, digits, `-` and `_` only, so it can't reach another path.
+fn valid_post_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || id.len() > 100 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("That post is not valid.".into());
+    }
+    Ok(())
+}
+
+/// A social's own comment ID (Facebook's have `_`, YouTube's `-` and `.`).
+fn valid_comment_id(id: &str) -> Result<(), String> {
+    if id.is_empty() || id.len() > 200 || !id.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')) {
+        return Err("That comment is not valid.".into());
+    }
+    Ok(())
+}
+
+/// Ayrshare's name for one of our socials.
+fn network_of(platform: &str) -> Result<&'static str, String> {
+    match platform {
+        "x" | "twitter" => Ok("twitter"),
+        other => NETWORKS.iter().copied().find(|network| *network == other).ok_or_else(|| "That social is not one Social Space posts to.".to_string()),
+    }
+}
+
+/// Views, likes, comments and shares of one post on each social it went to.
+#[tauri::command]
+pub async fn ayrshare_post_analytics(brand_id: String, id: String) -> Result<Value, String> {
+    valid_post_id(&id)?;
+    let profile = profile_key(&brand_id)?;
+    let key = api_key()?;
+    let x = x_keys()?.is_some();
+    let (ok, value) = send(&key, Call::new(reqwest::Method::POST, "analytics/post").profile(profile).body(json!({ "id": id })).with_x(x)).await?;
+    // A partial answer (one social failed) still comes back with the others.
+    if ok || value.get("status").and_then(Value::as_str) == Some("partial") {
+        return Ok(value);
+    }
+    Err(error_message(&value).map_or("Ayrshare could not read this post's results.".to_string(), |message| format!("Ayrshare could not read this post's results: {message}")))
+}
+
+/// Followers and totals of each linked social of the brand.
+#[tauri::command]
+pub async fn ayrshare_social_analytics(brand_id: String, platforms: Vec<String>) -> Result<Value, String> {
+    let networks = platforms.iter().map(|platform| network_of(platform)).collect::<Result<Vec<_>, _>>()?;
+    if networks.is_empty() {
+        return Ok(json!({}));
+    }
+    let profile = profile_key(&brand_id)?;
+    let key = api_key()?;
+    let x = networks.contains(&"twitter") && x_keys()?.is_some();
+    let (ok, value) = send(&key, Call::new(reqwest::Method::POST, "analytics/social").profile(profile).body(json!({ "platforms": networks })).with_x(x)).await?;
+    if ok || value.get("status").and_then(Value::as_str) == Some("partial") {
+        return Ok(value);
+    }
+    Err(error_message(&value).map_or("Ayrshare could not read this brand's results.".to_string(), |message| format!("Ayrshare could not read this brand's results: {message}")))
+}
+
+/// The comments on one post, keyed by social.
+#[tauri::command]
+pub async fn ayrshare_comments(brand_id: String, id: String) -> Result<Value, String> {
+    valid_post_id(&id)?;
+    let profile = profile_key(&brand_id)?;
+    let key = api_key()?;
+    let x = x_keys()?.is_some();
+    let (ok, value) = send(&key, Call::new(reqwest::Method::GET, format!("comments/{id}")).profile(profile).with_x(x)).await?;
+    if ok || value.get("status").and_then(Value::as_str) == Some("partial") {
+        return Ok(value);
+    }
+    // No comments yet is not a failure.
+    if error_message(&value).is_some_and(|message| message.to_lowercase().contains("no comments")) {
+        return Ok(json!({ "status": "success" }));
+    }
+    Err(error_message(&value).map_or("Ayrshare could not read the comments.".to_string(), |message| format!("Ayrshare could not read the comments: {message}")))
+}
+
+pub(crate) const MAX_REPLY_CHARS: usize = 2_000;
+
+/// Replies to a comment on the social it was left on. `comment_id` is the social's own ID, as the
+/// comments call gives it; TikTok also needs the video's ID.
+#[tauri::command]
+pub async fn ayrshare_reply_comment(brand_id: String, comment_id: String, platform: String, text: String, video_id: Option<String>) -> Result<Value, String> {
+    valid_comment_id(&comment_id)?;
+    let network = network_of(&platform)?;
+    let text = text.trim();
+    if text.is_empty() {
+        return Err("Write a reply first.".into());
+    }
+    if text.chars().count() > MAX_REPLY_CHARS {
+        return Err(format!("Replies can be at most {MAX_REPLY_CHARS} characters."));
+    }
+    let mut body = json!({ "platforms": [network], "comment": text, "searchPlatformId": true });
+    if network == "tiktok" {
+        let video = video_id.filter(|id| !id.is_empty()).ok_or("Replying on TikTok needs the video's ID.")?;
+        valid_comment_id(&video)?;
+        body["videoId"] = json!(video);
+    }
+    let profile = profile_key(&brand_id)?;
+    let key = api_key()?;
+    if network == "twitter" && x_keys()?.is_none() {
+        return Err("Replying on X needs your X app's API key and secret. Add them under Settings → Ayrshare.".into());
+    }
+    expect(&key, Call::new(reqwest::Method::POST, format!("comments/reply/{comment_id}")).profile(profile).body(body).with_x(network == "twitter"), "send the reply").await
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AyrshareUsage {
+    /// Posts counted this month (failed tries count too); resets on the 1st.
+    posts: u64,
+    /// The plan's monthly posts; None when Ayrshare leaves it out (10,000 or more).
+    quota: Option<u64>,
+    /// Profiles on the account (one per brand).
+    profiles: Option<u64>,
+}
+
+pub(crate) fn usage_of(user: &Value, profiles: Option<&Value>) -> AyrshareUsage {
+    let number = |key: &str| user.get(key).and_then(Value::as_u64);
+    let profiles = profiles.and_then(|value| value.get("profiles").and_then(Value::as_array).or_else(|| value.as_array())).map(|list| list.len() as u64);
+    AyrshareUsage { posts: number("monthlyPostCount").unwrap_or(0), quota: number("monthlyPostQuota"), profiles }
+}
+
+/// This month's posts against the plan, and how many brand profiles the account has.
+#[tauri::command]
+pub async fn ayrshare_usage() -> Result<AyrshareUsage, String> {
+    let key = api_key()?;
+    let user = expect(&key, Call::new(reqwest::Method::GET, "user"), "read the account").await?;
+    let profiles = match send(&key, Call::new(reqwest::Method::GET, "profiles")).await {
+        Ok((true, value)) => Some(value),
+        _ => None,
+    };
+    Ok(usage_of(&user, profiles.as_ref()))
+}
+
 /// Whether a link is a live post on one of the socials Ayrshare posts to (https only).
 fn is_post_link(link: &str) -> bool {
     let Ok(url) = url::Url::parse(link) else { return false };
@@ -623,4 +757,19 @@ mod tests {
         assert_eq!(profile_slot("b-1").unwrap(), "profile-b-1");
         assert_eq!(platform_of("twitter"), Some(Platform::X));
     }
+    #[test]
+    fn reads_usage_and_checks_result_ids() {
+        let usage = usage_of(&json!({ "monthlyPostCount": 380, "monthlyPostQuota": 1000 }), Some(&json!({ "profiles": [{}, {}] })));
+        assert_eq!(usage, AyrshareUsage { posts: 380, quota: Some(1000), profiles: Some(2) });
+        assert_eq!(usage_of(&json!({}), None), AyrshareUsage { posts: 0, quota: None, profiles: None });
+        assert!(valid_post_id("abc-12_3").is_ok());
+        assert!(valid_post_id("../user").is_err());
+        assert!(valid_comment_id("1234_5678").is_ok());
+        assert!(valid_comment_id("Ugx.abc-9").is_ok());
+        assert!(valid_comment_id("a/b").is_err());
+        assert_eq!(network_of("x").unwrap(), "twitter");
+        assert_eq!(network_of("youtube").unwrap(), "youtube");
+        assert!(network_of("myspace").is_err());
+    }
+
 }

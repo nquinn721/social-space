@@ -72,7 +72,7 @@ function BrandPosting({ brand, statuses, disabled, onNavigate }: { brand: Brand;
   if (status === null) { line = 'Checking Ayrshare…'; tone = 'checking'; }
   else if (!status.connected || status.working === false) {
     tone = 'todo'; line = 'Posting goes through Ayrshare. Connect it once under Settings, then set up each brand here.';
-    body = onNavigate ? <button type="button" className="primary-button small-button" onClick={() => onNavigate('settings', 'posting')}><KeyRound size={14}/> Connect Ayrshare</button> : null;
+    body = onNavigate ? <button type="button" className="primary-button small-button" onClick={() => onNavigate('settings', 'ayrshare')}><KeyRound size={14}/> Connect Ayrshare</button> : null;
   } else if (socials === undefined) { line = 'Asking Ayrshare which socials are linked…'; tone = 'checking'; }
   else if (socials === null) {
     tone = 'problem'; line = `Ayrshare couldn't be asked about ${brand.name}${ayrshare.brands[brand.id]?.error ? `: ${ayrshare.brands[brand.id]?.error}` : '.'}`;
@@ -171,7 +171,7 @@ export default function BrandAccounts({ workspace, brand, accounts, loaded, busy
     switch (status.action?.kind) {
       case 'finish-signup': return onSignUp ? () => onSignUp(account) : undefined;
       case 'own-login': return () => onEditAccount(account);
-      case 'connect-ayrshare': case 'x-keys': return onNavigate ? () => onNavigate('settings', 'posting') : undefined;
+      case 'connect-ayrshare': case 'x-keys': return onNavigate ? () => onNavigate('settings', 'ayrshare') : undefined;
       case 'setup-posting': return () => void ayrshare.createProfile(brand).catch((reason) => setPageNote(errorText(reason)));
       case 'link': return () => void link();
       default: return undefined;
@@ -179,7 +179,7 @@ export default function BrandAccounts({ workspace, brand, accounts, loaded, busy
   }
 
   return <section className="card brand-accounts" aria-label={`${brand.name} profiles`}>
-    <div className="brand-accounts-head"><h3>Accounts</h3><small>One line per social. Details has the sign-in.</small></div>
+    <div className="brand-accounts-head"><h3>Socials</h3><small>One line per social. Details has the sign-in.</small></div>
     <BrandPosting brand={brand} statuses={statuses} disabled={disabled} onNavigate={onNavigate}/>
     {pageNote && <div className="notice conn-notice" role="status"><span>{pageNote}</span><button type="button" className="icon-button" aria-label="Dismiss" onClick={() => setPageNote('')}>×</button></div>}
     <ul className="social-rows">{accounts.map((account) => {

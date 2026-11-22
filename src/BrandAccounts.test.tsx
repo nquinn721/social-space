@@ -38,7 +38,7 @@ describe('brand accounts', () => {
     const navigate = vi.fn();
     show([profile('tt', 'tiktok')], { onNavigate: navigate });
     await userEvent.setup().click(screen.getByRole('button', { name: /Connect Ayrshare/ }));
-    expect(navigate).toHaveBeenCalledWith('settings', 'posting');
+    expect(navigate).toHaveBeenCalledWith('settings', 'ayrshare');
     // The brand-wide step isn't repeated on every row.
     expect(within(screen.getByRole('listitem', { name: 'TikTok profile' })).queryByRole('button', { name: /Connect Ayrshare/ })).not.toBeInTheDocument();
   });

@@ -50,12 +50,12 @@ part of it working. Every Tauri command must also be listed in `src-tauri/build.
 
 | Concern | Start at |
 | --- | --- |
-| Navigation and pages | `src/App.tsx` (views from `VIEWS` in `src/model.ts`), `src/pages/` |
+| Navigation and pages | `src/App.tsx` (views from `VIEWS` in `src/model.ts`: Today, Brands, Calendar, Results, Comments), `src/pages/` |
 | Brands, accounts, sign-up | `src/pages/AccountsPage.tsx`, `CreateAccountWizard.tsx`, `brands.ts`, `autofill.rs` |
 | Videos and posting | `VideoLibrary.tsx`, `postDetails.ts`, `useVideoGenerations.ts`, `video_*.rs`, `queue.rs` |
-| Connections per social | `Connections.tsx`, `profileConnections.ts`, `setupNeeds.ts`, `social_connect.rs`, `instagram*.rs` |
+| Posting, scheduling, results, comments (Ayrshare) | `ayrshare.rs`, `useAyrshare.tsx`, `postQueue.ts`, `calendar.ts`, `useResults.tsx`, `results.ts` |
 | Guided developer-app setup | `DevAppSetupGuide.tsx` (site embedded via `embed_setup_page`), step text in `devAppGuides.ts`, pages in `setup_pages.rs` |
-| Email and verification codes | `InboxList.tsx`, `email.rs`, `gmail_session.rs` |
+| Email and verification codes (sign-up only) | `InboxList.tsx`, `email.rs`, `gmail_session.rs` |
 | Assistant and profile pictures (Grok) | `src/assistant/grokClient.ts`, `ProfileImageStudio.tsx`, `imageAiService.ts`, `grok_ai.rs` |
 | Series (stories across several videos) | `SeriesPanel.tsx` (brand's Series tab), `series.ts`, `seriesWriter.ts` (Grok writes), character pictures via `generate_video` `references` in `video_gen.rs` / `grok.rs` |
 | Brand bios, keywords and filling profile editors; ghost-text suggestions | `BrandProfiles.tsx`, `assistant/profileWriter.ts`, `GhostText.tsx`, `open_profile_editor` in `posting.rs`, `profile_edit_script` in `autofill.rs`, `docs/brand-profiles.md` |

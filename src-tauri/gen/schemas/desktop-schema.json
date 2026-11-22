@@ -195,6 +195,12 @@
           "markdownDescription": "Enables the ayrshare_brand_socials command without any pre-configured scope."
         },
         {
+          "description": "Enables the ayrshare_comments command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ayrshare-comments",
+          "markdownDescription": "Enables the ayrshare_comments command without any pre-configured scope."
+        },
+        {
           "description": "Enables the ayrshare_create_profile command without any pre-configured scope.",
           "type": "string",
           "const": "allow-ayrshare-create-profile",
@@ -243,10 +249,22 @@
           "markdownDescription": "Enables the ayrshare_post command without any pre-configured scope."
         },
         {
+          "description": "Enables the ayrshare_post_analytics command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ayrshare-post-analytics",
+          "markdownDescription": "Enables the ayrshare_post_analytics command without any pre-configured scope."
+        },
+        {
           "description": "Enables the ayrshare_remove_x_keys command without any pre-configured scope.",
           "type": "string",
           "const": "allow-ayrshare-remove-x-keys",
           "markdownDescription": "Enables the ayrshare_remove_x_keys command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ayrshare_reply_comment command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ayrshare-reply-comment",
+          "markdownDescription": "Enables the ayrshare_reply_comment command without any pre-configured scope."
         },
         {
           "description": "Enables the ayrshare_save_key command without any pre-configured scope.",
@@ -261,6 +279,12 @@
           "markdownDescription": "Enables the ayrshare_save_x_keys command without any pre-configured scope."
         },
         {
+          "description": "Enables the ayrshare_social_analytics command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ayrshare-social-analytics",
+          "markdownDescription": "Enables the ayrshare_social_analytics command without any pre-configured scope."
+        },
+        {
           "description": "Enables the ayrshare_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-ayrshare-status",
@@ -271,6 +295,12 @@
           "type": "string",
           "const": "allow-ayrshare-upload-video",
           "markdownDescription": "Enables the ayrshare_upload_video command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the ayrshare_usage command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ayrshare-usage",
+          "markdownDescription": "Enables the ayrshare_usage command without any pre-configured scope."
         },
         {
           "description": "Enables the ayrshare_use_profile command without any pre-configured scope.",
@@ -783,6 +813,12 @@
           "markdownDescription": "Denies the ayrshare_brand_socials command without any pre-configured scope."
         },
         {
+          "description": "Denies the ayrshare_comments command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ayrshare-comments",
+          "markdownDescription": "Denies the ayrshare_comments command without any pre-configured scope."
+        },
+        {
           "description": "Denies the ayrshare_create_profile command without any pre-configured scope.",
           "type": "string",
           "const": "deny-ayrshare-create-profile",
@@ -831,10 +867,22 @@
           "markdownDescription": "Denies the ayrshare_post command without any pre-configured scope."
         },
         {
+          "description": "Denies the ayrshare_post_analytics command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ayrshare-post-analytics",
+          "markdownDescription": "Denies the ayrshare_post_analytics command without any pre-configured scope."
+        },
+        {
           "description": "Denies the ayrshare_remove_x_keys command without any pre-configured scope.",
           "type": "string",
           "const": "deny-ayrshare-remove-x-keys",
           "markdownDescription": "Denies the ayrshare_remove_x_keys command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ayrshare_reply_comment command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ayrshare-reply-comment",
+          "markdownDescription": "Denies the ayrshare_reply_comment command without any pre-configured scope."
         },
         {
           "description": "Denies the ayrshare_save_key command without any pre-configured scope.",
@@ -849,6 +897,12 @@
           "markdownDescription": "Denies the ayrshare_save_x_keys command without any pre-configured scope."
         },
         {
+          "description": "Denies the ayrshare_social_analytics command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ayrshare-social-analytics",
+          "markdownDescription": "Denies the ayrshare_social_analytics command without any pre-configured scope."
+        },
+        {
           "description": "Denies the ayrshare_status command without any pre-configured scope.",
           "type": "string",
           "const": "deny-ayrshare-status",
@@ -859,6 +913,12 @@
           "type": "string",
           "const": "deny-ayrshare-upload-video",
           "markdownDescription": "Denies the ayrshare_upload_video command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ayrshare_usage command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ayrshare-usage",
+          "markdownDescription": "Denies the ayrshare_usage command without any pre-configured scope."
         },
         {
           "description": "Denies the ayrshare_use_profile command without any pre-configured scope.",

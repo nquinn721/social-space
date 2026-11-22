@@ -90,7 +90,7 @@ describe('brand picture', () => {
     await user.click(screen.getByRole('button', { name: /Generate with Grok/ }));
     await user.click(await screen.findByRole('button', { name: /Make 4 takes/ }));
     await user.click(await screen.findByRole('button', { name: 'Open Video sources' }));
-    expect(onNavigate).toHaveBeenCalledWith('settings', 'video-sources');
+    expect(onNavigate).toHaveBeenCalledWith('settings', 'grok');
   });
 });
 

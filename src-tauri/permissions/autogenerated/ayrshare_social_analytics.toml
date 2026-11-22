@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-social-analytics"
+description = "Enables the ayrshare_social_analytics command without any pre-configured scope."
+commands.allow = ["ayrshare_social_analytics"]
+
+[[permission]]
+identifier = "deny-ayrshare-social-analytics"
+description = "Denies the ayrshare_social_analytics command without any pre-configured scope."
+commands.deny = ["ayrshare_social_analytics"]

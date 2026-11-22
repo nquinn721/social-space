@@ -22,7 +22,7 @@ export default function EmailSettings() {
   }
   return <section className="settings-card email-settings" id="email">
     <h2><Mail size={17}/> Email inbox</h2>
-    <p>Where sign-up and verification emails arrive. Connected mail shows in Inbox, inside Create accounts, and to the assistant. Nothing is marked as read.</p>
+    <p>Where sign-up and verification emails arrive. While you make a brand's accounts, codes from this inbox pop up to copy in one click. Nothing is marked as read.</p>
     {!available ? <div className="status-line off"><span className="dot"/><span>Open the desktop app to connect your email.</span></div> : connection ? <>
       <div className="status-line"><span className="dot"/><span>Connected to <strong>{connection.username}</strong> on {connection.host}</span><button className="remove-button" style={{ marginRight: 0 }} disabled={busy} onClick={() => void run(async () => { await disconnectEmail(); setConnection(null); setMessage('Email disconnected.'); })}>Disconnect</button></div>
       {connection.kind === 'gmail' && <p>Reading through your Gmail sign-in in the app. The inbox shows unread mail, which is where new codes land.</p>}

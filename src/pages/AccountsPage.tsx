@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
-import { AppWindow, ArrowLeft, Pencil, Plus, Search, Trash2, UserPlus, UsersRound } from 'lucide-react';
+import { AppWindow, ArrowLeft, Link2, Pencil, Search, Trash2, UserPlus, UsersRound, Wand2 } from 'lucide-react';
 import VideoLibrary from '../VideoLibrary';
 import SeriesPanel from '../SeriesPanel';
-import type { OpenBrand } from '../App';
+import BrandSchedule from '../BrandSchedule';
+import ResultsPage from './ResultsPage';
+import { useAyrshare } from '../useAyrshare';
+import { errorText } from '../ui';
+import type { BrandTab, OpenBrand } from '../App';
 import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type BrandImage, type Platform, type PlatformAction, type View, type Workspace } from '../model';
 import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 
 import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
-import { brandSummary, chipLabel, useAllStatuses, useBrandStatuses, type SocialStatus } from '../brandStatus';
+import { needsAttention, useAllStatuses, useBrandStatuses, type SocialStatus } from '../brandStatus';
 import BrandCard from '../BrandCard';
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
 import BrandProfiles, { type ProfileDraft } from '../BrandProfiles';
@@ -20,7 +24,6 @@ type Props = {
   workspace: Workspace;
   loaded: boolean;
   busy: boolean;
-  onAddAccount: () => void;
   onEditAccount: (account: Account) => void;
   onCreateAccounts: (platforms?: Platform[], prefill?: WizardPrefill) => void;
   /** Runs the in-app sign-up for profiles that are saved here but not created on the social yet. */
@@ -35,7 +38,7 @@ type Props = {
   onOpenBrand?: (open: OpenBrand) => void;
   /** Saves workspace changes made on a brand's Content tab. */
   onSave?: (next: Workspace, message: string) => Promise<boolean | undefined>;
-  /** Goes to where something is set up (inbox, Settings → Posting, video makers). */
+  /** Goes to where something is set up (inbox, Settings → Ayrshare, video makers). */
   onNavigate?: (view: View, section?: string) => void;
   /** Removes a profile from the app (asks first). It never deletes anything on the social. */
   onRemoveAccount?: (account: Account) => void;
@@ -56,7 +59,7 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
   return brands.map((brand) => ({ key: brand.id, brand, accounts: accounts.filter((account) => account.brandId === brand.id).sort(byPlatform) }));
 }
 
-export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, openBrand, onOpenBrand, onSave, onRemoveAccount, onRemoveBrand, onRenameBrand, onNavigate, startTab }: Props) {
+export default function AccountsPage({ workspace, loaded, busy, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, openBrand, onOpenBrand, onSave, onRemoveAccount, onRemoveBrand, onRenameBrand, onNavigate, startTab }: Props) {
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<'brands' | 'sign-ins'>(startTab ?? 'brands');
   // The open brand lives in the app when it passes one in, so the overview can open a brand's posts.
@@ -65,7 +68,9 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   const setOpened = onOpenBrand ?? setLocalOpen;
   const openId = opened?.id ?? null;
   const brandTab = opened?.tab ?? 'content';
-  const showBrandTab = (tab: 'content' | 'series' | 'accounts') => { if (opened) setOpened({ ...opened, tab }); };
+  const showBrandTab = (tab: BrandTab) => { if (opened) setOpened({ ...opened, tab }); };
+  const ayrshare = useAyrshare();
+  const [linkError, setLinkError] = useState('');
   const [renaming, setRenaming] = useState<string | null>(null);
   // Migrated once, so accounts saved before brands existed keep the same brand on every read.
   const migrated = useMemo(() => { const moved = migrateWorkspace(workspace); return { ...workspace, brands: moved.brands, accounts: moved.accounts }; }, [workspace]);
@@ -98,7 +103,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     return onSave({ ...workspace, accounts: workspace.accounts.map((item) => { const draft = byId.get(item.id); return draft ? { ...item, bio: draft.bio, keywords: draft.keywords } : item; }) }, message);
   }
   const [adding, setAdding] = useState(false);
-  /** A chip on the brand page that links one social on Ayrshare: the Accounts tab acts on it. */
+  /** A chip on the brand page that links one social on Ayrshare: the Socials tab acts on it. */
   const [accountRequest, setAccountRequest] = useState<AccountRequest | undefined>();
   /** The wizard prepares each account's password and reports errors before opening sign-up. */
   function startSignUp(account: Account) {
@@ -128,15 +133,11 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     } finally { setAdding(false); }
   }
 
-  const actions = <>
-    <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
-    <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
-  </>;
+  const actions = <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>;
   const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button></div>;
 
   if (open && tab === 'brands') {
     const { brand, accounts } = open;
-    const summary = brandSummary(statuses);
     /**
      * The one step that unblocks a social: make its profile, finish its sign-up, connect Ayrshare (Settings),
      * or open Accounts to set up posting, link it on Ayrshare or fix its login.
@@ -145,7 +146,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       const kind = status.action?.kind;
       if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
       else if (kind === 'finish-signup' && status.account && onSignUp) startSignUp(status.account);
-      else if ((kind === 'connect-ayrshare' || kind === 'x-keys') && onNavigate) onNavigate('settings', 'posting');
+      else if ((kind === 'connect-ayrshare' || kind === 'x-keys') && onNavigate) onNavigate('settings', 'ayrshare');
       else {
         showBrandTab('accounts');
         if (kind === 'link') setAccountRequest({ platform: status.platform, kind: 'link', at: Date.now() });
@@ -154,6 +155,14 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     const notCreated = accounts.filter((account) => account.status !== 'active');
     const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
     const baseEmail = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
+    const linked = ayrshare.brands[brand.id]?.socials?.linked ?? [];
+    const attention = statuses.filter(needsAttention).filter((status) => status.kind !== 'no-ayrshare');
+    const linkSocials = () => {
+      setLinkError('');
+      if (!ayrshare.brands[brand.id]?.socials?.hasProfile) { showBrandTab('accounts'); return; }
+      ayrshare.link(brand).catch((reason) => setLinkError(errorText(reason)));
+    };
+    const tabs: { id: BrandTab; label: string }[] = [{ id: 'content', label: 'Videos' }, ...(onSave ? [{ id: 'series' as const, label: 'Stories' }] : []), { id: 'schedule', label: 'Schedule' }, { id: 'results', label: 'Results' }, { id: 'accounts', label: attention.length ? `Socials (${attention.length})` : 'Socials' }];
     return <>
       <button type="button" className="text-button back-link" onClick={() => { setOpened(null); setRenaming(null); }}><ArrowLeft size={15}/> All brands</button>
       <div className="brand-hero">
@@ -163,28 +172,26 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
           : <form className="inline-add rename-form" onSubmit={(event) => { event.preventDefault(); const name = renaming.trim(); if (name && onRenameBrand) void onRenameBrand(brand, name).then((ok) => { if (ok) setRenaming(null); }); }}>
             <label htmlFor="brand-name" className="sr-only">Brand name</label><input id="brand-name" autoFocus maxLength={120} value={renaming} onChange={(event) => setRenaming(event.target.value)}/>
             <button className="primary-button small-button" disabled={!renaming.trim() || busy}>Save</button><button type="button" className="ghost-button small-button" onClick={() => setRenaming(null)}>Cancel</button>
-          </form>}<p className={`brand-summary tone-${summary.tone}`}><span className="dot"/>{summary.text}</p></div>
-        {notCreated.length > 1 && onSignUp && <button className="primary-button" disabled={!loaded || busy} onClick={() => onSignUp(notCreated)}><AppWindow size={15}/> Create all {notCreated.length} on the socials</button>}
+          </form>}
+          <p className="brand-linked"><span className="today-socials">{linked.map((item) => <BrandMark key={item.platform} platform={item.platform} small/>)}</span>
+            {linked.length ? `${linked.length} ${linked.length === 1 ? 'social' : 'socials'} linked in Ayrshare` : 'No socials linked in Ayrshare yet'}
+            {attention.length > 0 && <button type="button" className="status-chip tone-todo" onClick={() => showBrandTab('accounts')}><span className="dot"/>{attention.length} {attention.length === 1 ? 'needs' : 'need'} you</button>}</p></div>
+        <div className="heading-buttons">
+          <button className="outline-button" disabled={!loaded || busy} onClick={linkSocials}><Link2 size={15}/> Link socials</button>
+          <button className="primary-button" disabled={!loaded} onClick={() => { showBrandTab('content'); window.setTimeout(() => document.querySelector<HTMLElement>('.make-video, .library-toolbar')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50); }}><Wand2 size={15}/> Make a video</button>
+        </div>
       </div>
-      <div className="social-strip" role="list" aria-label={`${brand.name} on each social`}>{statuses.map((status) => {
-        const name = getPlatform(status.platform).name;
-        const handle = status.account?.handle ? `@${status.account.handle.replace(/^@/, '')}` : '';
-        // The social and one short state; the handle, the full detail and the action are in the tooltip.
-        return <button type="button" role="listitem" key={status.platform} className={`social-chip tone-${status.tone}`} title={[handle, status.detail, status.tone !== 'ok' ? status.action?.label : ''].filter(Boolean).join(' · ')} disabled={!loaded || busy || adding}
-          onClick={() => fixStatus(status)} aria-label={`${name}: ${status.label}${status.action ? `. ${status.action.label}` : ''}`}>
-          <BrandMark platform={status.platform}/>
-          <span className="social-chip-text"><strong>{name}</strong><span className="social-chip-state"><span className="dot"/>{chipLabel(status)}</span></span>
-        </button>;
-      })}</div>
+      {linkError && <div className="error-message" role="alert">{linkError}</div>}
       <div className="segmented account-tabs brand-tabs" role="tablist" aria-label={`${brand.name} sections`}>
-        <button type="button" role="tab" aria-selected={brandTab === 'content'} aria-pressed={brandTab === 'content'} onClick={() => showBrandTab('content')}>Posts</button>
-        {onSave && <button type="button" role="tab" aria-selected={brandTab === 'series'} aria-pressed={brandTab === 'series'} onClick={() => showBrandTab('series')}>Stories</button>}
-        <button type="button" role="tab" aria-selected={brandTab === 'accounts'} aria-pressed={brandTab === 'accounts'} onClick={() => showBrandTab('accounts')}>Accounts</button>
+        {tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={brandTab === item.id} aria-pressed={brandTab === item.id} onClick={() => showBrandTab(item.id)}>{item.label}</button>)}
       </div>
-      {brandTab === 'series' && onSave ? <SeriesPanel workspace={workspace} brand={brand} loaded={loaded} busy={busy} onSave={onSave} onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined}/>
+      {brandTab === 'schedule' ? <BrandSchedule workspace={workspace} brand={brand} onOpenBrand={(id, tab) => setOpened({ id, tab: tab ?? 'content' })}/>
+      : brandTab === 'results' ? <ResultsPage workspace={workspace} brandId={brand.id} onOpenSettings={onNavigate ? () => onNavigate('settings', 'ayrshare') : undefined}/>
+      : brandTab === 'series' && onSave ? <SeriesPanel workspace={workspace} brand={brand} loaded={loaded} busy={busy} onSave={onSave} onManageSources={onNavigate ? () => onNavigate('settings', 'grok') : undefined}/>
       : brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
-        onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onShowAccounts={() => showBrandTab('accounts')}
+        onManageSources={onNavigate ? () => onNavigate('settings', 'grok') : undefined} onShowAccounts={() => showBrandTab('accounts')}
         onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
+      {notCreated.length > 1 && onSignUp && <div className="heading-buttons"><button className="primary-button" disabled={!loaded || busy} onClick={() => onSignUp(notCreated)}><AppWindow size={15}/> Create all {notCreated.length} on the socials</button></div>}
       <BrandAccounts workspace={migrated} brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} onEditAccount={onEditAccount}
         onSignUp={onSignUp ? (account) => startSignUp(account) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
@@ -197,24 +204,19 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   }
 
   return <>
-    <PageHeader eyebrow="Your brands" title="Brands" description="A brand is one account on every social. Open a brand to see its posts by category, and its accounts." actions={actions}/>
+    <PageHeader eyebrow="Your brands" title="Brands" description="Each brand is one Ayrshare profile. Its videos go to every social linked to it." actions={actions}/>
     {tabs}
     {tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
-      <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>
+      <p>New brand makes its Ayrshare profile, then you link its Instagram, Facebook, TikTok, YouTube and X. Moving to a new PC? Restore your backup under Sign-ins.</p>
       <div className="heading-buttons">{actions}</div>
     </section> : <>
       <div className="toolbar"><label className="search-input"><span className="sr-only">Search brands</span><Search size={15}/><input type="search" placeholder="Search brands or usernames" value={query} onChange={(event) => setQuery(event.target.value)}/></label></div>
       {shown.length === 0 && <p className="footnote">No brands match that search.</p>}
       <div className="brand-cards">{shown.map(({ brand, accounts }) => <BrandCard key={brand.id} brand={brand} accounts={accounts} workspace={workspace}
-        statuses={allStatuses[brand.id] ?? []} onOpen={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}/>)}</div>
+        statuses={allStatuses[brand.id] ?? []} onOpen={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}/>)}
+        {!query && <button type="button" className="brand-card new" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={20}/><strong>New brand</strong><small>Makes its Ayrshare profile, then you link its socials</small></button>}</div>
     </>}
-    {tab === 'brands' && <details className="more-tools"><summary>Open a social's own site</summary>
-    <div className="platform-shortcuts" style={{ marginTop: 0 }}>{PLATFORMS.map((platform) => <div className="platform-shortcut" key={platform.id}>
-      <BrandMark platform={platform.id} small/>
-      <div><strong>{platform.name}</strong><small>{platform.description}</small></div>
-      <button className="icon-button" aria-label={`Manage on ${platform.name}`} disabled={busy} onClick={() => onOpen(platform.id, 'manage')}><AppWindow size={16}/></button>
-    </div>)}</div></details>}
   </>;
 }

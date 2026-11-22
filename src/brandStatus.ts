@@ -11,7 +11,7 @@ import { useAyrshare } from './useAyrshare';
  */
 export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'no-ayrshare' | 'no-brand-profile' | 'not-linked' | 'relink' | 'no-x-keys' | 'ready';
 export type Tone = 'ok' | 'ready' | 'todo' | 'problem' | 'muted' | 'checking';
-/** connect-ayrshare: Settings → Posting. setup-posting: make the brand's Ayrshare profile. link: open the linking page. x-keys: Settings → Posting. */
+/** connect-ayrshare: Settings → Ayrshare. setup-posting: make the brand's Ayrshare profile. link: open the linking page. x-keys: Settings → Ayrshare. */
 export type SocialAction = 'create' | 'finish-signup' | 'own-login' | 'connect-ayrshare' | 'setup-posting' | 'link' | 'x-keys';
 export type SocialStatus = {
   platform: Platform;
@@ -45,7 +45,7 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
   if (wrongLogin(account)) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs the brand's own email, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };
   const ayrshare = inputs.ayrshare;
   if (!ayrshare) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking Ayrshare.', canPost: false };
-  if (!ayrshare.connected) return { ...base, kind: 'no-ayrshare', tone: 'todo', label: 'Ayrshare not connected', detail: 'Posting goes through Ayrshare. Connect it under Settings → Posting.', action: { kind: 'connect-ayrshare', label: 'Connect Ayrshare', short: 'Connect' }, canPost: false };
+  if (!ayrshare.connected) return { ...base, kind: 'no-ayrshare', tone: 'todo', label: 'Ayrshare not connected', detail: 'Posting goes through Ayrshare. Connect it under Settings → Ayrshare.', action: { kind: 'connect-ayrshare', label: 'Connect Ayrshare', short: 'Connect' }, canPost: false };
   const socials = inputs.socials;
   if (socials === undefined) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Asking Ayrshare which socials are linked.', canPost: false };
   if (socials === null) return { ...base, kind: 'checking', tone: 'problem', label: 'Couldn\'t check', detail: 'Ayrshare could not be asked which socials are linked. Check again in a moment.', canPost: false };
@@ -53,7 +53,7 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
   const linked = socials.linked.find((item) => item.platform === platform);
   if (!linked) return { ...base, kind: 'not-linked', tone: 'todo', label: 'Not linked', detail: `Link ${account.handle ? `@${account.handle.replace(/^@/, '')}` : `the brand's ${name}`} on Ayrshare so posts can go there.`, action: { kind: 'link', label: `Link ${name}`, short: 'Link' }, canPost: false };
   const as = linked.name ? ` as ${platform === 'youtube' || platform === 'facebook' ? linked.name : `@${linked.name.replace(/^@/, '')}`}` : '';
-  if (platform === 'x' && !ayrshare.xKeys) return { ...base, kind: 'no-x-keys', tone: 'todo', label: 'Needs X app keys', detail: 'X takes posts only with your own X app\'s API key and secret (X bills about 2¢ a post). Add them under Settings → Posting.', action: { kind: 'x-keys', label: 'Add X app keys', short: 'Add keys' }, canPost: false, linkedAs: linked.name };
+  if (platform === 'x' && !ayrshare.xKeys) return { ...base, kind: 'no-x-keys', tone: 'todo', label: 'Needs X app keys', detail: 'X takes posts only with your own X app\'s API key and secret (X bills about 2¢ a post). Add them under Settings → Ayrshare.', action: { kind: 'x-keys', label: 'Add X app keys', short: 'Add keys' }, canPost: false, linkedAs: linked.name };
   if (linked.refresh) return { ...base, kind: 'relink', tone: 'problem', label: 'Link again', detail: `Linked${as}, but ${name} wants the link renewed soon. Link it again.`, action: { kind: 'link', label: `Link ${name} again`, short: 'Relink' }, canPost: true, linkedAs: linked.name };
   return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Linked${as}. Posts go out through Ayrshare.`, canPost: true, linkedAs: linked.name };
 }

@@ -175,7 +175,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
     setNote(account.platform === 'x' ? 'Opened X profile settings. Choose your picture and save it on X yourself.' : `Opened ${getPlatform(account.platform).name} profile settings with the picture filled in (${PROFILE_SIZES[account.platform]} x ${PROFILE_SIZES[account.platform]}). Check the crop there, then press Save on the page.${account.platform === 'youtube' && image?.banner ? ' For the banner: on Branding press Upload under Banner image and pick the file Show banner file selects.' : ''}`);
   });
   const showBanner = () => run(async () => { if (image?.banner) await revealBrandImage(image.banner); });
-  const needKey = onNavigate ? () => onNavigate('settings', 'video-sources') : undefined;
+  const needKey = onNavigate ? () => onNavigate('settings', 'grok') : undefined;
   const studioFor = (what: Target) => setTarget((open) => open && open.kind === what.kind && (open.kind !== 'account' || what.kind !== 'account' || open.account.id === what.account.id) ? null : what);
 
   return <section className="card brand-picture" aria-labelledby="brand-picture-title">
