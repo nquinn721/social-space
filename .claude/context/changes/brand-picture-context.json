@@ -1,0 +1,22 @@
+{
+  "summary": "Pictures are built from the brand: name, handle, bio, notes and idea go into every Grok prompt, the style starts at the one that suits the account (kids or quotes -> illustrated), Fill form's picture idea is used, and a non-person brand gets no human faces (0.32.1).",
+  "features": ["profile-images", "accounts", "assistant-grok", "updates"],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    { "path": "src/imageAiService.ts", "note": "BrandContext, isAboutPerson, suggestStyle, pictureIdeaFor, describeBrand; buildPrompt/buildRefinePrompt take an optional context" },
+    { "path": "src/ProfileImageStudio.tsx", "note": "context and suggestedStyle props set the starting description and style and shape every prompt" },
+    { "path": "src/CreateAccountWizard.tsx", "note": "keeps Fill form's imagePrompt/imageStyle and passes the brand context to the picture studio" },
+    { "path": "src/BrandPicture.tsx", "note": "brand page picture studio starts from the brand's bio and style, prompts carry the brand context" },
+    { "path": "src/AccountDrawer.tsx", "note": "picture studio gets the account's name, handle, bio and notes" },
+    { "path": "src/assistant/suggest.ts", "note": "PROFILE_GUIDE: kids, animal and topic accounts get their mascot or subject, never a person" },
+    { "path": "src/ProfileImageStudio.test.tsx", "note": "brand-context prompt tests" },
+    { "path": "src/CreateAccountWizard.test.tsx", "note": "Fill form picture idea drives the studio" },
+    { "path": "package.json", "note": "0.32.1" },
+    { "path": "package-lock.json", "note": "0.32.1" },
+    { "path": "hub-app.json", "note": "0.32.1" },
+    { "path": "src-tauri/tauri.conf.json", "note": "0.32.1" },
+    { "path": "src-tauri/Cargo.toml", "note": "0.32.1" },
+    { "path": "src-tauri/Cargo.lock", "note": "0.32.1" }
+  ]
+}

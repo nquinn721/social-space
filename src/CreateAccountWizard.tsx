@@ -7,6 +7,7 @@ import { chooseImageFile, openGmailSignup, closeEmbeddedPage, embedPlatformPage,
 import InboxList from './InboxList';
 import { ADD_PROFILE_FLOWS, SIGNUP_FLOWS } from './signupFlows';
 import ProfileImageStudio, { type AutoImage } from './ProfileImageStudio';
+import type { BrandContext, ImageStyle } from './imageAiService';
 import IdeaSuggestionsModal from './IdeaSuggestionsModal';
 import { useBrandIdeas } from './useBrandIdeas';
 import { BrandMark, errorText, initialOf, useImagePreview } from './ui';
@@ -46,12 +47,15 @@ function boundsOf(element: HTMLElement): Bounds {
   return { x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: rect.width, height: rect.height };
 }
 
-function ImagePicker({ path, preview, busy, onPick, onGenerated, suggestion, auto }: { path: string; preview: string; busy: boolean; onPick: () => void; onGenerated: (path: string) => void; suggestion: string; auto?: AutoImage }) {
+/** The picture idea Fill form wrote for this brand, so the first picture matches the account. */
+type PictureIdea = { prompt: string; style: ImageStyle };
+
+function ImagePicker({ path, preview, busy, onPick, onGenerated, suggestion, pictureIdea, context, auto }: { path: string; preview: string; busy: boolean; onPick: () => void; onGenerated: (path: string) => void; suggestion: string; pictureIdea?: PictureIdea | null; context: BrandContext; auto?: AutoImage }) {
   const [studio, setStudio] = useState(Boolean(auto));
   useEffect(() => { if (auto) setStudio(true); }, [auto?.key]);
   return <>
     <div className="profile-image">{preview ? <img src={preview} alt="Profile preview"/> : <span className="image-placeholder"><ImagePlus size={18}/></span>}<span>{path ? path.split(/[\\/]/).pop() : 'No image chosen'}</span><button type="button" className="outline-button small-button generate-button" disabled={busy} aria-expanded={studio} onClick={() => setStudio((open) => !open)}><Wand2 size={13}/> Generate</button><button type="button" className="outline-button small-button" disabled={busy} onClick={onPick}>Choose</button></div>
-    {studio && <ProfileImageStudio key={auto?.key} suggestion={suggestion} auto={auto} onAutoUse={onGenerated} disabled={busy} onClose={() => setStudio(false)} onUse={(generated) => { onGenerated(generated); setStudio(false); }}/>}
+    {studio && <ProfileImageStudio key={auto?.key} suggestion={pictureIdea?.prompt || suggestion} suggestedStyle={pictureIdea?.style} context={context} auto={auto} onAutoUse={onGenerated} disabled={busy} onClose={() => setStudio(false)} onUse={(generated) => { onGenerated(generated); setStudio(false); }}/>}
   </>;
 }
 
@@ -71,6 +75,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   const [website, setWebsite] = useState(prefill?.website ?? '');
   const [signupEmail, setSignupEmail] = useState(prefill?.signupEmail || DEFAULT_SIGNUP_EMAIL);
   const [imagePath, setImagePath] = useState(prefill?.imagePath ?? '');
+  const [pictureIdea, setPictureIdea] = useState<PictureIdea | null>(null);
   const [birthday, setBirthday] = useState(prefill?.birthday ?? DEFAULT_SIGNUP_BIRTHDAY);
   const [page, setPage] = useState<SitePage | null>(null);
   const frame = useRef<HTMLDivElement>(null);
@@ -94,6 +99,8 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
   // Left blank, the username and display name come from the account name, e.g. Massage With Mia → @massagewithmia.
   const shownName = displayName.trim() || label.trim();
   const shownHandle = normalizeHandle(handle) || (label.trim() ? emailTag(label) : '');
+  // Everything known about the brand goes into the picture prompt, so the first picture fits the account.
+  const pictureContext: BrandContext = { name: label, displayName: shownName, handle: shownHandle, bio, idea };
   // Each social either adds this brand to a login that has room, or gets a new account with an unused email.
   const plans = ordered.map((platform) => planPresence(existing, platform, label.trim() || handle || 'brand', signupEmail));
   const bioLength = bio.trim().length;
@@ -172,6 +179,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
     try {
       const suggestion = await suggestProfile(idea.trim(), tightest.limit, ordered.map((id) => getPlatform(id).name));
       setLabel(suggestion.name); setHandle(suggestion.username); setDisplayName(suggestion.displayName); setBio(suggestion.description);
+      setPictureIdea(suggestion.imagePrompt ? { prompt: suggestion.imagePrompt, style: suggestion.imageStyle } : null);
       setNote('Form filled. Review and edit the details before continuing.');
     } catch (reason) { setFillError(errorText(reason, 'Could not fill the form. Try again.')); }
     finally { setFillingForm(false); }
@@ -315,7 +323,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
                 {signupEmail.trim() && plans.length > 0 && <ul className="login-plan" aria-label="Login plan">{plans.map((plan) => <li key={plan.platform}><BrandMark platform={plan.platform} small/><span>{plan.reason}</span></li>)}</ul>}
               </details>
               <label>Profile image <span>optional, you can add it later</span></label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()} pictureIdea={pictureIdea} context={pictureContext}/>
               {feedback}
             </div>
             <aside className="preview-card" aria-label="Profile preview">
@@ -358,7 +366,7 @@ export default function CreateAccountWizard({ onSave, onClose, initialPlatforms,
             {step === 'profile' && <>
               <ul className="summary-list">{accounts.map((item) => <li key={item.id} className={outcomes[item.id] ?? ''}><BrandMark platform={item.platform} small/>{getPlatform(item.platform).name}<em>{outcomes[item.id] === 'created' ? 'Created' : 'Planned'}</em></li>)}</ul>
               <label>Profile image</label>
-              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()}/>
+              <ImagePicker path={imagePath} preview={preview} busy={busy} onPick={() => void pickImage()} onGenerated={setImagePath} suggestion={idea.trim()} pictureIdea={pictureIdea} context={pictureContext}/>
               {created.length > 0 && <div className="profile-actions">{created.map((item) => <button key={item.id} type="button" className="outline-button" disabled={busy} onClick={() => void fillProfile(item)}><BrandMark platform={item.platform} small/> {item.platform === 'x' ? 'Edit X profile manually' : `Fill ${getPlatform(item.platform).name} profile`} <ChevronRight size={15}/></button>)}</div>}
               {feedback}
             </>}

@@ -58,4 +58,33 @@ describe('profile image studio', () => {
     expect(product).toMatch(/no people/);
     expect(ai.buildPrompt('fox', 'logo', ['', 'orange'])).toBe('minimal modern logo mark, fox, orange, flat vector style, bold simple shapes, centered on a plain background, high contrast, app icon, no tiny details, no watermark');
   });
+
+  it('builds the first picture from the brand, with no person for a bunny account for kids', async () => {
+    const bunnies = { name: 'Bunny Whispers', displayName: 'Bunny Whispers | Quotes', handle: 'bunnywhispers', bio: 'Gentle bunny quotes to teach kindness to kids 3-8. New illustration daily' };
+    expect(ai.isAboutPerson(bunnies)).toBe(false);
+    expect(ai.suggestStyle(bunnies)).toBe('illustration');
+    const prompt = ai.buildPrompt('a bunny', 'photo', [], bunnies);
+    expect(prompt).not.toMatch(/fictional person|headshot|skin/);
+    expect(prompt).toMatch(/"Bunny Whispers \| Quotes" \(@bunnywhispers\)/);
+    expect(prompt).toMatch(/Gentle bunny quotes/);
+    expect(prompt).toMatch(/child-safe/);
+    expect(prompt).toMatch(/no human faces/);
+    expect(ai.buildRefinePrompt('add a hat', 'illustration', bunnies)).toMatch(/no human faces/);
+
+    const user = userEvent.setup();
+    render(<ProfileImageStudio context={bunnies} onUse={vi.fn()} onClose={vi.fn()}/>);
+    expect(screen.getByRole('button', { name: 'Illustrated avatar' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Describe the picture')).toHaveValue(bunnies.bio);
+    await user.click(screen.getByRole('button', { name: /Generate/ }));
+    expect(vi.mocked(ai.generateProfileImage).mock.calls[0][0].prompt).toMatch(/^stylized illustrated avatar.*Bunny Whispers.*no human faces$/);
+  });
+
+  it('keeps a person in the picture when the brand is about one', () => {
+    const mia = { name: 'Massage with Mia', bio: 'Relaxing massage tips from a licensed therapist' };
+    expect(ai.isAboutPerson(mia)).toBe(true);
+    expect(ai.suggestStyle(mia)).toBe('photo');
+    expect(ai.buildPrompt('smiling woman', 'photo', [], mia)).toMatch(/^photorealistic headshot portrait of a fictional person/);
+    expect(ai.suggestStyle({ name: 'Crumb & Crust', bio: 'Sourdough from a tiny bakery' })).toBe('product');
+    expect(ai.suggestStyle({ name: 'Goat Hour', bio: 'Daily goat videos from the farm' })).toBe('photo');
+  });
 });

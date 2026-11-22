@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, FolderOpen, ImagePlus, Loader2, RotateCcw, Sparkles, Wand2, X as Close } from 'lucide-react';
 import { getPlatform, normalizeHandle, type Account, type Brand, type BrandImage, type View, type Workspace } from './model';
-import { buildPrompt, buildRefinePrompt, STYLES, type ImageStyle } from './imageAiService';
+import { buildPrompt, buildRefinePrompt, pictureIdeaFor, STYLES, suggestStyle, type BrandContext, type ImageStyle } from './imageAiService';
 import { BANNER, bannerPrompt, brandImagePreview, generatePictures, keepBanner, keepFile, keepSquare, pictureFileFor, PROFILE_SIZES, profilePicturePath, revealBrandImage, type Aspect, type GeneratedImage } from './brandImageService';
 import { chooseImageFile } from './profileService';
 import { openProfileEditor } from './postingService';
@@ -37,7 +37,7 @@ type Target = { kind: 'brand' } | { kind: 'banner' } | { kind: 'account'; accoun
  * Makes pictures with Grok Imagine: describe, generate four takes, pick one, refine it, use it.
  * Square for profile pictures, 16:9 for a YouTube banner. Uses the xAI key of the Grok video source.
  */
-export function PictureStudio({ title, aspect, initial, style: startStyle = 'logo', busy, onUse, onClose, onNeedKey }: { title: string; aspect: Aspect; initial: string; style?: ImageStyle; busy: boolean; onUse: (preview: string, prompt: string) => Promise<void>; onClose: () => void; onNeedKey?: () => void }) {
+export function PictureStudio({ title, aspect, initial, context, style: startStyle = context ? suggestStyle(context) : 'logo', busy, onUse, onClose, onNeedKey }: { title: string; aspect: Aspect; initial: string; context?: BrandContext; style?: ImageStyle; busy: boolean; onUse: (preview: string, prompt: string) => Promise<void>; onClose: () => void; onNeedKey?: () => void }) {
   const [description, setDescription] = useState(initial);
   const [style, setStyle] = useState<ImageStyle>(startStyle);
   const [refinement, setRefinement] = useState('');
@@ -56,7 +56,7 @@ export function PictureStudio({ title, aspect, initial, style: startStyle = 'log
     setWorking(label); setError('');
     try { await action(); } catch (reason) { setError(errorText(reason)); } finally { setWorking(''); }
   }
-  const promptFor = () => wide ? description.trim() : buildPrompt(description, style);
+  const promptFor = () => wide ? description.trim() : buildPrompt(description, style, [], context);
   const generate = () => run(`Making ${TAKES} takes with Grok, about 10 to 30 seconds…`, async () => {
     const prompt = promptFor();
     const made = await generatePictures({ prompt, count: TAKES, aspect });
@@ -65,7 +65,7 @@ export function PictureStudio({ title, aspect, initial, style: startStyle = 'log
   });
   const refine = () => run('Refining with Grok, about 10 to 20 seconds…', async () => {
     if (!current) return;
-    const prompt = wide ? `Keep this banner the same, but ${refinement.trim()}. No text, no watermark.` : buildRefinePrompt(refinement, style);
+    const prompt = wide ? `Keep this banner the same, but ${refinement.trim()}. No text, no watermark.` : buildRefinePrompt(refinement, style, context);
     const made = await generatePictures({ prompt, count: 1, aspect, sourcePath: current.path });
     setTakes((list) => [...made.map((image) => ({ ...image, prompt })), ...list].slice(0, MAX_TAKES_KEPT));
     setSelected(0); setRefinement('');
@@ -124,6 +124,10 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
   const bannerPreview = useBrandPicture(image?.banner);
   const blocked = busy || working;
   const youtube = accounts.find((account) => account.platform === 'youtube');
+  // The brand's own words (name, handle, bio, notes) shape every picture made for it.
+  const lead = accounts.find((account) => account.bio?.trim()) ?? accounts[0];
+  const context: BrandContext = { name: brand.name, displayName: lead?.displayName, handle: lead?.handle, bio: lead?.bio, notes: brand.notes };
+  const startIdea = pictureIdeaFor({ ...context, displayName: undefined }) || brand.name;
 
   async function run(action: () => Promise<void>) {
     if (working) return;
@@ -188,7 +192,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
         {image?.file && accounts.some((account) => account.status === 'active') && <div className="picture-put-on"><span>Put it on</span>{accounts.filter((account) => account.status === 'active').map((account) => <button key={account.id} type="button" className="outline-button small-button" disabled={blocked || !pictureFileFor(account, brand)} aria-label={`Put on ${getPlatform(account.platform).name}`} title={account.platform === 'x' ? 'Open X profile settings and choose the picture yourself' : `Opens ${getPlatform(account.platform).name} profile settings with the picture filled in`} onClick={() => void putOn(account)}><BrandMark platform={account.platform} small/> {getPlatform(account.platform).name}</button>)}</div>}
       </div>
     </div>
-    {target?.kind === 'brand' && <PictureStudio key="brand" title={`Picture for ${brand.name}`} aspect="1:1" initial={image?.prompt ? '' : brand.name} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
+    {target?.kind === 'brand' && <PictureStudio key="brand" title={`Picture for ${brand.name}`} aspect="1:1" initial={startIdea} context={context} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
 
     {image?.file && youtube && <div className="banner-row">
       <div className="banner-frame" aria-label="YouTube banner preview">{bannerPreview ? <img src={bannerPreview} alt=""/> : <span>{image.banner ? 'Banner is on its way from your partner\'s app' : 'No YouTube banner yet'}</span>}<i className="safe-area" title={`Shown on every device: the centre ${BANNER.safeWidth} x ${BANNER.safeHeight}`}/></div>
@@ -219,7 +223,7 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
             {own && <button type="button" className="ghost-button small-button" disabled={blocked} onClick={() => void run(async () => { await onSaveAccountImage(account, undefined, `${name} uses the brand picture again.`); })}><RotateCcw size={13}/> Use brand picture</button>}
           </div>
         </div>
-        {open && <PictureStudio key={account.id} title={`Own picture for ${name}`} aspect="1:1" initial={image?.prompt ? '' : brand.name} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
+        {open && <PictureStudio key={account.id} title={`Own picture for ${name}`} aspect="1:1" initial={startIdea} context={context} busy={blocked} onUse={useSquare} onClose={() => setTarget(null)} onNeedKey={needKey}/>}
       </li>;
     })}</ul></details>}
     {youtube && image?.banner && youtube.status !== 'active' && <p className="footnote">The banner goes on YouTube once the channel is created.</p>}

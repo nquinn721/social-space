@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, within, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CreateAccountWizard, { DEFAULT_SIGNUP_EMAIL } from './CreateAccountWizard';
@@ -102,6 +102,25 @@ describe('create account wizard', () => {
     expect(screen.getByLabelText(/Profile description/)).toHaveValue('Butterfly jewelry kids love.');
     expect(suggest.suggestProfile).toHaveBeenCalledWith('New three', 80, ['Instagram', 'TikTok', 'YouTube', 'X', 'Facebook']);
     expect(imageAi.generateProfileImage).not.toHaveBeenCalled();
+  });
+
+  it('starts the picture from the filled brand, not a generic portrait', async () => {
+    vi.mocked(suggest.suggestProfile).mockResolvedValue({ name: 'Bunny Whispers', username: 'bunnywhispers', displayName: 'Bunny Whispers | Quotes', description: 'Gentle bunny quotes for kids 3-8', imagePrompt: 'cute illustrated bunny with a soft smile, pastel meadow', imageStyle: 'illustration' });
+    vi.mocked(imageAi.generateProfileImage).mockResolvedValue({ path: 'C:\\pics\\bunny.jpg', preview: 'data:image/jpeg;base64,1' });
+    const user = userEvent.setup();
+    render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
+    await user.type(screen.getByLabelText(/Your idea/), 'bunny quotes for kids');
+    await user.click(screen.getByRole('button', { name: 'Fill form' }));
+    expect(await screen.findByText(/Form filled/)).toBeInTheDocument();
+    await user.click(screen.getAllByRole('button', { name: /Generate/ })[0]);
+    expect(screen.getByLabelText('Describe the picture')).toHaveValue('cute illustrated bunny with a soft smile, pastel meadow');
+    expect(screen.getByRole('button', { name: 'Illustrated avatar' })).toHaveAttribute('aria-pressed', 'true');
+    const studio = screen.getByRole('region', { name: 'Generate a profile picture' });
+    await user.click(within(studio).getByRole('button', { name: /^Generate$/ }));
+    const prompt = vi.mocked(imageAi.generateProfileImage).mock.calls[0][0].prompt;
+    expect(prompt).toMatch(/Bunny Whispers \| Quotes/);
+    expect(prompt).toMatch(/no human faces/);
+    expect(prompt).not.toMatch(/fictional person/);
   });
 
   it('keeps provider errors retryable and does not close the wizard on Escape', async () => {
