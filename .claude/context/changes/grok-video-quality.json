@@ -1,0 +1,75 @@
+{
+  "summary": "Grok videos use grok-imagine-video-1.5 at native 1080p (720p with character pictures), and every Grok video prompt ends with anatomy guidance (one head, one body, no duplicated or stacked characters). All Grok writing (video ideas, captions, stories, assistant) uses the flagship grok-4.7; settings still on the old grok-4.3 default move up once. Make a video starts at the longest length (Grok 15 s, Kling 10 s) and remembers the length the user picks, so it no longer falls back to 8 s when the panel opens again; suggested ideas use the longest length.",
+  "features": [
+    "video-library",
+    "assistant-grok",
+    "series",
+    "updates",
+    "posting"
+  ],
+  "changes": [
+    {
+      "old": "grok-imagine-video",
+      "new": "grok-imagine-video-1.5"
+    },
+    {
+      "old": "Grok Imagine video at 720p",
+      "new": "Grok Imagine Video 1.5 at 1080p"
+    },
+    {
+      "old": "DEFAULT_MODEL grok-4.3",
+      "new": "DEFAULT_MODEL grok-4.7"
+    },
+    {
+      "old": "Grok default length 8 seconds",
+      "new": "Grok default length 15 seconds"
+    }
+  ],
+  "kept": [],
+  "spots": [
+    {
+      "path": "src-tauri/src/grok.rs",
+      "note": "MODEL grok-imagine-video-1.5, 1080p / 720p with references, ANATOMY_GUIDANCE appended to the prompt, test"
+    },
+    {
+      "path": "src/videoProviders.ts",
+      "note": "Grok label 1.5 at 1080p, defaultDuration 15; Kling defaultDuration 10"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "MakeVideo remembers the picked length (socialspace-video-length)"
+    },
+    {
+      "path": "src/assistant/grokClient.ts",
+      "note": "DEFAULT_MODEL grok-4.7, one-time move from grok-4.3, settings version"
+    },
+    {
+      "path": "src/assistant/videoIdeas.ts",
+      "note": "anatomy and single-subject rules, prefer the longest length"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "longest default, length kept after making a video"
+    },
+    {
+      "path": "src/assistant/tools.test.ts",
+      "note": "new default lengths"
+    },
+    {
+      "path": "package.json",
+      "note": "0.36.0"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "0.36.0"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "0.36.0"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "0.36.0"
+    }
+  ]
+}

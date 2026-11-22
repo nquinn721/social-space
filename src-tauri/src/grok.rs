@@ -7,13 +7,20 @@ use serde::{Deserialize, Serialize};
 use crate::video_gen::VideoTask;
 
 pub(crate) const API_BASE: &str = "https://api.x.ai/v1";
-const MODEL: &str = "grok-imagine-video";
+/// xAI's highest-quality video model: native 1080p for text-to-video, up to 15 seconds.
+const MODEL: &str = "grok-imagine-video-1.5";
+/// Native resolution for prompt-only clips.
+const RESOLUTION: &str = "1080p";
+/// Clips guided by character pictures top out at 720p on grok-imagine-video-1.5.
+const REFERENCE_RESOLUTION: &str = "720p";
+/// Added to every prompt so animals and people keep one head and a normal body (no merged or stacked twins).
+pub(crate) const ANATOMY_GUIDANCE: &str = "Anatomy: every character has exactly one head and one body with natural, correct anatomy (two eyes, the right number of ears, legs and paws). Characters never duplicate, merge, stack, split or grow extra heads, faces or limbs. Keep each character's look consistent from the first frame to the last.";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Serialize)]
 struct CreateVideo<'a> {
     model: &'static str,
-    prompt: &'a str,
+    prompt: String,
     aspect_ratio: &'a str,
     duration: u8,
     resolution: &'static str,
@@ -27,9 +34,9 @@ struct ImageUrl {
     url: String,
 }
 
-/// Most reference pictures grok-imagine-video takes in one request.
+/// Most reference pictures the Grok video model takes in one request.
 pub(crate) const MAX_REFERENCES: usize = 7;
-/// Longest clip grok-imagine-video makes when it is given reference pictures.
+/// Longest clip the Grok video model makes when it is given reference pictures.
 pub(crate) const MAX_REFERENCE_SECONDS: u8 = 10;
 
 #[derive(Deserialize)]
@@ -114,8 +121,10 @@ fn request<'a>(prompt: &'a str, aspect_ratio: &'a str, duration: u8, references:
     if !references.is_empty() && duration > MAX_REFERENCE_SECONDS {
         return Err(format!("Clips with character pictures can be at most {MAX_REFERENCE_SECONDS} seconds on Grok."));
     }
+    let resolution = if references.is_empty() { RESOLUTION } else { REFERENCE_RESOLUTION };
     let reference_images = references.into_iter().map(|url| ImageUrl { url }).collect();
-    Ok(CreateVideo { model: MODEL, prompt: prompt.trim(), aspect_ratio, duration, resolution: "720p", reference_images })
+    let prompt = format!("{}\n\n{ANATOMY_GUIDANCE}", prompt.trim());
+    Ok(CreateVideo { model: MODEL, prompt, aspect_ratio, duration, resolution, reference_images })
 }
 
 /// Starts a Grok Imagine video, guided by character pictures (data URLs) when given.
@@ -152,13 +161,14 @@ mod tests {
 
     #[test]
     fn request_matches_the_documented_shape() {
-        let body = request("A lake", "9:16", 8, vec![]).unwrap();
+        let body = request(" A lake ", "9:16", 15, vec![]).unwrap();
         assert_eq!(
             serde_json::to_value(body).unwrap(),
-            serde_json::json!({"model": "grok-imagine-video", "prompt": "A lake", "aspect_ratio": "9:16", "duration": 8, "resolution": "720p"})
+            serde_json::json!({"model": "grok-imagine-video-1.5", "prompt": format!("A lake\n\n{ANATOMY_GUIDANCE}"), "aspect_ratio": "9:16", "duration": 15, "resolution": "1080p"})
         );
-        let with_cast = request("<IMAGE_0> walks in", "9:16", 10, vec!["data:image/jpeg;base64,AA".into()]).unwrap();
-        assert_eq!(serde_json::to_value(with_cast).unwrap()["reference_images"], serde_json::json!([{"url": "data:image/jpeg;base64,AA"}]));
+        let with_cast = serde_json::to_value(request("<IMAGE_0> walks in", "9:16", 10, vec!["data:image/jpeg;base64,AA".into()]).unwrap()).unwrap();
+        assert_eq!(with_cast["reference_images"], serde_json::json!([{"url": "data:image/jpeg;base64,AA"}]));
+        assert_eq!(with_cast["resolution"], "720p", "character pictures cap the clip at 720p");
         assert!(request("x", "9:16", 15, vec!["a".into()]).is_err(), "references cap the clip at 10 s");
         assert!(request("x", "9:16", 8, vec!["a".into(); MAX_REFERENCES + 1]).is_err());
     }

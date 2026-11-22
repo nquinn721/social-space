@@ -6,21 +6,25 @@ export type ChatMessage = { role: 'system' | 'user' | 'assistant' | 'tool'; cont
 export type ToolSpec = { type: 'function'; function: { name: string; description: string; parameters: { type: 'object'; properties: Record<string, unknown>; required?: string[] } } };
 export type AssistantSettings = { model: string };
 
-/** grok-4.3: quick replies and dependable tool calling at a lower price than the flagship. */
-export const DEFAULT_MODEL = 'grok-4.3';
+/** grok-4.7: xAI's newest flagship and smartest model, used for all writing (prompts, captions, stories) and the assistant. */
+export const DEFAULT_MODEL = 'grok-4.7';
+/** Earlier defaults, moved up to the flagship when settings load. */
+const OLD_DEFAULTS = ['grok-4.3'];
+/** Bumped when DEFAULT_MODEL changes, so a model the user picked on purpose afterwards is kept. */
+const SETTINGS_VERSION = 2;
 export const DEFAULT_SETTINGS: AssistantSettings = { model: DEFAULT_MODEL };
 const SETTINGS_KEY = 'socialspace-assistant-settings';
 
 export function loadSettings(): AssistantSettings {
   try {
-    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null') as Partial<AssistantSettings> | null;
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null') as (Partial<AssistantSettings> & { version?: number }) | null;
     // Settings saved before the switch to Grok name a local Ollama model.
-    const model = typeof saved?.model === 'string' && saved.model.startsWith('grok') ? saved.model : DEFAULT_MODEL;
+    const model = typeof saved?.model === 'string' && saved.model.startsWith('grok') && !(saved.version !== SETTINGS_VERSION && OLD_DEFAULTS.includes(saved.model)) ? saved.model : DEFAULT_MODEL;
     return { model };
   } catch { return DEFAULT_SETTINGS; }
 }
 export function saveSettings(settings: AssistantSettings) {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* settings stay for this session */ }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, version: SETTINGS_VERSION })); } catch { /* settings stay for this session */ }
 }
 
 function desktopOnly() { if (!isTauri()) throw new Error('Open the desktop app to use the assistant.'); }

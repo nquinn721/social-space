@@ -795,6 +795,13 @@ function AddVideo({ brandId, category, disabled, onSave, onClose }: AddProps) {
   </form>;
 }
 
+const LENGTH_KEY = 'socialspace-video-length';
+/** The clip length picked last, so it stays chosen when the panel opens again (otherwise the longest one is used). */
+function savedLength(): number | null {
+  try { const value = Number(localStorage.getItem(LENGTH_KEY)); return Number.isInteger(value) && value > 0 ? value : null; } catch { return null; }
+}
+function saveLength(value: number) { try { localStorage.setItem(LENGTH_KEY, String(value)); } catch { /* kept for this panel only */ } }
+
 type MakeProps = { brandName: string; brandNotes: string; category: VideoCategory; disabled: boolean; onMake: ReturnType<typeof useVideoGenerations>['make']; onClose: () => void; onManageSources?: () => void };
 function MakeVideo({ brandName, brandNotes, category, disabled, onMake, onClose, onManageSources }: MakeProps) {
   const [state, setState] = useState<SourcesState | null>(null);
@@ -803,7 +810,7 @@ function MakeVideo({ brandName, brandNotes, category, disabled, onMake, onClose,
   const [prompt, setPrompt] = useState('');
   const [title, setTitle] = useState('');
   const [aspectRatio, setAspectRatio] = useState(DEFAULT_RATIO);
-  const [duration, setDuration] = useState<number | null>(null);
+  const [duration, setDuration] = useState<number | null>(savedLength);
   const [showOptions, setShowOptions] = useState(false);
   const [sending, setSending] = useState(false);
   const sendingGuard = useRef(false);
@@ -849,7 +856,7 @@ function MakeVideo({ brandName, brandNotes, category, disabled, onMake, onClose,
       <div><label htmlFor="make-source">Made with</label>
         <select id="make-source" value={source.id} onChange={(event) => setSourceId(event.target.value)}>{usable.map((item) => <option key={item.id} value={item.id}>{item.name} · {PROVIDERS[item.provider].name}</option>)}</select></div>
       <div><label htmlFor="make-duration">Length</label>
-        <select id="make-duration" value={seconds} onChange={(event) => setDuration(Number(event.target.value))}>{provider.durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></div>
+        <select id="make-duration" value={seconds} onChange={(event) => { const value = Number(event.target.value); setDuration(value); saveLength(value); }}>{provider.durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></div>
     </div>
     {showOptions ? <div className="library-make-row">
       <div><label htmlFor="make-title">Title <span>optional</span></label><input id="make-title" maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="From the description"/></div>
