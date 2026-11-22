@@ -47,12 +47,12 @@ export function postRequest(workspace: Workspace, video: Video, platform: Platfo
 }
 
 /** Marks a video as posted on a social in the latest workspace. */
-export function markPosted(workspace: Workspace, videoId: string, platform: Platform): Workspace | null {
+export function markPosted(workspace: Workspace, videoId: string, platform: Platform, at = Date.now()): Workspace | null {
   const video = workspace.videos?.find((item) => item.id === videoId);
   if (!video || video.posted.includes(platform)) return null;
   // A post made on the social's own page is a real, public post even while the app's API is in test
   // mode (TikTok Sandbox, YouTube Testing only limit API uploads), so it is never kept as a test post.
-  return { ...workspace, videos: (workspace.videos ?? []).map((item) => item.id === videoId ? { ...item, posted: [...item.posted, platform] } : item) };
+  return { ...workspace, videos: (workspace.videos ?? []).map((item) => item.id === videoId ? { ...item, posted: [...item.posted, platform], postedAt: { ...item.postedAt, [platform]: at } } : item) };
 }
 
 /**

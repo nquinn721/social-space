@@ -24,6 +24,7 @@ import { testModeOf, withPosted } from './appReviews';
 import { earlierPartMissing, videoPartLabel, waitingOnEarlierPart } from './series';
 import { batchPlan, preparationSignature, type BatchDestination } from './batchPosting';
 import { beginAttempt, clearAttempt, readAttempt, recordPublished } from './publishAttempt';
+import { dailyLimitReason, DAILY_LIMIT } from './postQueue';
 import VideoIdeasDialog from './VideoIdeasDialog';
 import VideoTextEditor from './VideoTextEditor';
 import { useVideoIdeas } from './useVideoIdeas';
@@ -213,8 +214,8 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
         const current = currentWorkspace.videos?.find(item => item.id === video.id);
         if (!current || current.generation || preparationSignature(current) !== preparationSignature(video)) throw new Error('The video changed. Review it again before opening posting windows.');
         if (current.posted.includes(destination.platform)) throw new Error(`${getPlatform(destination.platform).name} is already marked posted. Review the destinations again; any windows already opened remain open.`);
-        const order = waitingOnEarlierPart(currentWorkspace, current, destination.platform);
-        if (order) throw new Error(order);
+        const order = waitingOnEarlierPart(currentWorkspace, current, destination.platform) ?? dailyLimitReason(currentWorkspace, current.brandId, destination.platform);
+        if (order) throw new Error(`${getPlatform(destination.platform).name}: ${order}`);
         const account = currentWorkspace.accounts.find(item => item.brandId === current.brandId && item.platform === destination.platform && item.status === 'active');
         if (!brandSocials(currentWorkspace, current.brandId).includes(destination.platform) || !account || account.id !== destination.accountId || JSON.stringify(account) !== destination.accountSnapshot) throw new Error(`The ${getPlatform(destination.platform).name} account changed. Review the destinations again.`);
         if (latestBrowser.current.isOpen(current.id, destination.platform) || latestBrowser.current.isAsking(current.id, destination.platform)) throw new Error(`Check the existing ${getPlatform(destination.platform).name} posting window first.`);
@@ -289,7 +290,7 @@ export default function VideoLibrary({ workspace, loaded, busy, onSave, onOpen, 
               onToggle={(platform) => togglePosted(video, platform)} onOpen={onOpen} onRemove={() => removeVideo(video)} onRetry={() => generations.retry(video)}
               category={category} brandName={brand.name} brandNotes={brandNotes} onSaveText={(path, edit) => saveTextVideo(video, path, edit)} onSavePost={(draft, defaults) => savePost(draft, defaults, `Saved the post details of "${draft.title}".`)}
               instagram={instagram} onPost={post} facebook={facebook} onPostFacebook={postFacebook} onConnectInstagram={onConnectInstagram} browser={browser} marks={workspace.setup} statuses={statuses} onFix={fix} onPreparePosts={preparePosts} onResolveAttempt={resolveAttempt}
-              part={videoPartLabel(workspace, video)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
+              part={videoPartLabel(workspace, video)} dailyLimit={(platform) => dailyLimitReason(workspace, video.brandId, platform)} waitingOn={(platform) => waitingOnEarlierPart(workspace, video, platform)} earlierPart={(platform) => earlierPartMissing(workspace, video, platform)}/>)}
           </ul>}
         </>}
         {error && <div className="error-message" role="alert">{error}</div>}
@@ -347,12 +348,14 @@ type RowProps = { video: Video; category: VideoCategory; brandName: string; bran
   onResolveAttempt: (video: Video, platform: 'instagram' | 'facebook', posted: boolean) => Promise<void>;
   browser?: BrowserPosting; marks?: Record<string, number>; statuses: SocialStatus[]; onFix: (status: SocialStatus) => void;
   /** For a series episode: "Part 2 of 5", and why it can't go up on a social before an earlier part. */
-  part?: string | null; waitingOn?: (platform: Platform) => string | null; earlierPart?: (platform: Platform) => number | null };
+  part?: string | null; waitingOn?: (platform: Platform) => string | null; earlierPart?: (platform: Platform) => number | null;
+  /** Why the account takes no more posts today, or null. */
+  dailyLimit?: (platform: Platform) => string | null };
 /**
  * One video as a post: its picture and text on the left, and a tile for every social of the brand that
  * says where it stands there (posted, ready, or what's missing) with the one button that moves it on.
  */
-function VideoRow({ video, category, brandName, brandNotes = '', onSaveText, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, onPreparePosts, onResolveAttempt }: RowProps) {
+function VideoRow({ video, category, brandName, brandNotes = '', onSaveText, socials, busy, disabled, progress, onToggle, onOpen, onRemove, onRetry, onSavePost, instagram, onPost, facebook, onPostFacebook, onConnectInstagram, browser, marks, statuses, onFix, part, waitingOn, earlierPart, dailyLimit, onPreparePosts, onResolveAttempt }: RowProps) {
   const job = video.generation;
   const fileName = video.mediaSource.split(/[\\/]/).pop();
   const playable = !job && isLocalVideo(video.mediaSource);
@@ -377,7 +380,7 @@ function VideoRow({ video, category, brandName, brandNotes = '', onSaveText, soc
   const facebookReady = !job && API_SOCIALS.includes('facebook') && !!onPostFacebook && !!facebook?.connected && isLocalVideo(video.mediaSource);
   const plan = batchPlan({ video, socials, statuses, instagramReady: automatic, facebookReady, browserAvailable: !!browser,
     isOpen: platform => !!browser?.isOpen(video.id, platform), isAsking: platform => !!browser?.isAsking(video.id, platform),
-    waitingOn: platform => waitingOn?.(platform) ?? null });
+    waitingOn: platform => waitingOn?.(platform) ?? null, dailyLimit: platform => dailyLimit?.(platform) ?? null });
   const eligible = plan.filter(item => item.method === 'browser' || item.method === 'manual');
   async function startBatch() {
     if (actionGuard.current || busy || working || !eligible.length) return;
@@ -459,7 +462,7 @@ function VideoRow({ video, category, brandName, brandNotes = '', onSaveText, soc
     if (!browser || !onSavePost || actionGuard.current || busy || working) return false;
     actionGuard.current = true; setWorking(true);
     try {
-    const order = waitingOn?.(platform);
+    const order = waitingOn?.(platform) ?? dailyLimit?.(platform);
     if (order) { setError(order); return false; }
     const problems = detailProblems(draft, socials);
     if (problems.length) { setEditing(true); setError(problems[0]); return false; }
@@ -515,6 +518,8 @@ function VideoRow({ video, category, brandName, brandNotes = '', onSaveText, soc
       tone = 'todo'; line = 'Did it go up?';
       action = <><button type="button" className="dest-button primary" aria-label={`Yes, it's on ${name}`} disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: video.id, platform }, true)}><Check size={13}/> Yes</button>
         <button type="button" className="dest-link quiet" disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: video.id, platform }, false)}>Not yet</button>{browser.confirmationError(video.id, platform) && <span className="error-message" role="alert">{browser.confirmationError(video.id, platform)}</span>}</>;
+    } else if (status.canPost && dailyLimit?.(platform)) {
+      tone = 'muted'; line = `${DAILY_LIMIT} today · next tomorrow`;
     } else if (status.canPost && platform === 'facebook' && API_SOCIALS.includes(platform)) {
       if (facebookReady) { tone = 'ready'; line = `Posts to ${facebook?.page}`; action = <button type="button" className="dest-button primary" aria-label="Post to Facebook" disabled={busy || working || confirming} onClick={() => void approveFacebook(video, false)}>{working ? <><Loader2 size={13} className="spin"/> Posting…</> : <><Send size={13}/> Post</>}</button>; }
       else { tone = 'todo'; line = isLocalVideo(video.mediaSource) ? 'Connected' : 'Needs a video file'; }

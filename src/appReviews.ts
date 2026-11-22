@@ -143,8 +143,12 @@ export function withPosted(video: Video, posted: Platform[], marks: Record<strin
   const testPosts = { ...(video.testPosts ?? {}) };
   for (const platform of Object.keys(testPosts) as Platform[]) if (!posted.includes(platform)) delete testPosts[platform];
   for (const platform of posted) if (!video.posted.includes(platform) && testModeOf(marks, platform)) testPosts[platform] = at;
+  const postedAt = { ...(video.postedAt ?? {}) };
+  for (const platform of Object.keys(postedAt) as Platform[]) if (!posted.includes(platform)) delete postedAt[platform];
+  for (const platform of posted) if (!video.posted.includes(platform)) postedAt[platform] = at;
   const next: Video = { ...video, posted };
   if (Object.keys(testPosts).length) next.testPosts = testPosts; else delete next.testPosts;
+  if (Object.keys(postedAt).length) next.postedAt = postedAt; else delete next.postedAt;
   return next;
 }
 
@@ -160,6 +164,10 @@ export function moveTestVideos(videos: Video[] | undefined, platform: Platform):
     const { [platform]: _moved, ...rest } = video.testPosts;
     const next: Video = { ...video, posted: video.posted.filter((item) => item !== platform) };
     if (Object.keys(rest).length) next.testPosts = rest; else delete next.testPosts;
+    if (next.postedAt?.[platform] !== undefined) {
+      const { [platform]: _gone, ...postedAt } = next.postedAt;
+      if (Object.keys(postedAt).length) next.postedAt = postedAt; else delete next.postedAt;
+    }
     return next;
   });
 }

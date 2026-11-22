@@ -96,7 +96,9 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
         const links = { ...current.links };
         for (const platform of autoPosted) if (results[platform]?.url) links[platform] = results[platform]!.url;
         const posted = [...new Set([...current.posted, ...autoPosted])];
-        await save.current({ ...now, videos: (now.videos ?? []).map((item) => item.id === video.id ? { ...toPost, posted, links } : item) }, `"${video.title}" was approved and posted.`);
+        const postedAt = { ...current.postedAt };
+        for (const platform of autoPosted) postedAt[platform] = postedAt[platform] ?? results[platform]?.at ?? Date.now();
+        await save.current({ ...now, videos: (now.videos ?? []).map((item) => item.id === video.id ? { ...toPost, posted, links, postedAt } : item) }, `"${video.title}" was approved and posted.`);
       }
     }
   }, []);

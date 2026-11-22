@@ -1,0 +1,84 @@
+{
+  "summary": "Post queue: a Queue page in the sidebar lines up each brand's finished videos per social, oldest first with series parts in order, and lets at most 3 go up per account per day. Post today's videos walks through the due posts one upload window at a time (the next opens once the last is recorded). Every recorded post now stamps Video.postedAt, which the daily limit reads; the video library and batch posting also refuse a 4th post on an account in a day.",
+  "features": [
+    "posting",
+    "navigation",
+    "video-library",
+    "partner-review",
+    "accounts",
+    "connections",
+    "updates"
+  ],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    {
+      "path": "src/postQueue.ts",
+      "note": "queue order, daily limit, lanes and today's steps"
+    },
+    {
+      "path": "src/pages/QueuePage.tsx",
+      "note": "Queue page and the walk-through"
+    },
+    {
+      "path": "src/queue.css",
+      "note": "queue styles"
+    },
+    {
+      "path": "src/App.tsx",
+      "note": "Queue nav item and view"
+    },
+    {
+      "path": "src/model.ts",
+      "note": "View 'queue', Video.postedAt"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "note": "Video.posted_at field"
+    },
+    {
+      "path": "src/useBrowserPosting.ts",
+      "note": "markPosted stamps postedAt"
+    },
+    {
+      "path": "src/appReviews.ts",
+      "note": "withPosted/moveTestVideos keep postedAt in step"
+    },
+    {
+      "path": "src/usePartnerReview.tsx",
+      "note": "approved auto-posts stamp postedAt"
+    },
+    {
+      "path": "src/batchPosting.ts",
+      "note": "dailyLimit blocks a destination"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "daily limit on the Post tile, postOnPage and preparePosts"
+    },
+    {
+      "path": "src/postQueue.test.ts",
+      "note": "tests"
+    },
+    {
+      "path": "src/pages/QueuePage.test.tsx",
+      "note": "tests"
+    },
+    {
+      "path": "package.json",
+      "note": "0.37.0"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "0.37.0"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "0.37.0"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "0.37.0"
+    }
+  ]
+}
