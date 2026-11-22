@@ -10,11 +10,12 @@ import { isLocalVideo } from './videoFileService';
 
 /**
  * The parts of the workspace both PCs share: everything except where each video's file sits on this PC
- * (`mediaSource`), which every PC keeps for itself.
+ * (`mediaSource`), which every PC keeps for itself, and the posting times (`posting`), which only the PC
+ * that schedules through Ayrshare uses.
  */
 export type SharedWorkspace = Pick<Workspace, 'businessName' | 'brands' | 'accounts' | 'channels'> & {
-  categories: NonNullable<Workspace['categories']>; setup: Record<string, number>;
-  videos: NonNullable<Workspace['videos']>; developerLogins: NonNullable<Workspace['developerLogins']>;
+  categories: NonNullable<Workspace['categories']>;
+  videos: NonNullable<Workspace['videos']>;
   series: NonNullable<Workspace['series']>;
 };
 
@@ -27,7 +28,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 export function sharedOf(workspace: Workspace): SharedWorkspace {
   return {
     businessName: workspace.businessName, brands: workspace.brands, accounts: workspace.accounts, channels: workspace.channels,
-    categories: workspace.categories ?? [], setup: workspace.setup ?? {}, developerLogins: workspace.developerLogins ?? {}, series: workspace.series ?? [],
+    categories: workspace.categories ?? [], series: workspace.series ?? [],
     // A file on this PC means nothing on the other; a web link does.
     videos: (workspace.videos ?? []).map((video) => {
       const shared = isLocalVideo(video.mediaSource) ? { ...video, mediaSource: '' } : video;
@@ -52,15 +53,6 @@ export function mergeList<T extends Item>(base: T[], local: T[], remote: T[]): T
   return merged;
 }
 
-function mergeRecord<T>(base: Record<string, T>, local: Record<string, T>, remote: Record<string, T>) {
-  const merged: Record<string, T> = {};
-  for (const key of new Set([...Object.keys(remote), ...Object.keys(local)])) {
-    const value = same(local[key], base[key]) ? remote[key] : same(remote[key], base[key]) ? local[key] : local[key] ?? remote[key];
-    if (value !== undefined) merged[key] = value;
-  }
-  return merged;
-}
-
 const scalar = <T,>(base: T, local: T, remote: T) => (local === base ? remote : local);
 
 /** Merges two whole workspaces (all lists, including videos) against the one both started from. */
@@ -70,10 +62,6 @@ export function mergeWorkspaces(base: Workspace, local: Workspace, remote: Works
     (merged as Record<ListKey, Item[]>)[key] = mergeList<Item>(base[key] ?? [], local[key] ?? [], remote[key] ?? []);
   }
   if (!merged.series?.length) delete merged.series;
-  const setup = mergeRecord(base.setup ?? {}, local.setup ?? {}, remote.setup ?? {});
-  if (Object.keys(setup).length) merged.setup = setup; else delete merged.setup;
-  const logins = mergeRecord(base.developerLogins ?? {}, local.developerLogins ?? {}, remote.developerLogins ?? {});
-  if (Object.keys(logins).length) merged.developerLogins = logins; else delete merged.developerLogins;
   return merged;
 }
 
@@ -162,8 +150,6 @@ export function withShared(local: Workspace, shared: SharedWorkspace): Workspace
   const accountIds = new Set(shared.accounts.map((account) => account.id));
   const channels = shared.channels.map((channel) => channel.accountId && !accountIds.has(channel.accountId) ? { ...channel, accountId: null } : channel);
   const next: Workspace = { ...local, businessName: shared.businessName, brands, accounts: shared.accounts, channels, categories, videos };
-  if (Object.keys(shared.setup).length) next.setup = shared.setup; else delete next.setup;
-  if (Object.keys(shared.developerLogins ?? {}).length) next.developerLogins = shared.developerLogins; else delete next.developerLogins;
   if (series.length) next.series = series; else delete next.series;
   return next;
 }
@@ -173,8 +159,8 @@ export function mergeShared(base: SharedWorkspace | null, local: Workspace, remo
   if (!remote) return local;
   const mine = base ? local : adoptRemoteIds(local, remote);
   // On the first sync the shared business name is kept, unless nothing has been shared yet.
-  // Payloads from before 0.16 have no videos or developer logins (and before 0.25 no series); those count as empty.
-  const from = base ?? { businessName: mine.businessName, brands: [], accounts: [], channels: [], categories: [], setup: {}, videos: [], developerLogins: {}, series: [] };
+  // Payloads from before 0.16 have no videos (and before 0.25 no series); those count as empty.
+  const from = base ?? { businessName: mine.businessName, brands: [], accounts: [], channels: [], categories: [], videos: [], series: [] };
   // An app from before series sends none: its side counts as unchanged, so this PC's series are kept.
   const theirs = { ...remote, businessName: remote.businessName || mine.businessName, series: remote.series ?? from.series ?? [] };
   const merged = mergeWorkspaces(from, sharedOf(mine), theirs);

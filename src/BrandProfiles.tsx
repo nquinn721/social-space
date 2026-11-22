@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppWindow, Loader2, Save, Sparkles } from 'lucide-react';
-import { BIO_LIMITS, getPlatform, type Account, type Brand, type DeveloperLogin } from './model';
+import { BIO_LIMITS, getPlatform, type Account, type Brand } from './model';
 import { cachedProfileCopy, parseKeywords, type ProfileCopy } from './assistant/profileWriter';
 import { GhostInput, GhostTextarea } from './GhostText';
-import { openProfileEditor } from './postingService';
+import { brandLogin, openProfileEditor } from './brandWindowService';
 import { pictureFileFor, profilePicturePath } from './brandImageService';
-import { brandLogin } from './useBrowserPosting';
+
 import type { FormFields } from './profileService';
 import { BrandMark, errorText } from './ui';
 import './brandProfiles.css';
@@ -17,7 +17,6 @@ type Props = {
   /** This brand's profiles, in platform order. */
   accounts: Account[];
   busy: boolean;
-  developerLogins?: Record<string, DeveloperLogin>;
   onSave: (drafts: ProfileDraft[], message: string) => Promise<boolean | undefined>;
 };
 type Draft = { bio: string; keywords: string };
@@ -37,7 +36,7 @@ export function editorFields(account: Account, brand: Brand, draft: Draft): Form
  * The brand's profile details on every social: Grok suggests each bio and the YouTube keywords (grey, Tab
  * takes them). Fill opens the brand's profile editor; supported sites are filled for review and X is manual.
  */
-export default function BrandProfiles({ brand, accounts, busy, developerLogins, onSave }: Props) {
+export default function BrandProfiles({ brand, accounts, busy, onSave }: Props) {
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => Object.fromEntries(accounts.map((account) => [account.id, draftOf(account)])));
   const [copy, setCopy] = useState<ProfileCopy | null>(null);
   const [writing, setWriting] = useState(false);
@@ -93,7 +92,7 @@ export default function BrandProfiles({ brand, accounts, busy, developerLogins, 
   async function fillOne(account: Account) {
     const file = pictureFileFor(account, brand);
     const imagePath = file ? await profilePicturePath(file, account.platform) : undefined;
-    await openProfileEditor({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: account.handle, fields: editorFields(account, brand, drafts[account.id] ?? draftOf(account)), imagePath });
+    await openProfileEditor({ platform: account.platform, brandId: brand.id, ...brandLogin(account), handle: account.handle, fields: editorFields(account, brand, drafts[account.id] ?? draftOf(account)), imagePath });
   }
   const live = accounts.filter((account) => account.status === 'active');
   const fill = (targets: Account[]) => run(targets.length > 1 ? 'all' : targets[0].id, async () => {

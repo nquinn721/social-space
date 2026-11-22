@@ -1,89 +1,52 @@
 import { describe, expect, it, vi } from 'vitest';
-import { prepareProfileRemoval, queueForProfiles, removedProfileIds } from './deletionSafety';
+import { prepareProfileRemoval, removedProfileIds, scheduledForProfiles } from './deletionSafety';
 import type { Workspace } from './model';
-import type { QueueJob, QueueStatus } from './queueService';
 
 const workspace = {
+  businessName: '', brands: [{ id: 'b', name: 'Mia', notes: '' }, { id: 'o', name: 'Owner', notes: '' }], channels: [],
   accounts: [
-    { id: 'mia', platform: 'instagram', label: 'Mia', handle: 'mia', status: 'active', notes: '' },
-    { id: 'owner', platform: 'instagram', label: 'Owner', handle: 'owner', status: 'active', notes: '' },
+    { id: 'mia', platform: 'instagram', label: 'Mia', handle: 'mia', status: 'active', notes: '', brandId: 'b' },
+    { id: 'mia-tt', platform: 'tiktok', label: 'Mia', handle: 'mia', status: 'active', notes: '', brandId: 'b' },
+    { id: 'owner', platform: 'instagram', label: 'Owner', handle: 'owner', status: 'active', notes: '', brandId: 'o' },
   ],
-  channels: [
-    { id: 'mia-channel', accountId: 'mia', platform: 'instagram', name: 'Mia', handle: 'mia', notes: '' },
-    { id: 'owner-channel', accountId: 'owner', platform: 'instagram', name: 'Owner', handle: 'owner', notes: '' },
+  videos: [
+    { id: 'v1', brandId: 'b', categoryId: 'c', title: 'One', mediaSource: '', caption: '', posted: ['tiktok'], createdAt: 1,
+      scheduled: { instagram: { id: 'p1', at: 5, state: 'scheduled' }, tiktok: { id: 'p2', at: 4, state: 'posted' } } },
+    { id: 'v2', brandId: 'o', categoryId: 'c', title: 'Two', mediaSource: '', caption: '', posted: [], createdAt: 2,
+      scheduled: { instagram: { id: 'p3', at: 5, state: 'scheduled' } } },
   ],
 } as Workspace;
-const job = (id: string, channelId: string, status: QueueStatus): QueueJob => ({
-  id, channelId, status, platform: 'instagram', channelName: 'Example', channelHandle: 'example',
-  mediaSource: 'https://example.test/video.mp4', caption: '', scheduledAt: 123,
-  mode: 'automatic', error: null, instagramAccountId: '123',
+const deps = (answers: boolean[]) => ({
+  hasPassword: vi.fn(async () => true), cancel: vi.fn(async () => undefined),
+  confirm: vi.fn((_message: string) => answers.shift() ?? false), isCurrent: () => true,
 });
 
 describe('removing a local profile', () => {
-  it('selects only unfinished queue items for that profile, leaving the owner and posted items alone', () => {
-    const jobs = [job('pending', 'mia-channel', 'scheduled'), job('due', 'mia-channel', 'manual_due'), job('posted', 'mia-channel', 'posted'), job('owner', 'owner-channel', 'scheduled')];
-    expect(queueForProfiles(workspace, new Set(['mia']), jobs).map((item) => item.id)).toEqual(['pending', 'due']);
+  it('finds only the scheduled posts of the profiles being removed', () => {
+    expect(scheduledForProfiles(workspace, new Set(['mia', 'mia-tt']))).toEqual([{ brandId: 'b', videoId: 'v1', platform: 'instagram', id: 'p1' }]);
+    expect(scheduledForProfiles(workspace, new Set(['owner'])).map((post) => post.id)).toEqual(['p3']);
   });
-  it('does not cancel any queued posts if either confirmation is declined', async () => {
+  it('cancels nothing if either confirmation is declined', async () => {
     for (const answers of [[false], [true, false]]) {
-      const confirm = vi.fn((_message: string) => answers.shift() ?? false);
-      const cancel = vi.fn(async () => undefined);
-      const deps = { list: async () => [job('pending', 'mia-channel', 'scheduled')], hasPassword: async () => true, cancel, confirm, isCurrent: () => true };
-      expect(await prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', deps)).toBeNull();
-      expect(cancel).not.toHaveBeenCalled();
-      expect(confirm.mock.calls[0][0]).toContain('live accounts and Pages remain');
+      const run = deps(answers);
+      await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', run)).resolves.toBeNull();
+      expect(run.cancel).not.toHaveBeenCalled();
     }
   });
-  it('only cancels the selected profile’s queue once local removal and password loss are both confirmed', async () => {
-    const cancel = vi.fn(async (_id: string) => undefined);
-    const confirm = vi.fn((_message: string) => true);
-    const deps = { list: async () => [job('mia', 'mia-channel', 'scheduled'), job('owner', 'owner-channel', 'scheduled')], hasPassword: async () => true, cancel, confirm, isCurrent: () => true };
-    expect(await prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', deps)).toBe(1);
-    expect(confirm).toHaveBeenCalledTimes(2);
-    expect(confirm.mock.calls[1][0]).toContain('deletes the saved passwords');
-    expect(cancel).toHaveBeenCalledOnce();
-    expect(cancel).toHaveBeenCalledWith('mia', true);
+  it('cancels the profile\'s scheduled posts once both are confirmed', async () => {
+    const run = deps([true, true]);
+    await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', run)).resolves.toBe(1);
+    expect(run.cancel).toHaveBeenCalledWith({ brandId: 'b', videoId: 'v1', platform: 'instagram', id: 'p1' });
+    expect(run.confirm.mock.calls[0][0]).toContain('1 scheduled post is cancelled in Ayrshare');
   });
-  it('leaves queue untouched while a post is publishing or the workspace changed', async () => {
-    const cancel = vi.fn(async () => undefined);
-    const deps = { list: async () => [job('pending', 'mia-channel', 'publishing')], hasPassword: async () => false, cancel, confirm: () => true, isCurrent: () => true };
-    await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', deps)).rejects.toThrow('being published');
-    await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', { ...deps, list: async () => [job('pending', 'mia-channel', 'scheduled')], isCurrent: () => false })).rejects.toThrow('workspace changed');
-    expect(cancel).not.toHaveBeenCalled();
-  });
-  it('requires the user to identify an unlinked queue item before removing it', async () => {
-    const legacy = { ...workspace, channels: [...workspace.channels, { id: 'legacy', accountId: null, platform: 'instagram' as const, name: 'Legacy', handle: 'legacy', notes: '' }] };
-    const cancel = vi.fn(async () => undefined);
-    const confirm = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
-    const deps = { list: async () => [job('legacy-job', 'legacy', 'scheduled')], hasPassword: async () => false, cancel, confirm, isCurrent: () => true };
-    expect(await prepareProfileRemoval(legacy, new Set(['mia']), 'Remove Mia?', deps)).toBeNull();
-    expect(cancel).not.toHaveBeenCalled();
-    expect(confirm.mock.calls[1][0]).toContain('not linked to a saved account');
-    confirm.mockReset().mockReturnValue(true);
-    expect(await prepareProfileRemoval(legacy, new Set(['mia']), 'Remove Mia?', deps)).toBe(1);
-    expect(cancel).toHaveBeenCalledWith('legacy-job', true);
-  });
-  it('requires the user to check an uncertain post before removing its queue record', async () => {
-    const cancel = vi.fn(async () => undefined);
-    const confirm = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
-    const deps = { list: async () => [job('uncertain', 'mia-channel', 'needs_review')], hasPassword: async () => false, cancel, confirm, isCurrent: () => true };
-    expect(await prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', deps)).toBeNull();
-    expect(cancel).not.toHaveBeenCalled();
-    expect(confirm.mock.calls[1][0]).toContain('checked the social');
-    confirm.mockReset().mockReturnValue(true);
-    expect(await prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', deps)).toBe(1);
-    expect(cancel).toHaveBeenCalledWith('uncertain', false);
+  it('stops when the workspace changed or Ayrshare refuses', async () => {
+    await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove?', { ...deps([true, true]), isCurrent: () => false })).rejects.toThrow('changed');
+    const refusing = { ...deps([true, true]), cancel: vi.fn(async () => { throw new Error('No.'); }) };
+    await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove?', refusing)).rejects.toThrow('nothing was removed');
   });
   it('keeps credentials for accounts retained or restored by concurrent workspace updates', () => {
-    const empty = { ...workspace, accounts: [] };
-    expect(removedProfileIds(new Set(['mia', 'owner']), workspace, empty)).toEqual([]);
-    expect(removedProfileIds(new Set(['mia', 'owner']), empty, workspace)).toEqual([]);
-    expect(removedProfileIds(new Set(['mia', 'owner']), empty, { ...workspace, accounts: [workspace.accounts[0]] })).toEqual(['owner']);
-  });
-  it('reports partial queue cancellation and does not remove the profile when a later job changes', async () => {
-    const cancel = vi.fn(async (id: string) => { if (id === 'second') throw new Error('Post is now being published.'); });
-    const deps = { list: async () => [job('first', 'mia-channel', 'scheduled'), job('second', 'mia-channel', 'scheduled')], hasPassword: async () => false, cancel, confirm: () => true, isCurrent: () => true };
-    await expect(prepareProfileRemoval(workspace, new Set(['mia']), 'Remove Mia?', deps)).rejects.toThrow('1 was already cancelled; the profile was not removed');
-    expect(cancel).toHaveBeenCalledTimes(2);
+    const saved = { ...workspace, accounts: workspace.accounts.filter((account) => account.id !== 'mia') };
+    expect(removedProfileIds(new Set(['mia', 'owner']), saved, workspace)).toEqual([]);
+    expect(removedProfileIds(new Set(['mia']), saved, saved)).toEqual(['mia']);
   });
 });

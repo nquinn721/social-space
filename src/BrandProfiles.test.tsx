@@ -4,10 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import BrandProfiles, { editorFields } from './BrandProfiles';
 import type { Account, Brand } from './model';
-import * as posting from './postingService';
+import * as posting from './brandWindowService';
 import * as writer from './assistant/profileWriter';
 
-vi.mock('./postingService', () => ({ openProfileEditor: vi.fn(async () => 'post-1') }));
+vi.mock('./brandWindowService', async (actual) => ({ ...(await actual<typeof import('./brandWindowService')>()), openProfileEditor: vi.fn(async () => 'post-1') }));
 vi.mock('./brandImageService', () => ({ pictureFileFor: () => 'abc.jpg', profilePicturePath: vi.fn(async (_file: string, platform: string) => `C:/pics/${platform}.jpg`) }));
 vi.mock('./assistant/profileWriter', async (actual) => ({ ...(await actual<typeof import('./assistant/profileWriter')>()), cachedProfileCopy: vi.fn() }));
 

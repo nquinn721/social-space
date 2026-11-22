@@ -1,10 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { isTauri } from '@tauri-apps/api/core';
-import { normalizeHandle, type Platform, type Video, type Workspace } from './model';
-import { claimInstagramConnection } from './instagramService';
-import { publishVideoToInstagram } from './useBrandInstagram';
+import type { Platform, Video, Workspace } from './model';
 import { errorText } from './ui';
-import { approvedToPost, approvedVideo, AUTO_POST_PLATFORMS, finishedStatus, partnerVideo, partnerVideosToImport, resultEvent, REVIEW_POLL_MS, reviewCatalog, submissionFor } from './partnerReview';
+import { approvedToPost, approvedVideo, finishedStatus, partnerVideo, partnerVideosToImport, resultEvent, REVIEW_POLL_MS, reviewCatalog, submissionFor } from './partnerReview';
 import { claimReviewPost, importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, submitForReview, type PlatformResult, type ReviewConnection, type ReviewPost } from './reviewService';
 
 type Save = (next: Workspace, message: string) => Promise<boolean | undefined>;
@@ -33,27 +31,9 @@ function rememberImported(id: string) {
   try { localStorage.setItem(IMPORTED_KEY, JSON.stringify([...importedIds(), id])); } catch { /* only costs a possible re-import */ }
 }
 
-/** Posts one approved video to a social. Only Instagram is posted by the app; the others are left to do by hand. */
-async function postTo(platform: Platform, video: Video, workspace: Workspace): Promise<PlatformResult> {
-  const at = Date.now();
-  if (!AUTO_POST_PLATFORMS.includes(platform)) return { status: 'manual', at };
-  const account = workspace.accounts.find((item) => item.brandId === video.brandId && item.platform === 'instagram' && item.status === 'active');
-  if (!account) return { status: 'failed', error: 'The brand has no live Instagram profile in Social Space.', at };
-  try {
-    const identity = await claimInstagramConnection(account.id, normalizeHandle(account.handle));
-    if (!identity) return { status: 'failed', error: 'Instagram is not connected for this brand.', at };
-    if (identity.login === 'instagram') return { status: 'failed', error: 'This Instagram sign-in cannot upload videos from the PC. Connect it through Facebook.', at };
-    const handle = normalizeHandle(account.handle);
-    const published = await publishVideoToInstagram({ accountId: account.id, handle, username: identity.username, providerId: identity.id, connected: true, canUploadFiles: true }, video);
-    return { status: 'posted', url: published.permalink, at: Date.now() };
-  } catch (reason) {
-    return { status: 'failed', error: errorText(reason, 'Instagram did not publish this video.'), at: Date.now() };
-  }
-}
-
 /**
- * Keeps the app in step with the review site: loads the posts sent for review, and posts each one the
- * reviewer approved, then saves where it went (on the video and on the review site's history).
+ * Keeps the app in step with the review site: loads the posts sent for review, and puts each one the
+ * reviewer approved (with the reviewer's edits) into the queue, which schedules it through Ayrshare.
  * Checks every minute while the app is open and partner review is connected.
  */
 export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: Save): PartnerReview {
@@ -83,22 +63,14 @@ export function usePartnerReview(workspace: Workspace, loaded: boolean, onSave: 
       const results: Partial<Record<Platform, PlatformResult>> = { ...post.results };
       for (const platform of post.platforms ?? []) {
         if (results[platform]?.status === 'posted') continue;
-        const result = await postTo(platform, toPost, latest.current);
+        const result: PlatformResult = { status: 'manual', at: Date.now() };
         results[platform] = result;
         events.push(resultEvent(platform, result));
       }
-      const status = finishedStatus(post.platforms ?? [], results);
-      await recordReviewResult(post.videoId, status, results, events);
-      const autoPosted = (Object.entries(results) as [Platform, PlatformResult][]).filter(([, result]) => result.status === 'posted').map(([platform]) => platform);
+      await recordReviewResult(post.videoId, finishedStatus(post.platforms ?? [], results), results, events);
       const now = latest.current;
-      const current = (now.videos ?? []).find((item) => item.id === video.id);
-      if (current && autoPosted.length) {
-        const links = { ...current.links };
-        for (const platform of autoPosted) if (results[platform]?.url) links[platform] = results[platform]!.url;
-        const posted = [...new Set([...current.posted, ...autoPosted])];
-        const postedAt = { ...current.postedAt };
-        for (const platform of autoPosted) postedAt[platform] = postedAt[platform] ?? results[platform]?.at ?? Date.now();
-        await save.current({ ...now, videos: (now.videos ?? []).map((item) => item.id === video.id ? { ...toPost, posted, links, postedAt } : item) }, `"${video.title}" was approved and posted.`);
+      if ((now.videos ?? []).some((item) => item.id === video.id)) {
+        await save.current({ ...now, videos: (now.videos ?? []).map((item) => item.id === video.id ? { ...toPost, posted: item.posted, postedAt: item.postedAt, scheduled: item.scheduled, links: item.links } : item) }, `"${video.title}" was approved and is in the queue.`);
       }
     }
   }, []);

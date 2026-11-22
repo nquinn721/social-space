@@ -4,16 +4,24 @@ import { brandSummary, chipLabel, type SocialStatus } from './brandStatus';
 import { BrandAvatar } from './BrandPicture';
 import { BrandMark } from './ui';
 
-/** Posts still to make for a brand: every finished video times every social it has a profile on and isn't up on yet. */
+/**
+ * Posts still to make for a brand: every finished video times every social it has a profile on that it isn't
+ * up on or scheduled for yet. `now` counts the ones on socials Ayrshare can post to; `scheduled` the ones
+ * Ayrshare already has.
+ */
 export function postsToMake(workspace: Workspace, brandId: string, statuses: SocialStatus[]) {
   const socials = statuses.filter((status) => status.kind !== 'no-profile').map((status) => status.platform);
-  const ready = new Set<Platform>(statuses.filter((status) => status.kind === 'ready').map((status) => status.platform));
-  let total = 0; let now = 0;
+  const ready = new Set<Platform>(statuses.filter((status) => status.canPost).map((status) => status.platform));
+  let total = 0; let now = 0; let scheduled = 0;
   for (const video of workspace.videos ?? []) {
     if (video.brandId !== brandId || video.generation) continue;
-    for (const platform of socials) if (!video.posted.includes(platform)) { total += 1; if (ready.has(platform)) now += 1; }
+    for (const platform of socials) {
+      if (video.posted.includes(platform)) continue;
+      if (video.scheduled?.[platform]?.state === 'scheduled') { scheduled += 1; continue; }
+      total += 1; if (ready.has(platform)) now += 1;
+    }
   }
-  return { total, now };
+  return { total, now, scheduled };
 }
 
 /**
@@ -33,6 +41,6 @@ export default function BrandCard({ brand, accounts, statuses, workspace, onOpen
     <div className="brand-card-socials">{statuses.map((status) => <span key={status.platform} className={`mini-social tone-${status.tone}`} title={`${getPlatform(status.platform).name}: ${status.label}. ${status.detail}`}>
       <BrandMark platform={status.platform} small/><span className="mini-social-state">{chipLabel(status)}</span>
     </span>)}</div>
-    <div className="brand-card-foot">{posts.total === 0 ? <span>{(workspace.videos ?? []).some((video) => video.brandId === brand.id) ? 'Nothing left to post' : 'No videos yet'}</span> : <><span><strong>{posts.total}</strong> {posts.total === 1 ? 'post' : 'posts'} to make</span>{posts.now < posts.total && <span className="muted">{posts.now} can go out now</span>}</>}</div>
+    <div className="brand-card-foot">{posts.total === 0 ? <span>{posts.scheduled ? `${posts.scheduled} scheduled` : (workspace.videos ?? []).some((video) => video.brandId === brand.id) ? 'Nothing left to post' : 'No videos yet'}</span> : <><span><strong>{posts.total}</strong> {posts.total === 1 ? 'post' : 'posts'} waiting</span>{posts.scheduled > 0 ? <span className="muted">{posts.scheduled} scheduled</span> : posts.now < posts.total && <span className="muted">{posts.now} can go out now</span>}</>}</div>
   </button>;
 }

@@ -48,6 +48,7 @@
     "allow-ayrshare-post",
     "allow-ayrshare-history",
     "allow-ayrshare-delete-post",
+    "allow-ayrshare-open-post",
     "allow-choose-video-file",
     "allow-grok-models",
     "allow-grok-chat",

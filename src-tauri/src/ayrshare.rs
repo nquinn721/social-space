@@ -547,9 +547,37 @@ pub async fn ayrshare_delete_post(brand_id: String, id: String) -> Result<(), St
     Err(if message.is_empty() { "Ayrshare could not cancel the post.".into() } else { format!("Ayrshare could not cancel the post: {message}") })
 }
 
+/// Whether a link is a live post on one of the socials Ayrshare posts to (https only).
+fn is_post_link(link: &str) -> bool {
+    let Ok(url) = url::Url::parse(link) else { return false };
+    let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+    url.scheme() == "https" && ["instagram.com", "facebook.com", "fb.watch", "tiktok.com", "youtube.com", "youtu.be", "x.com", "twitter.com"]
+        .iter().any(|allowed| host == *allowed || host.ends_with(&format!(".{allowed}")))
+}
+
+/// Opens a live post (its link from Ayrshare) in the default browser.
+#[tauri::command]
+pub async fn ayrshare_open_post(url: String) -> Result<(), String> {
+    if !is_post_link(&url) { return Err("That is not a link to a post.".into()); }
+    #[cfg(windows)]
+    { std::process::Command::new("explorer.exe").arg(&url).spawn().map(|_| ()).map_err(|_| "Could not open your browser.".to_string()) }
+    #[cfg(not(windows))]
+    { Err("Open the app on Windows to view posts.".into()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_social_post_links_open() {
+        assert!(is_post_link("https://www.instagram.com/reel/abc/"));
+        assert!(is_post_link("https://youtu.be/abc"));
+        assert!(is_post_link("https://x.com/bunny/status/1"));
+        assert!(!is_post_link("http://www.instagram.com/reel/abc/"));
+        assert!(!is_post_link("https://evilinstagram.com/x"));
+        assert!(!is_post_link("file:///C:/Windows/system32"));
+    }
 
     #[test]
     fn reads_linked_socials_from_the_user_answer() {

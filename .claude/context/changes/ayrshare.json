@@ -1,0 +1,768 @@
+{
+  "summary": "Posting and scheduling move to Ayrshare (0.39.0). Settings \u2192 Posting takes the Ayrshare API key and the X app keys; each brand gets its own Ayrshare profile (Set up posting) and links its Instagram, Facebook, TikTok, YouTube and X on Ayrshare's page, opened in the brand's window with each login filled in. Videos post now or wait in the queue, which schedules them through Ayrshare into the next posting time (3 a day per account, times editable, automatic by default) and reads each post's state back from Ayrshare's history. Removed: the direct TikTok/YouTube/X/Meta APIs and OAuth, developer accounts, app-review tracking, the Setup tracker, and posting through upload pages in app windows.",
+  "features": [
+    "posting",
+    "accounts",
+    "settings",
+    "overview",
+    "navigation",
+    "video-library",
+    "partner-review",
+    "instagram",
+    "facebook",
+    "assistant-grok",
+    "team-sync",
+    "profile-images"
+  ],
+  "changes": [
+    {
+      "old": "Prepare posting windows",
+      "new": "Post now"
+    },
+    {
+      "old": "Post today's videos",
+      "new": "Schedule new videos by themselves"
+    },
+    {
+      "old": "Developer accounts",
+      "new": "Posting"
+    },
+    {
+      "old": "What each social needs",
+      "new": "See the post queue"
+    },
+    {
+      "old": "Connect Instagram",
+      "new": "Link Instagram"
+    },
+    {
+      "old": "Did it go up?",
+      "new": "Scheduled"
+    },
+    {
+      "old": "developerLogins",
+      "new": "(removed; old workspaces drop it on load)"
+    },
+    {
+      "old": "testPosts",
+      "new": "(removed; old workspaces drop it on load)"
+    },
+    {
+      "old": "open_posting_window",
+      "new": "ayrshare_post"
+    }
+  ],
+  "kept": [
+    {
+      "term": "developerLogins",
+      "path": "src/brands.ts",
+      "reason": "migrateWorkspace drops this field from workspaces saved by older versions"
+    },
+    {
+      "term": "developerLogins",
+      "path": "src-tauri/src/team_sync.rs",
+      "reason": "shares developer-site passwords already saved by older versions; harmless once none exist"
+    },
+    {
+      "term": "developerLogins",
+      "path": "src-tauri/src/backup.rs",
+      "reason": "test fixture: an old workspace with the field still exports"
+    },
+    {
+      "term": "developerLogins",
+      "path": "src-tauri/src/lib.rs",
+      "reason": "test that an old workspace with the field still loads"
+    },
+    {
+      "term": "testPosts",
+      "path": "src/brands.ts",
+      "reason": "migrateWorkspace drops this field from workspaces saved by older versions"
+    }
+  ],
+  "spots": [
+    {
+      "path": "src-tauri/src/ayrshare.rs",
+      "note": "Ayrshare API: keys and brand profile keys in Credential Manager, profiles, linking session, upload, post, history, delete, open post link"
+    },
+    {
+      "path": "src-tauri/src/posting.rs",
+      "note": "only brand windows now: profile page, editor, password reset, and the Ayrshare linking window that fills each social's sign-in"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "note": "ayrshare commands registered; Workspace.posting, Video.scheduled/media, Brand.ayrshare; setup, developer_logins and test_posts removed"
+    },
+    {
+      "path": "src-tauri/src/backup.rs",
+      "note": "export lists the Ayrshare keys instead of developer accounts"
+    },
+    {
+      "path": "src/ayrshareService.ts",
+      "note": "the only way the app reaches Ayrshare"
+    },
+    {
+      "path": "src/ayrsharePosting.ts",
+      "note": "post bodies (captions, YouTube title, AI labels, cover), reading answers and history"
+    },
+    {
+      "path": "src/useAyrshare.tsx",
+      "note": "provider: status, linked socials per brand, send/cancel/retry, history sync, auto-scheduler"
+    },
+    {
+      "path": "src/AyrshareSettings.tsx",
+      "note": "Settings \u2192 Posting"
+    },
+    {
+      "path": "src/brandStatus.ts",
+      "note": "one status per social from Ayrshare: connected, brand profile, linked, X keys"
+    },
+    {
+      "path": "src/postQueue.ts",
+      "note": "posting times, next free slot, schedule plan, lanes"
+    },
+    {
+      "path": "src/pages/QueuePage.tsx",
+      "note": "scheduled/failed/waiting per social, auto switch, posting times"
+    },
+    {
+      "path": "src/BrandAccounts.tsx",
+      "note": "Posting panel: connect, set up posting, link socials"
+    },
+    {
+      "path": "src/VideoLibrary.tsx",
+      "note": "tiles: Posted+View, Scheduled+Cancel, Failed+Retry, Post now"
+    },
+    {
+      "path": "src/pages/AccountsPage.tsx",
+      "note": "Setup tab gone; statuses from Ayrshare"
+    },
+    {
+      "path": "src/pages/OverviewPage.tsx",
+      "note": "Connect Ayrshare step; queue quick action"
+    },
+    {
+      "path": "src/usePartnerReview.tsx",
+      "note": "approved posts go into the queue"
+    },
+    {
+      "path": "src/workspaceSync.ts",
+      "note": "setup and developer logins no longer shared"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/capabilities/default.json",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/add_queue_job.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_brand_socials.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_create_profile.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_delete_post.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_disconnect.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_forget_profile.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_history.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_open_linking.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_post.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_remove_x_keys.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_save_key.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_save_x_keys.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_status.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_upload_video.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_use_profile.toml",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/check_tiktok_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/check_x_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/check_youtube_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/choose_instagram_video.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/claim_instagram_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/claim_x_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/complete_queue_job.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/connect_facebook_page.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/connect_instagram.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/connect_instagram_app.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/connect_tiktok.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/connect_x.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/connect_youtube.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/delete_queue_job.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/developer_apps.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/disconnect_facebook.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/disconnect_instagram.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/disconnect_tiktok.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/disconnect_x.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/disconnect_youtube.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/embed_setup_page.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/facebook_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/finish_instagram_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/instagram_app_ready.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/instagram_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/list_queue.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/open_facebook_post.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/open_instagram_post.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/open_posting_window.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/open_setup_page.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/post_to_x.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/posting_sign_ins.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/publish_facebook_reel_file.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/publish_instagram_photo.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/publish_instagram_reel.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/publish_instagram_reel_file.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/remove_developer_app.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/save_developer_app.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/save_instagram_app.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/save_production_app.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/tiktok_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/use_production_app.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/x_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/youtube_connection.toml",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/dev_apps.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/embedded.rs",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/facebook.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/instagram.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/instagram_login.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/queue.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/setup_pages.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/sign_in_state.rs",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/social_connect.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/video_files.rs",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src-tauri/src/x_integration.rs",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/App.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/App.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandAccounts.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandCard.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandCard.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandPicture.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandPicture.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandProfiles.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/BrandProfiles.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/Connections.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/Connections.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/DevAppSetupGuide.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/DevAppSetupGuide.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/DeveloperAccounts.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/DeveloperAccounts.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/InstagramIdPrompt.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/PostingSettings.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/PostingSettings.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/ReviewNotice.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/ReviewNotice.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/SetupTracker.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/SetupTracker.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/SignIns.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/appReviews.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/appReviews.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/assistant/AssistantPanel.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/assistant/tools.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/assistant/tools.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/ayrsharePosting.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/batchPosting.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/batchPosting.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/brandStatus.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/brandWindowService.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/brands.css",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/brands.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/brands.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/browserSession.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/deletionSafety.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/deletionSafety.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/devAppGuides.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/devAppsService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/facebookService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/instagramService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/model.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/pages/AccountsPage.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/pages/OverviewPage.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/pages/QueuePage.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/pages/SettingsPage.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/partnerReview.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/partnerReview.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/postDetails.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/postQueue.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/postingMode.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/postingMode.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/postingService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/profileConnections.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/profileService.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/publishAttempt.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/publishAttempt.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/queue.css",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/queueService.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/queueService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/setup.css",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/setupNeeds.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/setupNeeds.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/setupService.openNeedPage.test.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/setupService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/socialConnectService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/useBrandFacebook.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/useBrandInstagram.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/useBrandPublishing.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/useBrowserPosting.test.tsx",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/useBrowserPosting.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/usePartnerReview.test.tsx",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/useReviewWatch.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/useSignIns.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "src/videoFileService.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/workspaceSync.test.ts",
+      "note": "follows the move to Ayrshare"
+    },
+    {
+      "path": "src/xService.ts",
+      "note": "removed: replaced by Ayrshare"
+    },
+    {
+      "path": "HANDOFF.md",
+      "note": "posting section rewritten for Ayrshare; developer accounts, setup tracker and upload windows removed"
+    },
+    {
+      "path": "src-tauri/permissions/autogenerated/ayrshare_open_post.toml",
+      "note": "generated permission for ayrshare_open_post"
+    }
+  ]
+}

@@ -12,7 +12,7 @@ export function PasswordCell({ account }: { account: Account }) {
   return <PasswordField id={account.id} label={`${getPlatform(account.platform).name} ${account.handle ? `@${account.handle}` : account.label}`}/>;
 }
 
-/** A saved password by its Credential Manager id: a profile's, or a developer account's. */
+/** A saved password by its Credential Manager id: a profile's. */
 export function PasswordField({ id, label }: { id: string; label: string }) {
   const [saved, setSaved] = useState<boolean | null>(null);
   const [value, setValue] = useState('');
@@ -67,7 +67,7 @@ export default function SignIns({ workspace, busy, onEdit, onRestore, showBackup
   const brandName = (account: Account) => workspace.brands.find((brand) => brand.id === account.brandId)?.name ?? account.label;
   const rows = [...workspace.accounts].sort((a, b) => brandName(a).localeCompare(brandName(b)) || ORDER.indexOf(a.platform) - ORDER.indexOf(b.platform));
 
-  /** Plain-text export: every brand's profiles, which login controls which profile, developer accounts and API keys. */
+  /** Plain-text export: every brand's profiles, which login controls which profile, and the Ayrshare keys. */
   function exportJson() {
     if (working) return;
     if (!window.confirm('The JSON file lists every username, email, password and API key in plain text, readable by anyone who opens it. Save it only somewhere private and delete it when you are done. Continue?')) return;

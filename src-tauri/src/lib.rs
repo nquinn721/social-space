@@ -30,7 +30,6 @@ const MAX_ACCOUNTS: usize = 200;
 const MAX_FIELD_LENGTH: usize = 1_000;
 const MAX_VIDEOS: usize = 20_000;
 const MAX_CAPTION_LENGTH: usize = 4_000;
-const MAX_SETUP_MARKS: usize = 2_000;
 const MAX_SERIES: usize = 500;
 /// A series holds its story bible and every episode's script, so it gets more room than one field.
 const MAX_SERIES_BYTES: usize = 400_000;
@@ -48,14 +47,6 @@ struct Workspace {
     categories: Vec<VideoCategory>,
     #[serde(default)]
     videos: Vec<Video>,
-    /// Setup steps the user marked done by hand (developer plans, app reviews, account settings
-    /// the app cannot see), keyed by step id, with when they were marked (ms since 1970).
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    setup: BTreeMap<String, u64>,
-    /// The one developer account per social (TikTok for Developers, Google Cloud, X, Meta), keyed by
-    /// provider. Its password is kept with the account passwords under `developer-<provider>`.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    developer_logins: BTreeMap<String, DeveloperLogin>,
     /// Stories told across several videos (story bible, characters with reference pictures,
     /// episodes), as the interface edits them. Only their id and brand are checked here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -63,13 +54,6 @@ struct Workspace {
     /// How posting through Ayrshare runs: whether the queue schedules by itself and at which times of day.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     posting: Option<serde_json::Value>,
-}
-
-/// A developer-site sign-in tracked by the app: it uses the main email, not a brand's.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-struct DeveloperLogin {
-    email: String,
 }
 
 /// A kind of video inside a brand, e.g. "Rabbit".
@@ -112,10 +96,6 @@ struct Video {
     /// Link to the live post on each social it was published to by the app.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     links: BTreeMap<String, String>,
-    /// Socials it was marked posted on while that social's app still ran in test mode (TikTok
-    /// Sandbox, YouTube before the audit), with when (ms). Moved over once the app is approved.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    test_posts: BTreeMap<String, u64>,
     /// When it went up on each social (ms), for the post queue's limit of posts a day per account.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     posted_at: BTreeMap<String, u64>,
@@ -271,9 +251,6 @@ fn validate_series(workspace: &Workspace, brand_ids: &HashSet<&String>) -> Resul
 fn validate_workspace(workspace: &Workspace) -> Result<(), String> {
     if workspace.business_name.len() > MAX_FIELD_LENGTH || workspace.accounts.len() > MAX_ACCOUNTS || workspace.channels.len() > MAX_ACCOUNTS || workspace.brands.len() > MAX_ACCOUNTS {
         return Err("The workspace is too large to save.".into());
-    }
-    if workspace.setup.len() > MAX_SETUP_MARKS || workspace.setup.keys().any(|key| key.trim().is_empty() || key.len() > 200) {
-        return Err("The setup checklist is too large to save.".into());
     }
     let mut brand_ids = HashSet::new();
     for brand in &workspace.brands {
@@ -509,6 +486,7 @@ pub fn run() {
             ayrshare::ayrshare_post,
             ayrshare::ayrshare_history,
             ayrshare::ayrshare_delete_post,
+            ayrshare::ayrshare_open_post,
             video_files::choose_video_file,
             grok_ai::grok_models,
             grok_ai::grok_chat,
@@ -578,13 +556,12 @@ mod tests {
     fn post_details_prompt_links_and_category_defaults_survive_saving() {
         let json = serde_json::json!({"businessName": "", "accounts": [], "categories": [{"id": "c", "brandId": "b", "name": "Rabbit", "defaults": {"caption": "Hi", "hashtags": ["#bunny"]}}],
             "videos": [{"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "details": {"hashtags": ["#bunny"], "shareToFeed": true, "coverMs": 1500}, "prompt": "a rabbit",
-            "links": {"instagram": "https://www.instagram.com/reel/x/"}, "testPosts": {"tiktok": 1700000000000u64}}]});
+            "links": {"instagram": "https://www.instagram.com/reel/x/"}}]});
         let workspace: Workspace = serde_json::from_value(json).unwrap();
         let saved = serde_json::to_value(&workspace).unwrap();
         assert_eq!(saved["videos"][0]["details"]["coverMs"], 1500);
         assert_eq!(saved["videos"][0]["prompt"], "a rabbit");
         assert_eq!(saved["videos"][0]["links"]["instagram"], "https://www.instagram.com/reel/x/");
-        assert_eq!(saved["videos"][0]["testPosts"]["tiktok"], 1700000000000u64);
         assert_eq!(saved["categories"][0]["defaults"]["hashtags"][0], "#bunny");
     }
 
@@ -626,8 +603,6 @@ mod tests {
             channels: vec![],
             categories: vec![],
             videos: vec![],
-            setup: Default::default(),
-            developer_logins: Default::default(),
             series: vec![],
             posting: None,
         };
@@ -660,9 +635,9 @@ mod tests {
     fn old_workspaces_load_and_channels_require_a_matching_account() {
         let mut workspace: Workspace = serde_json::from_str(r#"{"businessName":"Old LLC","accounts":[]}"#).unwrap();
         assert!(workspace.channels.is_empty());
-        assert!(workspace.developer_logins.is_empty());
-        let tracked: Workspace = serde_json::from_str(r#"{"businessName":"","accounts":[],"developerLogins":{"tiktok":{"email":"main@example.com"}}}"#).unwrap();
-        assert_eq!(tracked.developer_logins["tiktok"].email, "main@example.com");
+        // Parts of older versions that are gone (setup ticks, developer logins) still load, and are dropped on save.
+        let old: Workspace = serde_json::from_str(r#"{"businessName":"","accounts":[],"setup":{"x:app:plan":1},"developerLogins":{"tiktok":{"email":"main@example.com"}}}"#).unwrap();
+        assert!(serde_json::to_value(&old).unwrap().get("developerLogins").is_none());
         workspace.accounts.push(account("account-1"));
         workspace.channels.push(Channel { id: "channel-1".into(), platform: Platform::Instagram, name: "Main".into(), handle: "main".into(), account_id: Some("account-1".into()), notes: String::new() });
         assert!(validate_workspace(&workspace).is_ok());
@@ -684,7 +659,7 @@ mod tests {
 
     #[test]
     fn accounts_must_belong_to_a_saved_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![], posting: None };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Massage With Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![account("one")], channels: vec![], categories: vec![], videos: vec![], series: vec![], posting: None };
         workspace.accounts[0].brand_id = Some("b".into());
         let json = serde_json::to_string(&workspace).unwrap();
         assert!(json.contains(r#""brandId":"b""#));
@@ -758,8 +733,8 @@ mod tests {
 
     #[test]
     fn videos_must_be_in_a_category_of_their_brand() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![], posting: None };
-        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), test_posts: Default::default(), posted_at: Default::default(), series_id: None, episode: None, text_edit: None, scheduled: Default::default(), media: None });
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], series: vec![], posting: None };
+        workspace.videos.push(Video { id: "v".into(), brand_id: "b".into(), category_id: "c".into(), title: "Bunny".into(), media_source: String::new(), caption: String::new(), posted: vec![Platform::Tiktok], created_at: 1, generation: None, details: None, prompt: None, links: Default::default(), posted_at: Default::default(), series_id: None, episode: None, text_edit: None, scheduled: Default::default(), media: None });
         let json = serde_json::to_string(&workspace).unwrap();
         assert_eq!(serde_json::from_str::<Workspace>(&json).unwrap(), workspace);
         assert!(validate_workspace(&workspace).is_ok());
@@ -772,7 +747,7 @@ mod tests {
 
     #[test]
     fn videos_can_carry_an_ai_generation_in_progress() {
-        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], setup: Default::default(), developer_logins: Default::default(), series: vec![], posting: None };
+        let mut workspace = Workspace { business_name: String::new(), brands: vec![Brand { id: "b".into(), name: "Mia".into(), notes: String::new(), image: None, ayrshare: None }], accounts: vec![], channels: vec![], categories: vec![VideoCategory { id: "c".into(), brand_id: "b".into(), name: "Rabbit".into(), defaults: None }], videos: vec![], series: vec![], posting: None };
         let json = serde_json::json!({"id": "v", "brandId": "b", "categoryId": "c", "title": "Bunny", "generation": {"sourceId": "s", "sourceName": "Main", "provider": "kling", "taskId": "t1", "prompt": "a rabbit", "status": "working"}});
         workspace.videos.push(serde_json::from_value(json).unwrap());
         assert!(validate_workspace(&workspace).is_ok());
@@ -852,8 +827,6 @@ mod tests {
             channels: vec![],
             categories: vec![],
             videos: vec![],
-            setup: Default::default(),
-            developer_logins: Default::default(),
             series: vec![],
             posting: None,
         };

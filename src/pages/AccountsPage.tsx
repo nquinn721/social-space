@@ -7,17 +7,13 @@ import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type B
 import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 
 import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
-import { useBrandInstagram } from '../useBrandInstagram';
-import { brandStatuses, brandSummary, chipLabel, useBrandStatuses, type SocialStatus } from '../brandStatus';
+import { brandSummary, chipLabel, useAllStatuses, useBrandStatuses, type SocialStatus } from '../brandStatus';
 import BrandCard from '../BrandCard';
-import { useSetupStatus } from '../setupService';
-const NO_ACCOUNTS: Account[] = [];
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
 import BrandProfiles, { type ProfileDraft } from '../BrandProfiles';
 import { BrandMark, PageHeader } from '../ui';
 import '../brands.css';
 import SignIns from '../SignIns';
-import Connections from '../Connections';
 import { DEFAULT_SIGNUP_EMAIL, type WizardPrefill } from '../CreateAccountWizard';
 
 type Props = {
@@ -39,7 +35,7 @@ type Props = {
   onOpenBrand?: (open: OpenBrand) => void;
   /** Saves workspace changes made on a brand's Content tab. */
   onSave?: (next: Workspace, message: string) => Promise<boolean | undefined>;
-  /** Goes to where a connection is set up (inbox, posting, video makers). */
+  /** Goes to where something is set up (inbox, Settings → Posting, video makers). */
   onNavigate?: (view: View, section?: string) => void;
   /** Removes a profile from the app (asks first). It never deletes anything on the social. */
   onRemoveAccount?: (account: Account) => void;
@@ -47,8 +43,8 @@ type Props = {
   onRemoveBrand?: (brand: Brand) => void;
   /** Renames a brand and its profiles in the app (usernames on the socials are changed separately). */
   onRenameBrand?: (brand: Brand, name: string) => Promise<boolean | undefined>;
-  /** Opens on this tab of the brands list, e.g. Setup from the overview. */
-  startTab?: 'brands' | 'sign-ins' | 'connections';
+  /** Opens on this tab of the brands list, e.g. Sign-ins. */
+  startTab?: 'brands' | 'sign-ins';
 };
 type BrandGroup = { key: string; brand: Brand; accounts: Account[] };
 const ORDER = PLATFORMS.map((platform) => platform.id);
@@ -62,7 +58,7 @@ export function groupByBrand(workspace: Pick<Workspace, 'accounts'> & Partial<Wo
 
 export default function AccountsPage({ workspace, loaded, busy, onAddAccount, onEditAccount, onCreateAccounts, onSignUp, onAlreadyCreated, onOpen, onRestore, openBrand, onOpenBrand, onSave, onRemoveAccount, onRemoveBrand, onRenameBrand, onNavigate, startTab }: Props) {
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<'brands' | 'sign-ins' | 'connections'>(startTab ?? 'brands');
+  const [tab, setTab] = useState<'brands' | 'sign-ins'>(startTab ?? 'brands');
   // The open brand lives in the app when it passes one in, so the overview can open a brand's posts.
   const [localOpen, setLocalOpen] = useState<OpenBrand>(null);
   const opened = onOpenBrand ? openBrand ?? null : localOpen;
@@ -82,21 +78,8 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       || group.accounts.some((account) => account.handle.toLowerCase().includes(text) || (account.displayName ?? '').toLowerCase().includes(text)));
   }, [groups, query]);
   const open = groups.find((group) => group.brand.id === openId);
-  const instagram = useBrandInstagram(workspace, open?.brand.id);
-  const statuses = useBrandStatuses(workspace, open?.brand.id, instagram);
-  // The brand list checks every profile once (Instagram connections, saved logins) for its status lines.
-  const listStatus = useSetupStatus(open || tab !== 'brands' ? NO_ACCOUNTS : all);
-  const marks = workspace.setup ?? {};
-  const mark = onSave ? (id: string, done: boolean) => {
-    const next = { ...marks };
-    if (done) next[id] = Date.now(); else delete next[id];
-    void onSave({ ...workspace, setup: next }, done ? 'Marked done.' : 'Marked not done.');
-  } : undefined;
-  const developerLogins = workspace.developerLogins ?? {};
-  const trackLogin = onSave ? (provider: string, email: string) => {
-    if (developerLogins[provider]?.email === email) return;
-    void onSave({ ...workspace, developerLogins: { ...developerLogins, [provider]: { email } } }, 'Developer account saved.');
-  } : undefined;
+  const statuses = useBrandStatuses(migrated, open?.brand.id);
+  const allStatuses = useAllStatuses(migrated);
 
   /** The brand's picture, saved with the brand so it syncs (brands made before brands were saved are added). */
   async function saveBrandImage(brand: Brand, image: BrandImage | undefined, message: string) {
@@ -115,7 +98,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     return onSave({ ...workspace, accounts: workspace.accounts.map((item) => { const draft = byId.get(item.id); return draft ? { ...item, bio: draft.bio, keywords: draft.keywords } : item; }) }, message);
   }
   const [adding, setAdding] = useState(false);
-  /** A chip on the brand page that connects or signs in one social: the Accounts tab acts on it. */
+  /** A chip on the brand page that links one social on Ayrshare: the Accounts tab acts on it. */
   const [accountRequest, setAccountRequest] = useState<AccountRequest | undefined>();
   /** The wizard prepares each account's password and reports errors before opening sign-up. */
   function startSignUp(account: Account) {
@@ -149,19 +132,23 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
     <button className="outline-button" disabled={!loaded} onClick={onAddAccount}><Plus size={16}/> Add an existing account</button>
     <button className="primary-button" disabled={!loaded} onClick={() => onCreateAccounts()}><UserPlus size={16}/> New brand</button>
   </>;
-  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button>{onNavigate && <button type="button" role="tab" aria-selected={tab === 'connections'} aria-pressed={tab === 'connections'} onClick={() => setTab('connections')}>Setup</button>}</div>;
+  const tabs = <div className="segmented account-tabs" role="tablist" aria-label="Brands view"><button type="button" role="tab" aria-selected={tab === 'brands'} aria-pressed={tab === 'brands'} onClick={() => setTab('brands')}>Brands</button><button type="button" role="tab" aria-selected={tab === 'sign-ins'} aria-pressed={tab === 'sign-ins'} onClick={() => setTab('sign-ins')}>Sign-ins</button></div>;
 
   if (open && tab === 'brands') {
     const { brand, accounts } = open;
     const summary = brandSummary(statuses);
-    /** The one step that unblocks a social: make its profile, finish its sign-up, or open Accounts to fix the login. */
+    /**
+     * The one step that unblocks a social: make its profile, finish its sign-up, connect Ayrshare (Settings),
+     * or open Accounts to set up posting, link it on Ayrshare or fix its login.
+     */
     const fixStatus = (status: SocialStatus) => {
       const kind = status.action?.kind;
       if (kind === 'create' && onSave && onSignUp) void addSocial(open, status.platform);
       else if (kind === 'finish-signup' && status.account && onSignUp) startSignUp(status.account);
+      else if ((kind === 'connect-ayrshare' || kind === 'x-keys') && onNavigate) onNavigate('settings', 'posting');
       else {
         showBrandTab('accounts');
-        if (kind === 'connect' || kind === 'sign-in') setAccountRequest({ platform: status.platform, kind, at: Date.now() });
+        if (kind === 'link') setAccountRequest({ platform: status.platform, kind: 'link', at: Date.now() });
       }
     };
     const notCreated = accounts.filter((account) => account.status !== 'active');
@@ -186,7 +173,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         return <button type="button" role="listitem" key={status.platform} className={`social-chip tone-${status.tone}`} title={[handle, status.detail, status.tone !== 'ok' ? status.action?.label : ''].filter(Boolean).join(' · ')} disabled={!loaded || busy || adding}
           onClick={() => fixStatus(status)} aria-label={`${name}: ${status.label}${status.action ? `. ${status.action.label}` : ''}`}>
           <BrandMark platform={status.platform}/>
-          <span className="social-chip-text"><strong>{name}</strong><span className="social-chip-state"><span className="dot"/>{status.kind === 'reconnect' ? status.label : chipLabel(status)}</span></span>
+          <span className="social-chip-text"><strong>{name}</strong><span className="social-chip-state"><span className="dot"/>{chipLabel(status)}</span></span>
         </button>;
       })}</div>
       <div className="segmented account-tabs brand-tabs" role="tablist" aria-label={`${brand.name} sections`}>
@@ -196,14 +183,14 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       </div>
       {brandTab === 'series' && onSave ? <SeriesPanel workspace={workspace} brand={brand} loaded={loaded} busy={busy} onSave={onSave} onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined}/>
       : brandTab === 'content' ? (onSave ? <VideoLibrary workspace={workspace} loaded={loaded} busy={busy} onSave={onSave} onOpen={onOpen} brandId={brand.id}
-        onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onConnectInstagram={() => showBrandTab('accounts')} onShowAccounts={() => showBrandTab('accounts')}
-        instagram={instagram} onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
-      <BrandAccounts brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}
+        onManageSources={onNavigate ? () => onNavigate('settings', 'video-sources') : undefined} onShowAccounts={() => showBrandTab('accounts')}
+        onCreateProfile={(platform) => { const status = statuses.find((item) => item.platform === platform); if (status) fixStatus(status); }}/> : null) : <>
+      <BrandAccounts workspace={migrated} brand={brand} accounts={accounts} loaded={loaded} busy={busy || adding} onEditAccount={onEditAccount}
         onSignUp={onSignUp ? (account) => startSignUp(account) : undefined} onAlreadyCreated={onAlreadyCreated} onRemoveAccount={onRemoveAccount}
         onAddSocial={onSave && onSignUp ? (platform) => void addSocial(open, platform) : undefined} onNavigate={onNavigate}
         addHint={(platform) => planPresence(all, platform, brand.name, baseEmail).reason} warnings={(account) => issues.filter((issue) => issue.accountId === account.id).map((issue) => issue.text)} request={accountRequest}/>
-      {onSave && <BrandProfiles key={brand.id} brand={brand} accounts={accounts} busy={busy || !loaded} developerLogins={developerLogins} onSave={saveProfiles}/>}
-      {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} developerLogins={developerLogins} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
+      {onSave && <BrandProfiles key={brand.id} brand={brand} accounts={accounts} busy={busy || !loaded} onSave={saveProfiles}/>}
+      {onSave && <BrandPicture brand={brand} accounts={accounts} busy={busy} onNavigate={onNavigate} onSaveImage={(image, message) => saveBrandImage(brand, image, message)} onSaveAccountImage={(account, file, message) => saveAccountImage(account, file, message)}/>}
       {onRemoveBrand && <div className="danger-zone"><button type="button" className="remove-button" disabled={!loaded || busy} onClick={() => onRemoveBrand(brand)}><Trash2 size={14}/> Delete {brand.name}</button><small>{accounts.some((account) => account.status === 'active') ? 'Live profiles stay on the socials; only their saved details here are removed.' : 'Removes the brand, its profiles and its videos from the app.'}</small></div>}
       </>}
     </>;
@@ -212,7 +199,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
   return <>
     <PageHeader eyebrow="Your brands" title="Brands" description="A brand is one account on every social. Open a brand to see its posts by category, and its accounts." actions={actions}/>
     {tabs}
-    {tab === 'connections' && onNavigate ? <Connections onNavigate={onNavigate} accounts={all} brands={groups.map((group) => group.brand)} marks={marks} onMark={mark} onEditAccount={onEditAccount} developerLogins={developerLogins} onDeveloperLogin={trackLogin}/> : tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
+    {tab === 'sign-ins' ? <SignIns workspace={workspace} busy={busy} onEdit={onEditAccount} onRestore={onRestore ?? (async () => false)}/> : groups.length === 0 ? <section className="card empty-state">
       <div className="empty-icon"><UsersRound size={22}/></div>
       <strong>No brands yet</strong>
       <p>New brand walks you through signing up on Instagram, TikTok, YouTube and X with one name, one description and one password. Already have an account? Add it so its sign-in is kept here. Moving to a new PC? Restore your backup under Sign-ins.</p>
@@ -221,7 +208,7 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
       <div className="toolbar"><label className="search-input"><span className="sr-only">Search brands</span><Search size={15}/><input type="search" placeholder="Search brands or usernames" value={query} onChange={(event) => setQuery(event.target.value)}/></label></div>
       {shown.length === 0 && <p className="footnote">No brands match that search.</p>}
       <div className="brand-cards">{shown.map(({ brand, accounts }) => <BrandCard key={brand.id} brand={brand} accounts={accounts} workspace={workspace}
-        statuses={brandStatuses(migrated, brand.id, { connections: listStatus.connections, passwords: listStatus.passwords })} onOpen={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}/>)}</div>
+        statuses={allStatuses[brand.id] ?? []} onOpen={() => { setTab('brands'); setOpened({ id: brand.id, tab: 'content' }); }}/>)}</div>
     </>}
     {tab === 'brands' && <details className="more-tools"><summary>Open a social's own site</summary>
     <div className="platform-shortcuts" style={{ marginTop: 0 }}>{PLATFORMS.map((platform) => <div className="platform-shortcut" key={platform.id}>

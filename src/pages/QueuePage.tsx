@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AppWindow, Check, ListOrdered, Play, SkipForward, Square } from 'lucide-react';
-import { getPlatform, type Brand, type Workspace } from '../model';
+import { useEffect, useMemo, useState } from 'react';
+import { CalendarClock, ListOrdered, Loader2, Plus, RotateCcw, Send, X } from 'lucide-react';
+import { getPlatform, type Brand, type Platform, type PostingSettings, type Workspace } from '../model';
 import { BrandMark, errorText, PageHeader } from '../ui';
-import { brandStatuses, useSavedPasswords } from '../brandStatus';
-import { useSignIns } from '../useSignIns';
-import { useBrowserPosting } from '../useBrowserPosting';
-import { brandLanes, DAILY_LIMIT, dayLabel, notReady, stepKey, todaysSteps, type QueueLane, type QueueStep } from '../postQueue';
+import { useAllStatuses } from '../brandStatus';
+import { brandLanes, DAILY_LIMIT, isTime, notReady, planSchedule, postingSettings, whenLabel, type QueueLane } from '../postQueue';
 import { videoPartLabel } from '../series';
+import { useAyrshare } from '../useAyrshare';
 import '../library.css';
 import '../series.css';
 import '../queue.css';
@@ -18,6 +17,8 @@ type Props = {
   onSave: (next: Workspace, message: string) => Promise<boolean | undefined>;
   /** Opens a brand's page on its posts, to make videos or fix a social. */
   onOpenBrand: (brandId: string, tab?: 'content' | 'accounts') => void;
+  /** Goes to Settings → Posting, to connect Ayrshare. */
+  onOpenSettings?: () => void;
 };
 
 /** The time, moved on every minute, so a new day frees the daily limits without a reload. */
@@ -28,101 +29,105 @@ function useNow() {
 }
 
 /**
- * The post queue: each brand's finished videos wait their turn on every social, and at most DAILY_LIMIT
- * go up on an account in a day. Until the socials' APIs post by themselves, "Post today's videos" walks
- * through today's posts one at a time: it opens each upload page in the brand's window, Nate presses Post
- * there, and the next one opens once it is recorded.
+ * The post queue: each brand's finished videos wait their turn on every social, oldest first, and go to
+ * Ayrshare scheduled into the next free posting time (at most DAILY_LIMIT a day on an account). With
+ * automatic scheduling on, the app does that by itself while it is open; Ayrshare posts them on time even
+ * when the app is closed. What this page shows comes from the workspace, whose post states Ayrshare reports.
  */
-export default function QueuePage({ workspace, loaded, busy, onSave, onOpenBrand }: Props) {
+export default function QueuePage({ workspace, loaded, busy, onSave, onOpenBrand, onOpenSettings }: Props) {
   const now = useNow();
-  const passwords = useSavedPasswords(workspace.accounts);
-  const signIns = useSignIns();
-  const lanesByBrand = useMemo(() => workspace.brands.map((brand) => ({
-    brand, lanes: brandLanes(workspace, brand.id, brandStatuses(workspace, brand.id, { passwords, signIns: signIns[brand.id] }), now),
-  })), [workspace, passwords, signIns, now]);
-  const browser = useBrowserPosting(workspace, onSave);
-  const [running, setRunning] = useState(false);
-  const [skipped, setSkipped] = useState<string[]>([]);
-  const [started, setStarted] = useState(0);
+  const ayrshare = useAyrshare();
+  const all = useAllStatuses(workspace);
+  const lanesByBrand = useMemo(() => workspace.brands.map((brand) => ({ brand, lanes: brandLanes(workspace, brand.id, all[brand.id] ?? [], now) })), [workspace, all, now]);
+  const settings = postingSettings(workspace);
   const [error, setError] = useState('');
-  const steps = todaysSteps(lanesByBrand.flatMap((item) => item.lanes)).filter((step) => !skipped.includes(stepKey(step)));
-  const current = running ? steps[0] : undefined;
-  const currentKey = current ? stepKey(current) : '';
-  const opened = useRef('');
-  const video = (step: QueueStep) => workspace.videos?.find((item) => item.id === step.videoId);
-  const brandName = (id: string) => workspace.brands.find((brand) => brand.id === id)?.name ?? '';
-
-  async function open(step: QueueStep) {
-    const item = video(step);
-    if (!item) return;
-    setError('');
-    try { await browser.post(item, step.platform); }
-    catch (reason) { setError(errorText(reason, `Could not open the ${getPlatform(step.platform).name} upload page.`)); setRunning(false); }
-  }
-  // Opens each step's upload page as it comes up: the first when started, the next once the last is recorded.
-  useEffect(() => {
-    if (!running) return;
-    if (!current) { setRunning(false); return; }
-    if (opened.current === currentKey || browser.isOpen(current.videoId, current.platform) || browser.isAsking(current.videoId, current.platform)) return;
-    opened.current = currentKey;
-    void open(current);
-  }, [running, currentKey]);
-
-  function start() { setSkipped([]); opened.current = ''; setStarted(steps.length); setError(''); setRunning(true); }
-  function stop() { setRunning(false); opened.current = ''; }
-  function skip() { if (current) setSkipped((list) => [...list, stepKey(current)]); }
-
-  const waitingTotal = lanesByBrand.reduce((sum, item) => sum + item.lanes.reduce((count, lane) => count + lane.waiting.length, 0), 0);
-  const doneCount = Math.max(0, started - steps.length);
+  const [manual, setManual] = useState<{ done: number; total: number } | null>(null);
+  const connected = Boolean(ayrshare.status?.connected && ayrshare.status.working !== false);
   const disabled = !loaded || busy;
 
-  return <>
-    <PageHeader eyebrow="Posting" title="Post queue" description={<>Every finished video waits its turn, oldest first, on each social of its brand. At most {DAILY_LIMIT} go up on an account in a day. Until the socials' APIs post by themselves, you post them: the app opens each upload page with everything filled in, and you press Post.</>}
-      actions={!running && <button type="button" className="primary-button" disabled={disabled || steps.length === 0} onClick={start}><Play size={15}/> {steps.length ? `Post today's ${steps.length === 1 ? 'video' : `${steps.length} videos`}` : 'Nothing to post today'}</button>}/>
+  const lanes = lanesByBrand.flatMap((item) => item.lanes);
+  const waitingTotal = lanes.reduce((sum, lane) => sum + lane.waiting.length, 0);
+  const scheduledTotal = lanes.reduce((sum, lane) => sum + lane.scheduled.length, 0);
+  const failedTotal = lanes.reduce((sum, lane) => sum + lane.failed.length, 0);
+  const plan = useMemo(() => lanesByBrand.flatMap(({ brand, lanes }) => planSchedule(workspace, brand.id, lanes.filter((lane) => lane.status.canPost).map((lane) => lane.platform), now)), [lanesByBrand, workspace, now]);
 
-    {running && current && <section className="card queue-walk" aria-live="polite">
-      <div className="queue-walk-head">
-        <span className="queue-walk-count">Post {doneCount + 1} of {Math.max(started, doneCount + steps.length)}</span>
-        <button type="button" className="ghost-button small-button" onClick={stop}><Square size={13}/> Stop</button>
+  async function saveSettings(next: PostingSettings, message: string) {
+    setError('');
+    await onSave({ ...workspace, posting: next }, message);
+  }
+  /** With automatic scheduling off: schedules everything that fits in the next three weeks, one post at a time. */
+  async function scheduleNow() {
+    if (manual) return;
+    setError('');
+    setManual({ done: 0, total: plan.length });
+    try {
+      for (const [index, item] of plan.entries()) {
+        const result = await ayrshare.send(item.videoId, item.platform, item.at);
+        if (result.post.state === 'failed') throw new Error(result.post.error ?? 'Ayrshare did not take the post.');
+        setManual({ done: index + 1, total: plan.length });
+      }
+    } catch (reason) { setError(errorText(reason, 'Could not schedule the posts.')); }
+    finally { setManual(null); }
+  }
+  async function act(action: () => Promise<void>) {
+    setError('');
+    try { await action(); } catch (reason) { setError(errorText(reason)); }
+  }
+
+  const autoLine = !connected ? 'Ayrshare isn\'t connected, so nothing is scheduled.'
+    : !settings.autoSchedule ? `Automatic scheduling is off.${plan.length ? ` ${plan.length} ${plan.length === 1 ? 'post is' : 'posts are'} ready to schedule.` : ''}`
+    : ayrshare.auto.paused ? ayrshare.auto.paused
+    : ayrshare.auto.running ? `Scheduling${ayrshare.auto.current ? ` "${ayrshare.auto.current}"` : ''}…`
+    : plan.length ? 'Scheduling the next posts…'
+    : waitingTotal ? 'Everything that fits in the next three weeks is scheduled. The rest follows as days open up.'
+    : 'Everything is scheduled.';
+
+  return <>
+    <PageHeader eyebrow="Posting" title="Post queue" description={<>Every finished video waits its turn, oldest first, on each social of its brand, and goes to Ayrshare scheduled into the next posting time: at most {DAILY_LIMIT} a day on an account. Ayrshare posts them on time, even with the app closed.</>}
+      actions={connected && !settings.autoSchedule && <button type="button" className="primary-button" disabled={disabled || !!manual || plan.length === 0} onClick={() => void scheduleNow()}>{manual ? <><Loader2 size={15} className="spin"/> Scheduling {manual.done + 1} of {manual.total}…</> : <><Send size={15}/> {plan.length ? `Schedule ${plan.length} ${plan.length === 1 ? 'post' : 'posts'}` : 'Nothing to schedule'}</>}</button>}/>
+
+    <section className="card queue-settings" aria-label="Scheduling">
+      <div className={`status-line ${connected && !ayrshare.auto.paused ? '' : 'off'}`}><span className="dot"/><span>{ayrshare.auto.running && <Loader2 size={13} className="spin"/>} {autoLine}</span>
+        {!connected && onOpenSettings && <button type="button" className="primary-button small-button" onClick={onOpenSettings}>Connect Ayrshare</button>}
       </div>
-      <Step step={current} title={video(current)?.title ?? ''} part={video(current) ? videoPartLabel(workspace, video(current)!) : null} brand={brandName(current.brandId)} browser={browser} disabled={disabled} onOpen={() => void open(current)} onSkip={skip}/>
-    </section>}
-    {!running && started > 0 && steps.length === 0 && <section className="card queue-walk queue-walk-done"><Check size={16}/> Today's posts are done. The next ones are due tomorrow.</section>}
+      <div className="queue-settings-row">
+        <label className="toggle-row"><input type="checkbox" checked={settings.autoSchedule} disabled={disabled} onChange={(event) => void saveSettings({ ...settings, autoSchedule: event.target.checked }, event.target.checked ? 'Automatic scheduling is on.' : 'Automatic scheduling is off.')}/> Schedule new videos by themselves</label>
+        <PostingTimes times={settings.times} disabled={disabled} onSave={(times) => void saveSettings({ ...settings, times }, 'Posting times saved. New posts use them.')}/>
+      </div>
+      <p className="footnote">{scheduledTotal} scheduled · {waitingTotal} waiting{failedTotal ? ` · ${failedTotal} failed` : ''}. Times are this PC's time. Posts already scheduled keep their time.</p>
+    </section>
     {error && <div className="error-message" role="alert">{error}</div>}
 
     {workspace.brands.length === 0 ? <section className="card empty-state"><div className="empty-icon"><ListOrdered size={22}/></div><strong>No brands yet</strong><p>Create a brand and make some videos. They line up here.</p></section>
-      : waitingTotal === 0 && lanesByBrand.every((item) => item.lanes.every((lane) => lane.today.length === 0)) && <p className="library-hint">Nothing is waiting. Make videos in a brand's Posts tab and they line up here.</p>}
+      : waitingTotal + scheduledTotal + failedTotal === 0 && <p className="library-hint">Nothing is waiting. Make videos in a brand's Posts tab and they line up here.</p>}
 
-    {lanesByBrand.map(({ brand, lanes }) => <BrandQueue key={brand.id} brand={brand} lanes={lanes} workspace={workspace} current={current} onOpenBrand={onOpenBrand}/>)}
+    {lanesByBrand.map(({ brand, lanes }) => <BrandQueue key={brand.id} brand={brand} lanes={lanes} workspace={workspace} now={now}
+      onOpenBrand={onOpenBrand} onCancel={(videoId, platform) => void act(() => ayrshare.cancel(videoId, platform))} onRetry={(videoId, platform) => void act(() => ayrshare.retry(videoId, platform))}/>)}
   </>;
 }
 
-/** The step being posted: which brand, social and video, and what to do now. */
-function Step({ step, title, part, brand, browser, disabled, onOpen, onSkip }: { step: QueueStep; title: string; part: string | null; brand: string; browser: ReturnType<typeof useBrowserPosting>; disabled: boolean; onOpen: () => void; onSkip: () => void }) {
-  const name = getPlatform(step.platform).name;
-  const asking = browser.isAsking(step.videoId, step.platform);
-  const open = browser.isOpen(step.videoId, step.platform);
-  const failed = browser.confirmationError(step.videoId, step.platform);
-  return <div className="queue-step">
-    <BrandMark platform={step.platform}/>
-    <div className="queue-step-text">
-      <strong>{brand} on {name}</strong>
-      <span>{part && <span className="series-badge">{part}</span>}{title}</span>
-      <small>{asking ? `Did it go up on ${name}?` : open ? `Check the details in the ${name} window and press Post there. The next one opens once it is up.` : `The ${name} window is closed and this post isn't recorded.`}</small>
-      {failed && <span className="error-message" role="alert">{failed}</span>}
-    </div>
-    <div className="queue-step-actions">
-      {asking ? <>
-        <button type="button" className="primary-button small-button" disabled={disabled || browser.isConfirming} onClick={() => void browser.confirm({ videoId: step.videoId, platform: step.platform }, true)}><Check size={13}/> Yes, it's up</button>
-        <button type="button" className="ghost-button small-button" disabled={browser.isConfirming} onClick={() => void browser.confirm({ videoId: step.videoId, platform: step.platform }, false)}>Not yet</button>
-      </> : <button type="button" className="outline-button small-button" disabled={disabled} onClick={onOpen}><AppWindow size={13}/> {open ? 'Open again' : `Open ${name}`}</button>}
-      <button type="button" className="ghost-button small-button" disabled={browser.isConfirming} onClick={onSkip}><SkipForward size={13}/> Skip</button>
-    </div>
+/** The day's posting times (up to DAILY_LIMIT), edited in place and saved together. */
+function PostingTimes({ times, disabled, onSave }: { times: string[]; disabled: boolean; onSave: (times: string[]) => void }) {
+  const [draft, setDraft] = useState(times);
+  const saved = times.join(',');
+  useEffect(() => setDraft(times), [saved]); // eslint-disable-line react-hooks/exhaustive-deps
+  const valid = draft.length > 0 && draft.every(isTime) && new Set(draft).size === draft.length;
+  const changed = [...draft].sort().join(',') !== saved;
+  return <div className="posting-times" aria-label="Posting times">
+    <CalendarClock size={15}/><span>Posts go out at</span>
+    {draft.map((time, index) => <span key={index} className="posting-time">
+      <input type="time" aria-label={`Posting time ${index + 1}`} value={time} disabled={disabled} onChange={(event) => setDraft(draft.map((item, at) => at === index ? event.target.value : item))}/>
+      {draft.length > 1 && <button type="button" className="icon-button" aria-label={`Remove ${time}`} disabled={disabled} onClick={() => setDraft(draft.filter((_, at) => at !== index))}><X size={12}/></button>}
+    </span>)}
+    {draft.length < DAILY_LIMIT && <button type="button" className="ghost-button small-button" disabled={disabled} onClick={() => setDraft([...draft, '20:00'].filter((item, at, list) => list.indexOf(item) === at))}><Plus size={13}/> Add a time</button>}
+    {changed && <button type="button" className="outline-button small-button" disabled={disabled || !valid} onClick={() => onSave([...draft].sort())}>Save times</button>}
   </div>;
 }
 
-/** One brand's socials: what went up today, what goes next, and how long the queue lasts. */
-function BrandQueue({ brand, lanes, workspace, current, onOpenBrand }: { brand: Brand; lanes: QueueLane[]; workspace: Workspace; current?: QueueStep; onOpenBrand: Props['onOpenBrand'] }) {
+type LaneActions = { onCancel: (videoId: string, platform: Platform) => void; onRetry: (videoId: string, platform: Platform) => void };
+
+/** One brand's socials: what is scheduled when, what failed, and what still waits. */
+function BrandQueue({ brand, lanes, workspace, now, onOpenBrand, ...actions }: { brand: Brand; lanes: QueueLane[]; workspace: Workspace; now: number; onOpenBrand: Props['onOpenBrand'] } & LaneActions) {
   const unready = notReady(workspace, brand.id);
   const making = unready.filter((video) => video.generation).length;
   const fixing = unready.length - making;
@@ -132,29 +137,41 @@ function BrandQueue({ brand, lanes, workspace, current, onOpenBrand }: { brand: 
       <button type="button" className="ghost-button small-button" onClick={() => onOpenBrand(brand.id)}>Open posts</button>
     </div>
     {lanes.length === 0 ? <p className="library-hint">{brand.name} has no social profiles yet.</p> : <ul className="queue-lanes">
-      {lanes.map((lane) => <Lane key={lane.platform} lane={lane} workspace={workspace} current={current} onFix={() => onOpenBrand(brand.id, 'accounts')}/>)}
+      {lanes.map((lane) => <Lane key={lane.platform} lane={lane} workspace={workspace} now={now} onFix={() => onOpenBrand(brand.id, 'accounts')} {...actions}/>)}
     </ul>}
   </section>;
 }
 
-function Lane({ lane, workspace, current, onFix }: { lane: QueueLane; workspace: Workspace; current?: QueueStep; onFix: () => void }) {
+function Lane({ lane, workspace, now, onFix, onCancel, onRetry }: { lane: QueueLane; workspace: Workspace; now: number; onFix: () => void } & LaneActions) {
+  const ayrshare = useAyrshare();
   const name = getPlatform(lane.platform).name;
-  const next = lane.status.canPost ? lane.due : lane.waiting.slice(0, DAILY_LIMIT);
-  const left = Math.max(0, DAILY_LIMIT - lane.today.length);
-  const summary = lane.waiting.length === 0 ? 'Nothing waiting'
-    : `${lane.waiting.length} waiting${lane.status.canPost && lane.doneIn !== null ? ` · all up ${dayLabel(lane.doneIn)}` : ''}`;
-  return <li className={`queue-lane tone-${lane.status.canPost ? (left === 0 ? 'ok' : 'ready') : lane.status.tone}`}>
+  const part = (id: string) => { const video = workspace.videos?.find((item) => item.id === id); return video ? videoPartLabel(workspace, video) : null; };
+  const summary = !lane.status.canPost ? lane.status.label
+    : [lane.scheduled.length && `${lane.scheduled.length} scheduled`, lane.waiting.length && `${lane.waiting.length} waiting`].filter(Boolean).join(' · ') || 'Nothing waiting';
+  return <li className={`queue-lane tone-${lane.status.canPost ? (lane.failed.length ? 'problem' : 'ok') : lane.status.tone}`}>
     <BrandMark platform={lane.platform} small/>
-    <div className="queue-lane-name"><strong>{name}</strong><small>{lane.status.canPost ? summary : lane.status.label}</small></div>
-    <div className="queue-pips" aria-label={`${lane.today.length} of ${DAILY_LIMIT} posted today`} title={lane.today.map((video) => video.title).join('\n') || 'Nothing posted today'}>
-      {Array.from({ length: DAILY_LIMIT }, (_, index) => <span key={index} className={index < lane.today.length ? 'filled' : ''}/>)}
-      <small>{lane.today.length}/{DAILY_LIMIT} today</small>
+    <div className="queue-lane-name"><strong>{name}</strong><small>{summary}</small></div>
+    <div className="queue-pips" aria-label={`${lane.today} of ${DAILY_LIMIT} today`} title="Posts today, up or scheduled">
+      {Array.from({ length: DAILY_LIMIT }, (_, index) => <span key={index} className={index < lane.today ? 'filled' : ''}/>)}
+      <small>{lane.today}/{DAILY_LIMIT} today</small>
     </div>
     <div className="queue-next">
-      {!lane.status.canPost ? <><small>{lane.status.detail}</small>{lane.status.action && <button type="button" className="dest-button" onClick={onFix}>{lane.status.action.short}</button>}</>
-        : left === 0 ? <small>Done for today{lane.waiting.length ? `. Next: ${lane.waiting[0].title}, tomorrow.` : '.'}</small>
-        : next.length === 0 ? <small>Nothing waiting.</small>
-        : <ol>{next.map((video) => <li key={video.id} className={current?.videoId === video.id && current.platform === lane.platform ? 'current' : ''}>{videoPartLabel(workspace, video) && <span className="series-badge">{videoPartLabel(workspace, video)}</span>}{video.title}</li>)}</ol>}
+      {!lane.status.canPost && <><small>{lane.status.detail}</small>{lane.status.action && <button type="button" className="dest-button" onClick={onFix}>{lane.status.action.short}</button>}</>}
+      {(lane.scheduled.length > 0 || lane.failed.length > 0) && <ol className="queue-posts">
+        {lane.failed.map((video) => <li key={video.id} className="failed" title={video.scheduled?.[lane.platform]?.error}>
+          {part(video.id) && <span className="series-badge">{part(video.id)}</span>}<span className="queue-post-title">{video.title}</span>
+          <small className="danger-text">Failed: {video.scheduled?.[lane.platform]?.error ?? 'Ayrshare could not post it.'}</small>
+          <button type="button" className="ghost-button small-button" onClick={() => onRetry(video.id, lane.platform)}><RotateCcw size={12}/> Retry</button>
+        </li>)}
+        {lane.scheduled.slice(0, DAILY_LIMIT * 2).map((video) => <li key={video.id}>
+          {part(video.id) && <span className="series-badge">{part(video.id)}</span>}<span className="queue-post-title">{video.title}</span>
+          <small>{whenLabel(video.scheduled![lane.platform]!.at, now)}</small>
+          <button type="button" className="ghost-button small-button" aria-label={`Cancel ${video.title} on ${name}`} disabled={ayrshare.isSending(video.id, lane.platform)} onClick={() => onCancel(video.id, lane.platform)}><X size={12}/> Cancel</button>
+        </li>)}
+        {lane.scheduled.length > DAILY_LIMIT * 2 && <li className="more"><small>and {lane.scheduled.length - DAILY_LIMIT * 2} more scheduled, the last {whenLabel(lane.scheduled[lane.scheduled.length - 1].scheduled![lane.platform]!.at, now)}</small></li>}
+      </ol>}
+      {lane.status.canPost && lane.waiting.length > 0 && <small>{lane.waiting.length} waiting{lane.lastAt !== null ? `, all out by ${whenLabel(lane.lastAt, now)}` : ''}</small>}
+      {lane.status.canPost && lane.scheduled.length === 0 && lane.failed.length === 0 && lane.waiting.length === 0 && <small>Nothing waiting.</small>}
     </div>
   </li>;
 }

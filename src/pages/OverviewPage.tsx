@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Check, ChevronRight, ClipboardCheck, Mail, Plus, Send, UserPlus } from 'lucide-react';
+import { Bot, CalendarClock, Check, ChevronRight, Mail, Plus, Send, UserPlus } from 'lucide-react';
 import { brandSocials } from '../VideoLibrary';
 import { videoStage } from '../postDetails';
 import InboxList from '../InboxList';
@@ -7,9 +7,8 @@ import { emailConnection } from '../emailService';
 import { listModels } from '../assistant/grokClient';
 import { getPlatform, type Platform, type View, type Workspace } from '../model';
 import { BrandMark } from '../ui';
-import { useSetupStatus } from '../setupService';
-import { brandStatuses, needsAttention } from '../brandStatus';
-import { useSignIns } from '../useSignIns';
+import { needsAttention, useAllStatuses } from '../brandStatus';
+import { useAyrshare } from '../useAyrshare';
 import { migrateWorkspace } from '../brands';
 import BrandCard, { postsToMake } from '../BrandCard';
 
@@ -53,22 +52,25 @@ export default function OverviewPage({ workspace: saved, loaded, onNavigate, onO
   const workspace = useMemo(() => { const moved = migrateWorkspace(saved); return { ...saved, brands: moved.brands, accounts: moved.accounts }; }, [saved]);
   const openBrand = (id: string, tab: 'content' | 'accounts' = 'content') => onOpenBrand ? onOpenBrand(id, tab) : onNavigate('accounts');
   const { email, model } = useConnections();
+  const ayrshare = useAyrshare();
   const steps = [
     { id: 'name', done: Boolean(workspace.businessName.trim()), title: 'Name your workspace', detail: 'Shown across the app so you know where you are.', action: () => onNavigate('settings', 'workspace'), label: 'Add name' },
     { id: 'email', done: email === true, title: 'Connect your inbox', detail: 'So verification codes show up here during sign-up.', action: () => onNavigate('settings', 'email'), label: 'Connect' },
     { id: 'model', done: model === true, title: 'Set up the assistant', detail: 'Uses Grok with your xAI key. Suggests names, descriptions and pictures.', action: () => onNavigate('settings', 'assistant'), label: 'Set up' },
     { id: 'accounts', done: workspace.accounts.length > 0, title: 'Create your first brand', detail: 'One form sets up its profile on every social.', action: () => onCreateAccounts(), label: 'Start' },
   ];
+  const ayrshareStatus = ayrshare.status;
+  if (ayrshareStatus) steps.splice(3, 0, { id: 'ayrshare', done: Boolean(ayrshareStatus.connected && ayrshareStatus.working !== false), title: 'Connect Ayrshare', detail: 'Every post and schedule goes out through Ayrshare.', action: () => onNavigate('settings', 'posting'), label: 'Connect' });
   const done = steps.filter((step) => step.done).length;
   // Still checking email and Grok: don't flash the setup card at people who are set up.
-  const setupKnown = email !== null && model !== null;
-  const status = useSetupStatus(workspace.accounts);
-  const signIns = useSignIns();
+  const setupKnown = email !== null && model !== null && ayrshare.status !== null;
+  const all = useAllStatuses(workspace);
   const brands = workspace.brands ?? [];
   const boards = useMemo(() => brands.map((brand) => {
-    const statuses = brandStatuses(workspace, brand.id, { connections: status.connections, passwords: status.passwords, signIns: signIns[brand.id] });
+    const statuses = all[brand.id] ?? [];
     return { brand, accounts: workspace.accounts.filter((account) => account.brandId === brand.id), statuses, posts: postsToMake(workspace, brand.id, statuses) };
-  }), [workspace, brands, status.connections, status.passwords, signIns]);
+  }), [workspace, brands, all]);
+  const scheduled = boards.reduce((sum, board) => sum + board.posts.scheduled, 0);
   const toMake = boards.reduce((sum, board) => sum + board.posts.total, 0);
   const canGo = boards.reduce((sum, board) => sum + board.posts.now, 0);
   const attention = boards.flatMap((board) => board.statuses.filter(needsAttention).map((item) => ({ ...item, brand: board.brand })));
@@ -86,7 +88,7 @@ export default function OverviewPage({ workspace: saved, loaded, onNavigate, onO
     </div>
 
     {brands.length > 0 && <div className="stat-grid">
-      <button type="button" className="stat stat-button" onClick={() => waitingBrands[0] && openBrand(waitingBrands[0].brand.id)} disabled={!waitingBrands.length}><span>Posts to make</span><strong>{toMake}</strong><small>{toMake ? `${canGo} ready to go out now` : 'All caught up'}</small></button>
+      <button type="button" className="stat stat-button" onClick={() => waitingBrands[0] && openBrand(waitingBrands[0].brand.id)} disabled={!waitingBrands.length}><span>Posts to make</span><strong>{toMake}</strong><small>{toMake ? `${canGo} can be scheduled now` : 'All caught up'}{scheduled ? `, ${scheduled} scheduled` : ''}</small></button>
       <div className="stat"><span>Needs attention</span><strong>{attention.length}</strong><small>{attention.length ? 'Socials that can\'t post yet' : 'Every profile can post'}</small></div>
       <div className="stat"><span>Brands</span><strong>{brands.length}</strong><small>{live} live {live === 1 ? 'profile' : 'profiles'}</small></div>
       <div className="stat"><span>Videos</span><strong>{workspace.videos?.length ?? 0}</strong><small>In {workspace.categories?.length ?? 0} {(workspace.categories?.length ?? 0) === 1 ? 'category' : 'categories'}</small></div>
@@ -126,7 +128,7 @@ export default function OverviewPage({ workspace: saved, loaded, onNavigate, onO
           <div className="quick-actions">
             {waitingBrands.slice(0, 3).map((board) => <button key={board.brand.id} className="quick-action" onClick={() => openBrand(board.brand.id)}><Send size={18}/><div><strong>Post {board.brand.name}'s videos</strong><small>{board.posts.total} to make{board.posts.now < board.posts.total ? `, ${board.posts.now} ready now` : ''}</small></div><ChevronRight size={16}/></button>)}
             <button className="quick-action" onClick={() => onNavigate('inbox')}><Mail size={18}/><div><strong>Check verification codes</strong><small>{email === false ? 'Connect your inbox first' : 'Newest mail from your inbox'}</small></div><ChevronRight size={16}/></button>
-            <button className="quick-action" onClick={() => onNavigate('accounts', 'setup')}><ClipboardCheck size={18}/><div><strong>What each social needs</strong><small>Profiles, logins and connections, per social</small></div><ChevronRight size={16}/></button>
+            <button className="quick-action" onClick={() => onNavigate('queue')}><CalendarClock size={18}/><div><strong>See the post queue</strong><small>{scheduled ? `${scheduled} scheduled through Ayrshare` : 'What goes out when, on every social'}</small></div><ChevronRight size={16}/></button>
             <button className="quick-action" onClick={onOpenAssistant}><Bot size={18}/><div><strong>Ask the assistant</strong><small>{model === false ? 'Add your xAI key under Settings first' : 'Draft posts, profiles and pictures with Grok'}</small></div><ChevronRight size={16}/></button>
           </div>
         </section>

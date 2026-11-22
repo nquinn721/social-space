@@ -1,14 +1,14 @@
-/* Post queue page: today's walk-through on top, then each brand's socials. */
-.queue-walk { margin-bottom: 16px; border-color: var(--accent-line); background: var(--splash-soft); }
-.queue-walk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.queue-walk-count { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent-text); }
-.queue-walk-done { display: flex; align-items: center; gap: 8px; color: var(--success); border-color: var(--success-line); background: var(--success-soft); }
-.queue-step { display: flex; align-items: center; gap: 14px; }
-.queue-step-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
-.queue-step-text strong { font-size: 15px; }
-.queue-step-text > span { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queue-step-text small { color: var(--text-2); }
-.queue-step-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* Post queue page: scheduling settings on top, then each brand's socials with what Ayrshare has scheduled. */
+.queue-settings { margin-bottom: 16px; display: grid; gap: 12px; }
+.queue-settings .status-line { margin-top: 0; }
+.queue-settings .status-line.off .dot { color: var(--warning, var(--text-3)); }
+.queue-settings .status-line button { margin-left: auto; }
+.queue-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.queue-settings .footnote { margin: 0; }
+.toggle-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.posting-times { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+.posting-time { display: inline-flex; align-items: center; gap: 2px; }
+.posting-time input { width: auto; padding: 4px 6px; }
 .queue-brand { margin-bottom: 14px; }
 .queue-brand-head { justify-content: space-between; }
 .queue-lanes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -24,10 +24,16 @@
 .queue-next ol { counter-reset: next; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
 .queue-next li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; counter-increment: next; }
 .queue-next li::before { content: counter(next) ". "; color: var(--text-3); }
-.queue-next li.current { color: var(--accent-text); font-weight: 600; }
+.queue-next { flex-direction: column; align-items: flex-start; gap: 6px; }
+.queue-posts li { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.queue-posts li::before { flex: none; }
+.queue-posts .queue-post-title { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--text); }
+.queue-posts small { color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.queue-posts li.failed small { color: var(--danger); }
+.queue-posts li.more::before { content: ""; }
+.queue-posts .small-button { padding: 2px 8px; }
 .queue-next .series-badge { margin-right: 6px; }
 @media (max-width: 760px) {
   .queue-lane { grid-template-columns: auto 1fr; }
   .queue-pips, .queue-next { grid-column: 2; }
-  .queue-step { flex-wrap: wrap; }
 }

@@ -39,7 +39,7 @@ describe('partner review', () => {
 
   it('writes a history line for each social', () => {
     expect(resultEvent('instagram', { status: 'posted', at: 5 })).toEqual({ at: 5, text: 'Posted to Instagram' });
-    expect(resultEvent('tiktok', { status: 'manual', at: 5 }).text).toBe('TikTok is posted by hand from Social Space');
+    expect(resultEvent('tiktok', { status: 'manual', at: 5 }).text).toBe("TikTok is in Social Space's queue, scheduled through Ayrshare");
     expect(resultEvent('youtube', { status: 'failed', error: 'quota', at: 5 }).text).toBe('YouTube failed: quota');
   });
 

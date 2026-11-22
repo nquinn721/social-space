@@ -187,12 +187,10 @@ export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
   const videos = (saved.videos ?? [])
     .filter((video) => categories.some((category) => category.id === video.categoryId && category.brandId === video.brandId))
     .map((video) => video.seriesId && !seriesIds.has(video.seriesId) ? { ...video, seriesId: undefined, episode: undefined } : video);
-  // Ticks of profiles that no longer exist are dropped; app-wide ticks ("x:app:plan") stay.
-  const ids = new Set(accounts.map((account) => account.id));
-  const setup = Object.fromEntries(Object.entries(saved.setup ?? {}).filter(([key]) => /^(instagram|tiktok|youtube|x|facebook):/.test(key) || ids.has(key.split(':')[0])));
-  // Every other part (developer logins, anything added later) is kept as it is.
-  const { setup: _setup, series: _series, ...rest } = saved;
-  return { ...rest, businessName: saved.businessName ?? '', brands, accounts, channels: saved.channels ?? [], categories, videos, ...(Object.keys(setup).length ? { setup } : {}), ...(series.length ? { series } : {}) };
+  // Parts of older versions that are gone (setup ticks, developer logins, test posts) are dropped; anything else is kept.
+  const { series: _series, ...rest } = saved as Partial<Workspace> & Record<string, unknown>;
+  for (const gone of ['setup', 'developerLogins', 'testPosts']) delete rest[gone];
+  return { ...rest, businessName: saved.businessName ?? '', brands, accounts, channels: saved.channels ?? [], categories, videos, ...(series.length ? { series } : {}) };
 }
 
 /** Where a profile signs in, in plain words: shared with other brands, or its own account. */

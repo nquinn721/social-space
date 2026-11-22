@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import BrandPicture from './BrandPicture';
 import ProfileImageStudio from './ProfileImageStudio';
 import * as pictures from './brandImageService';
-import * as posting from './postingService';
+import * as posting from './brandWindowService';
 import * as images from './imageAiService';
 import type { Account, Brand } from './model';
 
@@ -13,7 +13,7 @@ vi.mock('./brandImageService', async (original) => ({ ...(await original<typeof 
   generatePictures: vi.fn(), keepSquare: vi.fn(), keepBanner: vi.fn(), keepFile: vi.fn(), profilePicturePath: vi.fn(), brandImagePreview: vi.fn(), revealBrandImage: vi.fn() }));
 vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), generateProfileImage: vi.fn() }));
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()), chooseImageFile: vi.fn() }));
-vi.mock('./postingService', async (original) => ({ ...(await original<typeof import('./postingService')>()), openProfileEditor: vi.fn() }));
+vi.mock('./brandWindowService', async (original) => ({ ...(await original<typeof import('./brandWindowService')>()), openProfileEditor: vi.fn() }));
 
 const brand: Brand = { id: 'b1', name: 'Bunnies', notes: '' };
 const account = (platform: Account['platform'], extra: Partial<Account> = {}): Account => ({ id: `a-${platform}`, platform, label: 'Bunnies', handle: 'bunnies', status: 'active', notes: '', brandId: 'b1', signupEmail: 'me@example.com', ...extra });

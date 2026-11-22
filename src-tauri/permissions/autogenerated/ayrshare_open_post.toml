@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-open-post"
+description = "Enables the ayrshare_open_post command without any pre-configured scope."
+commands.allow = ["ayrshare_open_post"]
+
+[[permission]]
+identifier = "deny-ayrshare-open-post"
+description = "Denies the ayrshare_open_post command without any pre-configured scope."
+commands.deny = ["ayrshare_open_post"]

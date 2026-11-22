@@ -1,22 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Bot, Building2, Clapperboard, Image, KeyRound, Mail, RefreshCw, RotateCw, Send, ShieldCheck, UserCheck, Users } from 'lucide-react';
-import PostingSettings from '../PostingSettings';
+import { Bot, Building2, Clapperboard, Image, Mail, RefreshCw, RotateCw, Send, ShieldCheck, UserCheck, Users } from 'lucide-react';
+import AyrshareSettings from '../AyrshareSettings';
 import VideoSources from '../VideoSources';
 import EmailSettings from '../EmailSettings';
 import PartnerReviewSettings from '../PartnerReviewSettings';
 import TeamSyncSettings from '../TeamSyncSettings';
 import PictureSettings from '../PictureSettings';
-import DeveloperAccounts, { type ReviewProps } from '../DeveloperAccounts';
 import type { TeamSync } from '../useTeamSync';
 import { DEFAULT_SETTINGS, listModels, loadSettings, saveSettings, type AssistantSettings } from '../assistant/grokClient';
 import { PageHeader } from '../ui';
 
-type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null; teamSync?: TeamSync; /** Developer-app review states and the inbox watch. */ reviews?: ReviewProps };
+type Props = { businessName: string; onBusinessNameChange: (value: string) => void; onSaveBusinessName: () => void; busy: boolean; loaded: boolean; /** Who manages app updates ("Ava"); null or absent when the app updates itself. */ updatesManagedBy?: string | null; teamSync?: TeamSync };
 
 const SECTIONS = [
   { id: 'workspace', label: 'Workspace', icon: Building2 },
   { id: 'posting', label: 'Posting', icon: Send },
-  { id: 'developer-accounts', label: 'Developer accounts', icon: KeyRound },
   { id: 'email', label: 'Email inbox', icon: Mail },
   { id: 'partner-review', label: 'Partner review', icon: UserCheck },
   { id: 'team-sync', label: 'Shared accounts', icon: Users },
@@ -68,10 +66,10 @@ function useSectionInView() {
   return [active, setActive] as const;
 }
 
-export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync, reviews }: Props) {
+export default function SettingsPage({ businessName, onBusinessNameChange, onSaveBusinessName, busy, loaded, updatesManagedBy, teamSync }: Props) {
   const [active, setActive] = useSectionInView();
   return <>
-    <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, inbox, video sources, pictures and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
+    <PageHeader eyebrow="Make it yours" title="Settings" description={`Your workspace, posting (Ayrshare), inbox, video sources, pictures and assistant. ${updatesManagedBy ? `Updates are managed by ${updatesManagedBy}.` : 'App updates have their own page.'}`}/>
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">{SECTIONS.map(({ id, label, icon: Icon }) => <a key={id} href={`#${id}`} className={active === id ? 'active' : ''} aria-current={active === id ? 'location' : undefined}
         onClick={(event) => { event.preventDefault(); setActive(id); document.getElementById(id)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }}><Icon size={16}/>{label}</a>)}</nav>
@@ -83,8 +81,7 @@ export default function SettingsPage({ businessName, onBusinessNameChange, onSav
           <input id="business" value={businessName} maxLength={120} onChange={(event) => onBusinessNameChange(event.target.value)} placeholder="e.g. Soft Wings LLC"/>
           <button className="primary-button" disabled={busy || !loaded}>Save changes</button>
         </form>
-        <PostingSettings marks={reviews?.marks}/>
-        <DeveloperAccounts reviews={reviews}/>
+        <AyrshareSettings/>
         <EmailSettings/>
         <PartnerReviewSettings/>
         {teamSync && <TeamSyncSettings sync={teamSync}/>}

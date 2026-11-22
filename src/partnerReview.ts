@@ -4,7 +4,6 @@ import { detailsOf } from './postDetails';
 import type { CatalogBrand, PlatformResult, ReviewEvent, ReviewPost, ReviewStatus, ReviewSubmission } from './reviewService';
 
 /** Socials this app posts to by itself once a post is approved; the rest are posted by hand. */
-export const AUTO_POST_PLATFORMS: Platform[] = ['instagram'];
 /** How often the app checks the review site for decisions. */
 export const REVIEW_POLL_MS = 60_000;
 
@@ -42,7 +41,7 @@ export function finishedStatus(platforms: Platform[], results: Partial<Record<Pl
 /** One line for the history on the review site. */
 export function resultEvent(platform: Platform, result: PlatformResult): ReviewEvent {
   const name = getPlatform(platform).name;
-  const text = result.status === 'posted' ? `Posted to ${name}` : result.status === 'manual' ? `${name} is posted by hand from Social Space` : `${name} failed: ${result.error ?? 'unknown error'}`;
+  const text = result.status === 'posted' ? `Posted to ${name}` : result.status === 'manual' ? `${name} is in Social Space's queue, scheduled through Ayrshare` : `${name} failed: ${result.error ?? 'unknown error'}`;
   return { at: result.at, text };
 }
 

@@ -10,7 +10,8 @@ import QueuePage from './pages/QueuePage';
 import SettingsPage from './pages/SettingsPage';
 import { deleteAccountPassword, hasAccountPassword } from './profileService';
 import { isTauri } from '@tauri-apps/api/core';
-import { deleteQueueJob, listQueue } from './queueService';
+import { deletePost } from './ayrshareService';
+import { AyrshareProvider } from './useAyrshare';
 import { prepareProfileRemoval, removedProfileIds } from './deletionSafety';
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Check, ChevronRight, Home, ListOrdered, Mail, RotateCw, Settings2, UsersRound, X as Close } from 'lucide-react';
@@ -22,13 +23,8 @@ import { initialOf, PageHeader } from './ui';
 import { PartnerReviewProvider, usePartnerReview } from './usePartnerReview';
 import { useTeamSync } from './useTeamSync';
 import { mergeWorkspaces } from './workspaceSync';
-import ReviewNotice from './ReviewNotice';
-import { useReviewWatch } from './useReviewWatch';
-import { moveTestVideos, seenKey, stateLabel, reviewOf, testVideos, withReviewState, type AppReview, type ReviewState } from './appReviews';
 import ThemePicker from './ThemePicker';
 import { celebrate, isCelebration } from './look';
-import { listDeveloperApps, switchToProductionApp } from './devAppsService';
-import type { DevProvider } from './devAppsService';
 
 type NavItem = { id: View; label: string; icon: typeof Home };
 /** Brands hold everything else: each brand's posts (by category) and, tucked away, its accounts. */
@@ -55,14 +51,16 @@ function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [wizard, setWizard] = useState<Wizard | null>(null);
   const [openBrand, setOpenBrand] = useState<OpenBrand>(null);
-  // Brands opens on its Setup tab when another page sends you there; the count remounts it.
-  const [brandsStart, setBrandsStart] = useState<{ tab: 'brands' | 'connections'; count: number }>({ tab: 'brands', count: 0 });
+  // Brands opens on its first tab; the count remounts it.
+  const [brandsStart, setBrandsStart] = useState<{ tab: 'brands' | 'sign-ins'; count: number }>({ tab: 'brands', count: 0 });
   const updates = useAppUpdates();
   const updatesManaged = Boolean(updates.managedBy);
   const updateWaiting = !updatesManaged && (hasUpdate(updates.status) || updates.progress?.state === 'running');
   const workspaceRef = useRef(workspace);
+  const loadedRef = useRef(loaded);
   const removingProfile = useRef(false);
   workspaceRef.current = workspace;
+  loadedRef.current = loaded;
 
   useEffect(() => { loadWorkspace().then((data) => { setWorkspace(data); setBusinessName(data.businessName); setLoaded(true); }).catch(() => showError('Could not load your workspace. Restart the app and try again.')); }, []);
   // Saves and team syncs run one at a time. A save prepared before a sync brought in the other PC's
@@ -88,39 +86,13 @@ function App() {
     });
   }
   const teamSync = useTeamSync({ loaded, workspaceRef, exclusive, apply: store });
-  // Watches the inbox for the socials' developer-app review results.
-  const reviewWatch = useReviewWatch({ loaded, workspaceRef, save: commit, notify: showMessage });
-  function setReview(provider: DevProvider, state: ReviewState) {
-    const at = Date.now();
-    // Set by hand: the user already knows, so no "review finished" notice for it.
-    void persist({ ...workspace, setup: { ...withReviewState(workspace.setup, provider, state, at), [seenKey(provider)]: at } }, `${reviewOf(provider)?.name ?? 'Review'}: ${stateLabel(state)}.`);
-  }
-  function dismissReviews(providers: string[]) {
-    const at = Date.now();
-    void commit({ ...workspaceRef.current, setup: { ...(workspaceRef.current.setup ?? {}), ...Object.fromEntries(providers.map((provider) => [seenKey(provider as DevProvider), at])) } }).catch(() => showError('Could not save your changes. Please try again.'));
-  }
-  /** One click after approval: production keys replace the test keys, and test posts go back to waiting. */
-  async function leaveTestMode(review: AppReview) {
-    if (busy || !loaded || !review.test) return;
-    const platform = review.test.platform;
-    const name = getPlatform(platform).name;
-    setBusy(true); setMessage('');
-    try {
-      let switched = false;
-      if (review.productionKeys) {
-        const app = (await listDeveloperApps()).find((item) => item.provider === review.provider);
-        if (!app?.productionId) { showError(`Add ${name}'s production keys under Developer accounts first, then press Switch again.`); navigate('settings', 'developer-accounts'); return; }
-        await switchToProductionApp(review.provider);
-        switched = true;
-      }
-      const current = workspaceRef.current;
-      const count = testVideos(current.videos, platform).length;
-      await commit({ ...current, videos: moveTestVideos(current.videos, platform), setup: { ...(current.setup ?? {}), [seenKey(review.provider)]: Date.now() } });
-      const moved = count ? ` ${count} test ${count === 1 ? 'video is' : 'videos are'} back in Waiting to post on ${name}${platform === 'youtube' ? '. Uploads from Testing stay Private on YouTube, so post them again or set them Public in YouTube Studio' : ', ready to post for real'}.` : '';
-      showMessage(`${switched ? `${name} now uses its production keys. Press Reconnect on each ${name} profile, since its connection was made with the Sandbox app.` : `${name} is out of test mode.`}${moved}`);
-    } catch (reason) { showError(reason instanceof Error ? reason.message : String(reason)); }
-    finally { setBusy(false); }
-  }
+  /** Changes the latest workspace and saves it, for work that runs in the background (posting, scheduling). */
+  const update = (change: (current: Workspace) => Workspace) => {
+    if (!loadedRef.current) return Promise.reject(new Error('The workspace has not loaded yet.'));
+    const current = workspaceRef.current;
+    const next = change(current);
+    return next === current ? Promise.resolve(current) : commit(next);
+  };
   async function persist(next: Workspace, success: string) {
     if (busy || !loaded) return;
     setBusy(true); setMessage('');
@@ -157,12 +129,11 @@ function App() {
       ? renamedProfile(account, old, name) : account);
     return persist({ ...workspace, brands: workspace.brands.map((item) => item.id === brand.id ? { ...item, name } : item), accounts }, `Renamed ${old} to ${name}. To change a username on a social, open that profile and use Fill profile.`);
   }
-  /** Verify and cancel the profile's pending queue items before removing its local details. */
+  /** Asks first, then cancels the profiles' posts still scheduled in Ayrshare before removing their local details. */
   async function prepareRemoval(current: Workspace, ids: Set<string>, description: string): Promise<number | null> {
     return prepareProfileRemoval(current, ids, description, {
-      list: () => isTauri() ? listQueue() : Promise.resolve([]),
       hasPassword: (id) => isTauri() ? hasAccountPassword(id) : Promise.resolve(false),
-      cancel: (id, onlyUnstarted) => deleteQueueJob(id, onlyUnstarted),
+      cancel: (post) => deletePost(post.brandId, post.id),
       confirm: (message) => window.confirm(message),
       isCurrent: () => workspaceRef.current === current,
     });
@@ -184,7 +155,7 @@ function App() {
       if (results.some((result) => result.status === 'rejected')) showError('Brand removed, but some saved passwords could not be removed from Windows Credential Manager.');
       else if (removedIds.length !== ids.size) showError('Some profiles changed while removing the brand, so their saved passwords were kept. Review the workspace.');
       else showMessage(`Removed ${brand.name} from Social Space.`);
-    } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the brand.'}${canceled ? ` ${canceled} queued ${canceled === 1 ? 'post was' : 'posts were'} already cancelled.` : ''}`); }
+    } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the brand.'}${canceled ? ` ${canceled} scheduled ${canceled === 1 ? 'post was' : 'posts were'} already cancelled in Ayrshare.` : ''}`); }
     finally { removingProfile.current = false; setBusy(false); }
   }
   async function removeAccount(account: Account) {
@@ -197,7 +168,13 @@ function App() {
       const prepared = await prepareRemoval(current, ids, `Remove the ${getPlatform(account.platform).name} profile of ${account.label} and its linked channels from Social Space?`);
       if (prepared === null) return;
       canceled = prepared;
-      const saved = await commit({ ...current, accounts: current.accounts.filter((item) => item.id !== account.id), channels: current.channels.filter((channel) => channel.accountId !== account.id) });
+      // Its posts on that social are gone from Ayrshare, so the videos wait again if the profile comes back.
+      const videos = (current.videos ?? []).map((video) => {
+        if (video.brandId !== account.brandId || video.scheduled?.[account.platform]?.state !== 'scheduled') return video;
+        const scheduled = { ...video.scheduled }; delete scheduled[account.platform];
+        return { ...video, scheduled };
+      });
+      const saved = await commit({ ...current, videos, accounts: current.accounts.filter((item) => item.id !== account.id), channels: current.channels.filter((channel) => channel.accountId !== account.id) });
       if (!removedProfileIds(ids, saved, workspaceRef.current).length) {
         showError('The profile changed while removing it, so its saved password was kept. Review the workspace.');
         return;
@@ -206,7 +183,7 @@ function App() {
       const password = isTauri() ? await Promise.allSettled([deleteAccountPassword(account.id)]) : [];
       if (password.some((result) => result.status === 'rejected')) showError('Profile removed, but its saved password could not be removed from Windows Credential Manager.');
       else showMessage(`Removed the ${getPlatform(account.platform).name} profile from Social Space.`);
-    } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the profile.'}${canceled ? ` ${canceled} queued ${canceled === 1 ? 'post was' : 'posts were'} already cancelled.` : ''}`); }
+    } catch (reason) { showError(`${reason instanceof Error ? reason.message : 'Could not remove the profile.'}${canceled ? ` ${canceled} scheduled ${canceled === 1 ? 'post was' : 'posts were'} already cancelled in Ayrshare.` : ''}`); }
     finally { removingProfile.current = false; setBusy(false); }
   }
   const addAccount = () => { setEditingAccount(null); setShowAccount(true); };
@@ -223,7 +200,6 @@ function App() {
   function navigate(next: View, section?: string) {
     setView(next);
     if (next !== 'accounts') setOpenBrand(null);
-    if (next === 'accounts' && section === 'setup') { setOpenBrand(null); setBrandsStart((current) => ({ tab: 'connections', count: current.count + 1 })); return; }
     if (next !== 'accounts') setBrandsStart((current) => current.tab === 'brands' ? current : { ...current, tab: 'brands' });
     if (section) window.setTimeout(() => document.getElementById(section)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50);
     else document.documentElement.scrollTop = 0;
@@ -232,7 +208,7 @@ function App() {
     <Icon size={17} strokeWidth={1.9}/><span>{label}</span>{id === 'accounts' && workspace.brands.length > 0 && <span className="nav-badge">{workspace.brands.length}</span>}{id === 'updates' && updateWaiting && <span className="update-dot" aria-hidden="true"/>}
   </button>;
 
-  return <PartnerReviewProvider value={review}><div className="app-shell">
+  return <AyrshareProvider workspace={workspace} loaded={loaded} update={update} notify={showMessage}><PartnerReviewProvider value={review}><div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><img className="brand-symbol" src={appIcon} alt=""/><div><strong>Social <span>Space</span></strong><small>Your social workspace</small></div></div>
       <nav aria-label="Main navigation"><div className="nav-group">{NAV_ITEMS.map(navButton)}</div></nav>
@@ -254,20 +230,19 @@ function App() {
       </header>
       <div className="page-content">
         {view !== 'updates' && <UpdateBanner updates={updates} onOpen={() => navigate('updates')}/>}
-        <ReviewNotice marks={workspace.setup} videos={workspace.videos} busy={busy} onMove={(review) => void leaveTestMode(review)} onOpen={() => navigate('settings', 'developer-accounts')} onDismiss={dismissReviews}/>
         {message && <div role={messageIsError ? 'alert' : 'status'} className={messageIsError ? 'notice notice-error' : 'notice'}>{messageIsError ? <AlertTriangle size={16}/> : <Check size={16}/>}{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><Close size={16}/></button></div>}
         {view === 'overview' && <OverviewPage workspace={workspace} loaded={loaded} onNavigate={navigate} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }} onCreateAccounts={createAccounts} onAddAccount={addAccount} onOpenAssistant={() => setAssistantOpen(true)}/>}
         {view === 'accounts' && <AccountsPage key={brandsStart.count} startTab={brandsStart.tab} workspace={workspace} loaded={loaded} busy={busy} openBrand={openBrand} onOpenBrand={setOpenBrand} onSave={persist} onAddAccount={addAccount} onEditAccount={editAccount} onCreateAccounts={createAccounts} onSignUp={signUp} onAlreadyCreated={(account) => void alreadyCreated(account)} onOpen={launch} onRestore={persist} onRemoveAccount={(account) => void removeAccount(account)} onRemoveBrand={(brand) => void removeBrand(brand)} onRenameBrand={renameBrand} onNavigate={navigate}/>}
-        {view === 'queue' && <QueuePage workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }}/>}
+        {view === 'queue' && <QueuePage workspace={workspace} loaded={loaded} busy={busy} onSave={persist} onOpenBrand={(id, tab = 'content') => { setOpenBrand({ id, tab }); setView('accounts'); }} onOpenSettings={() => navigate('settings', 'posting')}/>}
         {view === 'inbox' && <><PageHeader eyebrow="Verification codes and sign-up mail" title="Inbox" description="Newest mail from your connected inbox. Codes are pulled out so you can copy them in one click. Reading here doesn't mark anything as read."/><InboxList limit={40} autoRefresh/></>}
         {view === 'updates' && !updatesManaged && <UpdatesPage updates={updates}/>}
-        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync} reviews={{ marks: workspace.setup, onSet: setReview, watch: reviewWatch, busy: busy || !loaded }}/>}
+        {view === 'settings' && <SettingsPage businessName={businessName} onBusinessNameChange={setBusinessName} onSaveBusinessName={() => void persist({ ...workspace, businessName: businessName.trim() }, 'Workspace settings saved.')} busy={busy} loaded={loaded} updatesManagedBy={updates.managedBy} teamSync={teamSync}/>}
       </div>
     </main>
     {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} context={{ getWorkspace: () => workspaceRef.current, saveWorkspace: saveFromAssistant, navigate: setView }}/>
       : <button className="assistant-toggle" onClick={() => setAssistantOpen(true)}><Bot size={17}/> Ask assistant</button>}
     {wizard && <CreateAccountWizard initialPlatforms={wizard.platforms} prefill={wizard.prefill} resume={wizard.resume} existing={workspace.accounts} onSave={saveWizardAccount} onClose={() => setWizard(null)}/>}
     {showAccount && <AccountDrawer account={editingAccount} busy={busy} onClose={() => { setShowAccount(false); setEditingAccount(null); }} onSave={saveAccount} onRemove={removeAccount} onSignUp={(account) => signUp([account])} loginNote={editingAccount ? loginText(editingAccount, workspace) : undefined} pictureFile={editingAccount ? pictureFileFor(editingAccount, workspace.brands.find((brand) => brand.id === editingAccount.brandId)) : undefined}/>}
-  </div></PartnerReviewProvider>;
+  </div></PartnerReviewProvider></AyrshareProvider>;
 }
 export default App;

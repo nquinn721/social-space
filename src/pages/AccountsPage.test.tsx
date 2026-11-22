@@ -42,7 +42,7 @@ describe('brands page', () => {
     const profiles = screen.getByRole('region', { name: 'Soft Wings profiles' });
     expect(within(profiles).getByRole('listitem', { name: 'Instagram profile' })).toBeInTheDocument();
     expect(within(profiles).getByText('Not created yet')).toBeInTheDocument();
-    await user.click(within(profiles).getByRole('button', { name: 'Create on X' }));
+    await user.click(within(profiles).getByRole('button', { name: 'Finish sign-up' }));
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })]));
     expect(ensureSharedPassword).not.toHaveBeenCalled();
     expect(within(profiles).queryByRole('button', { name: 'Create on Instagram' })).not.toBeInTheDocument();

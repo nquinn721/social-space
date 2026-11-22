@@ -41,6 +41,7 @@ fn main() {
         "ayrshare_post",
         "ayrshare_history",
         "ayrshare_delete_post",
+        "ayrshare_open_post",
         "choose_video_file",
         "grok_models",
         "grok_chat",

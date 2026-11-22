@@ -231,6 +231,12 @@
           "markdownDescription": "Enables the ayrshare_open_linking command without any pre-configured scope."
         },
         {
+          "description": "Enables the ayrshare_open_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-ayrshare-open-post",
+          "markdownDescription": "Enables the ayrshare_open_post command without any pre-configured scope."
+        },
+        {
           "description": "Enables the ayrshare_post command without any pre-configured scope.",
           "type": "string",
           "const": "allow-ayrshare-post",
@@ -811,6 +817,12 @@
           "type": "string",
           "const": "deny-ayrshare-open-linking",
           "markdownDescription": "Denies the ayrshare_open_linking command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the ayrshare_open_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-ayrshare-open-post",
+          "markdownDescription": "Denies the ayrshare_open_post command without any pre-configured scope."
         },
         {
           "description": "Denies the ayrshare_post command without any pre-configured scope.",
