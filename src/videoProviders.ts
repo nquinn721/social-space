@@ -13,8 +13,8 @@ export type ProviderInfo = {
 
 /** Branding and copy for each video provider. Colors live in videoSources.css under `.provider-<id>`. */
 export const PROVIDERS: Record<VideoProvider, ProviderInfo> = {
-  kling: { id: 'kling', name: 'Kling AI', tagline: 'Text and image to video', logo: klingLogo, model: 'Kling 3.0 Turbo at 720p', durations: [5, 10], defaultDuration: 5, references: false, keyHelp: 'Create a key in the Kling AI developer console. It is shown only once, so paste it here right away.' },
-  grok: { id: 'grok', name: 'Grok Imagine', tagline: 'Video from xAI', logo: grokLogo, model: 'Grok Imagine video at 720p', durations: Array.from({ length: 15 }, (_, index) => index + 1), defaultDuration: 8, references: true, keyHelp: 'Create a key in the xAI console with access to the video models.' },
+  kling: { id: 'kling', name: 'Kling AI', tagline: 'Text and image to video', logo: klingLogo, model: 'Kling 3.0 Turbo at 720p', durations: [5, 10], defaultDuration: 10, references: false, keyHelp: 'Create a key in the Kling AI developer console. It is shown only once, so paste it here right away.' },
+  grok: { id: 'grok', name: 'Grok Imagine', tagline: 'Video from xAI', logo: grokLogo, model: 'Grok Imagine Video 1.5 at 1080p', durations: Array.from({ length: 15 }, (_, index) => index + 1), defaultDuration: 15, references: true, keyHelp: 'Create a key in the xAI console with access to the video models.' },
 };
 export const PROVIDER_LIST = Object.values(PROVIDERS);
 export const MAX_SOURCE_NAME = 60;

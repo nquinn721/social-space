@@ -38,9 +38,9 @@ describe('assistant tools', () => {
     vi.mocked(sources.generateVideo).mockResolvedValue({ id: 't1', status: 'pending', message: null, videoUrl: null, sourceId: 'grok', sourceName: 'Grok', provider: 'grok' });
     const ctx = context(workspace());
     expect(await runTool('generate_video', { prompt: 'A city' }, ctx)).toMatchObject({ started: true, source: 'Grok' });
-    expect(sources.generateVideo).toHaveBeenLastCalledWith('grok', 'A city', '9:16', 8);
+    expect(sources.generateVideo).toHaveBeenLastCalledWith('grok', 'A city', '9:16', 15);
     await runTool('generate_video', { prompt: 'A city', source: 'main', duration: 15 }, ctx);
-    expect(sources.generateVideo).toHaveBeenLastCalledWith('main', 'A city', '9:16', 5);
+    expect(sources.generateVideo).toHaveBeenLastCalledWith('main', 'A city', '9:16', 10);
     await expect(runTool('generate_video', { prompt: 'A city', source: 'Old' }, ctx)).rejects.toThrow('No usable video source named Old');
   });
 

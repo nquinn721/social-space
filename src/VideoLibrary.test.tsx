@@ -174,8 +174,23 @@ describe('video library', () => {
     await user.type(await screen.findByLabelText('Describe the video'), 'A white rabbit hops through a sunny garden');
     expect(screen.getByLabelText('Made with')).toHaveValue('k1');
     await user.click(screen.getByRole('button', { name: 'Make video' }));
-    expect(mocked.generateVideo).toHaveBeenCalledWith('k1', 'A white rabbit hops through a sunny garden', '9:16', 5, undefined);
+    expect(mocked.generateVideo).toHaveBeenCalledWith('k1', 'A white rabbit hops through a sunny garden', '9:16', 10, undefined);
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ videos: [bunny, expect.objectContaining({ title: 'A white rabbit hops through a sunny garden', categoryId: 'rabbit', generation: expect.objectContaining({ taskId: 'task-1', sourceId: 'k1', status: 'working' }) })] }), expect.stringContaining('Main Kling is making'));
+  });
+
+  it('starts at the longest length and keeps a picked length after making a video', async () => {
+    mocked.listVideoSources.mockResolvedValue({ active: 'k1', sources: [kling] });
+    mocked.generateVideo.mockResolvedValue({ id: 'task-2', status: 'submitted', message: null, videoUrl: null, sourceId: 'k1', sourceName: 'Main Kling', provider: 'kling' });
+    mocked.getVideo.mockResolvedValue({ id: 'task-2', status: 'processing', message: null, videoUrl: null });
+    const { user } = setup();
+    await user.click(screen.getByRole('button', { name: /Make a video/ }));
+    expect(await screen.findByLabelText('Length')).toHaveValue('10');
+    await user.selectOptions(screen.getByLabelText('Length'), '5');
+    await user.type(screen.getByLabelText('Describe the video'), 'A rabbit naps');
+    await user.click(screen.getByRole('button', { name: 'Make video' }));
+    expect(mocked.generateVideo).toHaveBeenCalledWith('k1', 'A rabbit naps', '9:16', 5, undefined);
+    await user.click(screen.getByRole('button', { name: /Make a video/ }));
+    expect(await screen.findByLabelText('Length')).toHaveValue('5');
   });
 
   it('lets the user reroll suggestions and use a complete scene without starting a video', async () => {
