@@ -11,7 +11,7 @@ import * as imageAi from './imageAiService';
 import type { Account } from './model';
 
 vi.mock('./profileService', async (original) => ({ ...(await original<typeof import('./profileService')>()),
-  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), openGmailSignup: vi.fn(), ensureAccountPassword: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
+  embedPlatformPage: vi.fn(), setEmbeddedBounds: vi.fn(), closeEmbeddedPage: vi.fn(), fillSiteForm: vi.fn(), siteUsername: vi.fn(), openGmailSignup: vi.fn(), ensureAccountPassword: vi.fn(), ensureSharedPassword: vi.fn(), revealAccountPassword: vi.fn(), chooseImageFile: vi.fn(), loadImagePreview: vi.fn() }));
 vi.mock('./assistant/suggest', () => ({ suggestProfile: vi.fn() }));
 vi.mock('./assistant/brandIdeas', () => ({ suggestBrandIdeas: vi.fn() }));
 vi.mock('./imageAiService', async (original) => ({ ...(await original<typeof import('./imageAiService')>()), generateProfileImage: vi.fn() }));
@@ -22,6 +22,7 @@ beforeEach(() => {
   vi.mocked(profile.embedPlatformPage).mockResolvedValue('site-embed-4');
   vi.mocked(profile.setEmbeddedBounds).mockResolvedValue();
   vi.mocked(profile.closeEmbeddedPage).mockResolvedValue();
+  vi.mocked(profile.siteUsername).mockResolvedValue({ value: null, taken: false });
   vi.mocked(email.emailConnection).mockResolvedValue({ host: 'imap.gmail.com', username: DEFAULT_SIGNUP_EMAIL });
   vi.mocked(email.listEmails).mockResolvedValue([{ uid: 9, from: 'Instagram <security@mail.instagram.com>', subject: '482913 is your Instagram code', date: 'today', unread: true }]);
   vi.mocked(email.readEmail).mockResolvedValue({ uid: 9, from: 'Instagram', to: DEFAULT_SIGNUP_EMAIL, subject: '482913 is your Instagram code', date: 'today', body: 'Confirm your email address. Your code is 482913.' });
@@ -221,18 +222,38 @@ describe('verification code detection', () => {
     expect(screen.getByLabelText('Instagram')).not.toBeChecked();
   });
 
-  it('saves the birthday so sign-up forms can fill it', async () => {
+  it('signs up with June 5 1983, even when the brand had another birthday saved', async () => {
     const saved: Account[] = [];
     const user = userEvent.setup();
-    render(<CreateAccountWizard initialPlatforms={['instagram']} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
+    render(<CreateAccountWizard initialPlatforms={['instagram']} prefill={{ birthday: '1990-02-22' }} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Soft Wings');
-    // No date is guessed: the user supplies it if needed.
-    expect(screen.getByLabelText(/Birthday/)).toHaveValue('');
-    await user.type(screen.getByLabelText(/Birthday/), '1998-04-12');
+    expect(screen.getByLabelText(/Birthday/)).toHaveValue('1983-06-05');
     await user.click(screen.getByRole('button', { name: /Start with 1 social/ }));
-    await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ birthday: '1998-04-12' }));
-    expect(saved[0].birthday).toBe('1998-04-12');
+    await waitFor(() => expect(vi.mocked(profile.fillSiteForm).mock.calls.at(-1)?.[1]).toMatchObject({ birthday: '1983-06-05' }));
+    expect(saved[0].birthday).toBe('1983-06-05');
   });
+
+  it('adds numbers to a taken username and saves it for that social only', async () => {
+    const instagram: Account = { id: 'ig', platform: 'instagram', label: 'Bunny Whispers', handle: 'bunnywhispers', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL };
+    const tiktok: Account = { ...instagram, id: 'tt', platform: 'tiktok', signupEmail: 'softwings25+bunnywhispers@gmail.com' };
+    const saved: Account[] = [];
+    let onPage = 'bunnywhispers';
+    vi.mocked(profile.siteUsername).mockImplementation(async (_window, set) => {
+      if (set) { onPage = set; return { value: set, taken: false }; }
+      return { value: onPage, taken: onPage === 'bunnywhispers' };
+    });
+    const user = userEvent.setup();
+    render(<CreateAccountWizard resume={[instagram, tiktok]} onSave={async (account) => { saved.push(account); }} onClose={vi.fn()}/>);
+    await waitFor(() => expect(profile.siteUsername).toHaveBeenCalledWith('site-embed-4', 'bunnywhispers1'), { timeout: 4_000 });
+    await waitFor(() => expect(saved.at(-1)).toMatchObject({ id: 'ig', handle: 'bunnywhispers1' }));
+    expect(await screen.findByText(/@bunnywhispers is taken on Instagram, so it now tries @bunnywhispers1/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Instagram account is created/ }));
+    await waitFor(() => expect(saved.at(-1)).toMatchObject({ id: 'ig', handle: 'bunnywhispers1', status: 'active' }));
+    // TikTok still tries the brand's own username first.
+    expect(await screen.findByText('Now: TikTok (2 of 2)')).toBeInTheDocument();
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenLastCalledWith('site-embed-4', expect.objectContaining({ username: 'bunnywhispers' }), expect.anything()));
+    expect(saved.some((item) => item.id === 'tt' && item.handle !== 'bunnywhispers')).toBe(false);
+  }, 10_000);
 
   it('goes straight to the sign-up page of a planned account', async () => {
     const planned: Account = { id: 'p1', platform: 'instagram', label: 'MassageMentor', handle: 'massagelisa', status: 'planned', notes: '', signupEmail: DEFAULT_SIGNUP_EMAIL };
@@ -360,6 +381,6 @@ describe('verification code detection', () => {
     render(<CreateAccountWizard onSave={vi.fn()} onClose={vi.fn()}/>);
     await user.type(screen.getByLabelText('Account name'), 'Massage With Mia');
     await user.click(screen.getByRole('button', { name: 'Make a new Gmail instead' }));
-    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia' }, { keepFilling: true }));
+    await waitFor(() => expect(profile.fillSiteForm).toHaveBeenCalledWith('site-9', { firstName: 'Massage With Mia', username: 'massagewithmia', birthday: '1983-06-05' }, { keepFilling: true }));
   });
 });

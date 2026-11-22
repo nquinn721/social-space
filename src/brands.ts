@@ -15,8 +15,22 @@ export const LOGIN_RULES: Record<Platform, { profilesPerLogin: number | null; ex
   facebook: { profilesPerLogin: null, explain: 'Each brand gets a Facebook Page managed through your Facebook login and business portfolio.' },
 };
 
-/** Never guess a birthday for a new social account. */
-export const DEFAULT_SIGNUP_BIRTHDAY = '';
+/** Sign-up forms (TikTok, Instagram, X, Google) all ask for a birthday; every brand uses this one (Nate's rule). */
+export const DEFAULT_SIGNUP_BIRTHDAY = '1983-06-05';
+
+/** The longest username each social allows. */
+export const HANDLE_LIMITS: Record<Platform, number> = { instagram: 30, tiktok: 24, youtube: 30, x: 15, facebook: 50 };
+/**
+ * The next username to try when a social says one is taken: the original with a number after it
+ * (bunnywhispers → bunnywhispers1, bunnywhispers2 …), shortened if needed to fit that social's limit.
+ */
+export function numberedHandle(original: string, taken: string, platform: Platform): string {
+  const base = original.replace(/^@+/, '').trim();
+  const tail = taken.startsWith(base) ? taken.slice(base.length) : '';
+  const next = /^\d+$/.test(tail) ? Number(tail) + 1 : 1;
+  const digits = String(next);
+  return base.slice(0, Math.max(1, HANDLE_LIMITS[platform] - digits.length)) + digits;
+}
 
 export const sharesLogins = (platform: Platform) => {
   const limit = LOGIN_RULES[platform].profilesPerLogin;
@@ -164,7 +178,9 @@ export function migrateWorkspace(saved: Partial<Workspace>): Workspace {
   const brands = [...(saved.brands ?? [])];
   const byName = new Map(brands.map((brand) => [brand.name.trim().toLowerCase(), brand]));
   const accounts = (saved.accounts ?? []).map((stored) => {
-    const account = stored;
+    // Profiles not created yet always sign up with the standard birthday; created ones keep the one they used.
+    const needsBirthday = stored.status !== 'active' && stored.platform !== 'youtube' && stored.platform !== 'facebook' && stored.birthday !== DEFAULT_SIGNUP_BIRTHDAY;
+    const account = needsBirthday ? { ...stored, birthday: DEFAULT_SIGNUP_BIRTHDAY } : stored;
     if (account.brandId && brands.some((brand) => brand.id === account.brandId)) return account;
     const name = account.label.trim() || 'Untitled';
     let brand = byName.get(name.toLowerCase());

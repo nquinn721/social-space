@@ -424,6 +424,8 @@ const FILL_SCRIPT: &str = r#"function (data) {
   const hints = [
     [/continue on the tiktok app|scan (the |this )?qr code/i, 'TikTok wants this sign-up finished in its phone app. Open TikTok on your phone, tap the scan icon, scan this QR code and finish there. Your email, password and birthday are under Sign-up details in Social Space.'],
     [/drag the (slider|puzzle)|select \d+ objects|verify (that )?you(')?re (a )?human|not a robot|security check|captcha/i, 'Solve this check yourself, then press the button on the page.'],
+    // The sign-up email already has an account (an earlier sign-up got that far): log in to it instead.
+    [/you('ve| have) already signed up|(email|address) (is )?already (registered|in use|taken|exists)|an account (already )?exists/i, 'This email already has an account here, from an earlier sign-up. Press Log in on the page: Social Space fills this profile\'s email and saved password. If the password is refused, use Forgot password, then mark the account created.'],
     [/(enter|add) (a |your )?phone number|verify your phone/i, 'This step wants your own phone number. Type it yourself, then the code it texts you.'],
   ];
   const hint = () => {
@@ -628,6 +630,89 @@ pub fn fill_site_form(
         .map_err(|_| "Could not fill the form in that window.".into())
 }
 
+/// What a sign-up page's username box holds, and whether the page says that name is taken.
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SiteUsername {
+    /// The username box's value, or None when the page has no username box.
+    value: Option<String>,
+    /// The page shows that this username is not available.
+    taken: bool,
+}
+
+/// Finds the sign-up page's username box, optionally puts a new username in it (as typing would, then
+/// leaves the box so the site checks it), and reads whether the page says the name is taken. It only
+/// reads the page and sets that one box; it never presses a button.
+const USERNAME_SCRIPT: &str = r#"(function (set) { try {
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const describe = (el) => [el.name, el.id, el.getAttribute('aria-label'), el.placeholder,
+    el.labels ? Array.from(el.labels).map((label) => label.textContent).join(' ') : ''].join(' ').toLowerCase();
+  const boxes = Array.from(document.querySelectorAll('input')).filter((el) => visible(el) && !el.disabled && !el.readOnly
+    && !['password', 'hidden', 'email', 'tel', 'checkbox', 'radio', 'file', 'submit', 'button'].includes((el.type || '').toLowerCase()));
+  const box = boxes.find((el) => (el.getAttribute('autocomplete') || '').toLowerCase() === 'username' && !/e-?mail|phone/.test(describe(el)))
+    || boxes.find((el) => /user ?name|handle/.test(describe(el)) && !/e-?mail|phone/.test(describe(el)));
+  if (!box) return { value: null, taken: false };
+  if (typeof set === 'string' && set && box.value !== set) {
+    box.focus();
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(box, set);
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    box.blur();
+    box.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    (window.__socialspaceDone || (window.__socialspaceDone = new WeakSet())).add(box);
+    box.style.outline = '2px solid #8b5cf6';
+    return { value: set, taken: false };
+  }
+  const value = box.value.trim();
+  const said = /not available|isn.?t available|unavailable|already (been )?(taken|in use|exists|registered)|is taken|(name|username) (is )?(already )?(used|in use)|someone (else )?(already )?(has|uses|is using) (that|this)|try (a )?(different|another) (one|user ?name)/i;
+  // The error sits next to the box; walk up a few levels so other text on the page doesn't count.
+  let near = '';
+  for (let node = box.parentElement, depth = 0; node && depth < 5; node = node.parentElement, depth += 1) {
+    const text = (node.innerText || '').replace(/’/g, "'");
+    if (text.length > 1500) break;
+    near = text;
+  }
+  const described = (box.getAttribute('aria-describedby') || '').split(/\s+/).map((id) => id && document.getElementById(id))
+    .filter(Boolean).map((el) => el.innerText || '').join(' ');
+  const page = (document.body.innerText || '').slice(0, 8000).replace(/’/g, "'").toLowerCase();
+  const named = value && page.includes('username ' + value.toLowerCase() + ' is not available');
+  return { value, taken: !!value && (said.test(near) || said.test(described) || !!named) };
+} catch (e) { return { value: null, taken: false }; } })"#;
+
+fn username_script(set: Option<&str>) -> Result<String, String> {
+    let set = serde_json::to_string(&set).map_err(|_| "Could not prepare the username.")?;
+    Ok(format!("{USERNAME_SCRIPT}({set})"))
+}
+
+/// Reads (and with `set`, replaces) the username on a sign-up page in one of the app's site windows.
+#[tauri::command]
+pub async fn site_username(app: AppHandle, window_label: String, set: Option<String>) -> Result<SiteUsername, String> {
+    if !window_label.starts_with("site-") {
+        return Err("That window cannot be read.".into());
+    }
+    if let Some(name) = set.as_deref() {
+        if name.is_empty() || name.chars().count() > 60 || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_') {
+            return Err("That username has characters the socials don't allow.".into());
+        }
+    }
+    let window = app.get_webview(&window_label).ok_or("That page is closed. Open it again.")?;
+    let url = window.url().map_err(|_| "Could not read the page address.")?;
+    if !platform_host(&url) {
+        return Ok(SiteUsername::default());
+    }
+    let script = username_script(set.as_deref())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (tx, rx) = std::sync::mpsc::channel();
+        window
+            .eval_with_callback(script, move |result| { let _ = tx.send(result); })
+            .map_err(|_| "Could not read the page.".to_string())?;
+        let raw = rx.recv_timeout(std::time::Duration::from_secs(3)).map_err(|_| "The page did not answer.".to_string())?;
+        Ok(serde_json::from_str::<SiteUsername>(&raw).unwrap_or_default())
+    })
+    .await
+    .map_err(|_| "Could not read the page.".to_string())?
+}
+
 #[tauri::command]
 pub async fn choose_image_file() -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(|| {
@@ -688,6 +773,20 @@ mod tests {
         assert!(script.contains(r#""password":null"#));
         assert!(script.contains("[role=combobox]"));
         assert!(script.contains("continue on the tiktok app"));
+        assert!(script.contains("already signed up"));
+    }
+
+    #[test]
+    fn username_script_only_sets_the_username_box() {
+        let script = username_script(Some("bunny\"whispers1")).unwrap();
+        assert!(script.ends_with(r#"("bunny\"whispers1")"#));
+        assert!(username_script(None).unwrap().ends_with("(null)"));
+        assert!(!script.contains(".click("));
+        assert!(!script.contains(".submit("));
+        assert!(!script.contains("requestSubmit"));
+        let read: SiteUsername = serde_json::from_str(r#"{"value":"bunnywhispers","taken":true}"#).unwrap();
+        assert_eq!(read, SiteUsername { value: Some("bunnywhispers".into()), taken: true });
+        assert_eq!(serde_json::from_str::<SiteUsername>("null").unwrap_or_default(), SiteUsername::default());
     }
 
     #[test]

@@ -4,7 +4,7 @@ import VideoLibrary from '../VideoLibrary';
 import SeriesPanel from '../SeriesPanel';
 import type { OpenBrand } from '../App';
 import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type BrandImage, type Platform, type PlatformAction, type View, type Workspace } from '../model';
-import { emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
+import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 
 import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
 import { useBrandInstagram } from '../useBrandInstagram';
@@ -136,9 +136,9 @@ export default function AccountsPage({ workspace, loaded, busy, onAddAccount, on
         onCreateAccounts([platform], { brandId: brand.id, label: brand.name, handle: emailTag(brand.name), signupEmail: base, displayName: lead?.displayName, bio: lead?.bio, website: lead?.website, imagePath: lead?.imagePath });
         return;
       }
-      // New profiles take the brand's name as their username; birthday is entered by the user.
+      // New profiles take the brand's name as their username (numbers are added at sign-up if it is taken) and the sign-up birthday.
       const account: Account = { ...createAccount(platform, brand.name, emailTag(brand.name), 'planned', ''), brandId: brand.id,
-        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath };
+        displayName: lead?.displayName || brand.name, bio: lead?.bio, website: lead?.website, signupEmail: plan.email, imagePath: lead?.imagePath, birthday: DEFAULT_SIGNUP_BIRTHDAY };
       const saved = await onSave({ ...workspace, accounts: [...workspace.accounts, account] }, `${getPlatform(platform).name} profile added to ${brand.name}.`);
       if (saved === false) return;
       startSignUp(account);

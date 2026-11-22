@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-site-username"
+description = "Enables the site_username command without any pre-configured scope."
+commands.allow = ["site_username"]
+
+[[permission]]
+identifier = "deny-site-username"
+description = "Denies the site_username command without any pre-configured scope."
+commands.deny = ["site_username"]
