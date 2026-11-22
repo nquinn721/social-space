@@ -480,5 +480,38 @@
       "character",
       "story"
     ]
+  },
+  {
+    "id": "look",
+    "menu": [
+      "Colors",
+      "Pick your vibe",
+      "Animations"
+    ],
+    "notes": [
+      "Sidebar Colors menu (ThemePicker.tsx) sets html[data-theme] (Neon, Sunset, Ocean, Candy, Forest) and html[data-motion] (Animations on/off) in localStorage, never the workspace. fun.css holds the themes, aurora background and all animations; it turns every animation off under prefers-reduced-motion or data-motion=calm. look.ts celebrate() throws confetti; App fires it for success messages that isCelebration() accepts (posted on, scheduled, live, created)."
+    ],
+    "paths": [
+      "src/look.ts",
+      "src/ThemePicker.tsx",
+      "src/fun.css",
+      "src/main.tsx",
+      "src/App.tsx"
+    ],
+    "screens": [
+      {
+        "name": "Colors",
+        "path": "src/ThemePicker.tsx"
+      }
+    ],
+    "summary": "The app's look: color themes, animations and confetti celebrations",
+    "terms": [
+      "theme",
+      "colors",
+      "animation",
+      "confetti",
+      "celebrate",
+      "motion"
+    ]
   }
 ]

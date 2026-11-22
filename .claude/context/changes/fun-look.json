@@ -1,0 +1,53 @@
+{
+  "summary": "Make the app colorful and fun: five color themes picked from a Colors menu in the sidebar, a drifting aurora background, a color per page in the sidebar, cards that lift and glow, flowing gradient buttons and progress bars, pages that rise in, popping messages and dialogs, and confetti when a post goes out, gets scheduled or a profile goes live. Animations can be turned off and respect the system's reduced-motion setting.",
+  "features": [
+    "look",
+    "navigation",
+    "accounts",
+    "updates"
+  ],
+  "changes": [],
+  "kept": [],
+  "spots": [
+    {
+      "path": "src/fun.css",
+      "note": "themes, aurora, hover/enter/progress/notice/dialog animations, calm mode"
+    },
+    {
+      "path": "src/look.ts",
+      "note": "theme + motion storage, isCelebration, celebrate confetti"
+    },
+    {
+      "path": "src/ThemePicker.tsx",
+      "note": "sidebar Colors menu"
+    },
+    {
+      "path": "src/look.test.ts",
+      "note": "tests"
+    },
+    {
+      "path": "src/main.tsx",
+      "note": "imports fun.css, applies the saved look before render"
+    },
+    {
+      "path": "src/App.tsx",
+      "note": "ThemePicker in the sidebar; confetti for celebratory success messages"
+    },
+    {
+      "path": "package.json",
+      "note": "0.38.0"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "note": "0.38.0"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "note": "0.38.0"
+    },
+    {
+      "path": "hub-app.json",
+      "note": "0.38.0"
+    }
+  ]
+}

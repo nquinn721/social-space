@@ -25,6 +25,8 @@ import { mergeWorkspaces } from './workspaceSync';
 import ReviewNotice from './ReviewNotice';
 import { useReviewWatch } from './useReviewWatch';
 import { moveTestVideos, seenKey, stateLabel, reviewOf, testVideos, withReviewState, type AppReview, type ReviewState } from './appReviews';
+import ThemePicker from './ThemePicker';
+import { celebrate, isCelebration } from './look';
 import { listDeveloperApps, switchToProductionApp } from './devAppsService';
 import type { DevProvider } from './devAppsService';
 
@@ -45,6 +47,8 @@ function App() {
   const [messageIsError, setMessageIsError] = useState(false);
   const showMessage = (text: string) => { setMessageIsError(false); setMessage(text); };
   const showError = (text: string) => { setMessageIsError(true); setMessage(text); };
+  // Confetti when a success message says something went out or came to life.
+  useEffect(() => { if (message && !messageIsError && isCelebration(message)) celebrate(); }, [message, messageIsError]);
   const [showAccount, setShowAccount] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [businessName, setBusinessName] = useState('');
@@ -234,6 +238,7 @@ function App() {
       <nav aria-label="Main navigation"><div className="nav-group">{NAV_ITEMS.map(navButton)}</div></nav>
       <div className="sidebar-bottom">
         {!updatesManaged && navButton({ id: 'updates', label: updateNavLabel(updates), icon: RotateCw })}
+        <ThemePicker/>
         {navButton({ id: 'settings', label: 'Settings', icon: Settings2 })}
         <div className="sidebar-profile"><div className="avatar">{initialOf(workspace.businessName)}</div><div><strong>{workspace.businessName || 'Your workspace'}</strong><small>{teamSync.status?.enabled ? 'Shared with your partner' : 'Stored on this PC'}</small></div></div>
       </div>
