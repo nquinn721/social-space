@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Sparkles, Wand2, X as Close } from 'lucide-react';
-import { buildPrompt, buildRefinePrompt, generateProfileImage, STYLES, type GeneratedImage, type ImageStyle } from './imageAiService';
+import { buildPrompt, buildRefinePrompt, generateProfileImage, pictureIdeaFor, STYLES, suggestStyle, type BrandContext, type GeneratedImage, type ImageStyle } from './imageAiService';
 import { errorText } from './ui';
 import './imageStudio.css';
 
@@ -20,11 +20,12 @@ export type AutoImage = { description: string; style: ImageStyle; key: number };
 /**
  * Makes a profile picture with Grok Imagine: describe it, generate, then
  * regenerate for a new take or refine the current one with a change.
- * Portraits are always of a fictional person.
+ * Portraits are always of a fictional person. With a brand context, every prompt is built around that
+ * account (name, bio, topics) and its style starts at the one that suits it, so the first take fits.
  */
-export default function ProfileImageStudio({ suggestion = '', auto, disabled = false, onUse, onAutoUse, onClose }: { suggestion?: string; auto?: AutoImage; disabled?: boolean; onUse: (path: string) => void; onAutoUse?: (path: string) => void; onClose: () => void }) {
-  const [description, setDescription] = useState(auto?.description ?? suggestion);
-  const [style, setStyle] = useState<ImageStyle>(auto?.style ?? 'photo');
+export default function ProfileImageStudio({ suggestion = '', suggestedStyle, context, auto, disabled = false, onUse, onAutoUse, onClose }: { suggestion?: string; suggestedStyle?: ImageStyle; context?: BrandContext; auto?: AutoImage; disabled?: boolean; onUse: (path: string) => void; onAutoUse?: (path: string) => void; onClose: () => void }) {
+  const [description, setDescription] = useState(auto?.description ?? (suggestion || (context ? pictureIdeaFor(context) : '')));
+  const [style, setStyle] = useState<ImageStyle>(auto?.style ?? suggestedStyle ?? (context ? suggestStyle(context) : 'photo'));
   const [refinement, setRefinement] = useState('');
   const [results, setResults] = useState<Result[]>([]);
   const [selected, setSelected] = useState(0);
@@ -47,7 +48,7 @@ export default function ProfileImageStudio({ suggestion = '', auto, disabled = f
   const makeAuto = async (idea: AutoImage) => {
     await run(GENERATING, async () => {
       setDescription(idea.description); setStyle(idea.style);
-      const prompt = buildPrompt(idea.description, idea.style);
+      const prompt = buildPrompt(idea.description, idea.style, [], context);
       const images = await make(prompt);
       keep(images, prompt);
       onAutoUse?.(images[0].path);
@@ -57,12 +58,12 @@ export default function ProfileImageStudio({ suggestion = '', auto, disabled = f
   useEffect(() => { if (auto?.description) void makeAuto(auto); }, [auto?.key]);
 
   const generate = () => run(GENERATING, async () => {
-    const prompt = buildPrompt(description, style);
+    const prompt = buildPrompt(description, style, [], context);
     keep(await make(prompt), prompt);
   });
   const refine = () => run(REFINING, async () => {
     if (!current) return;
-    const prompt = buildRefinePrompt(refinement, style);
+    const prompt = buildRefinePrompt(refinement, style, context);
     keep(await make(prompt, current.path), prompt);
     setRefinement('');
   });
