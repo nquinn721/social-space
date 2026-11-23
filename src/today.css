@@ -1,0 +1,99 @@
+/* Today, Calendar, Results and Comments. Colours come from the theme tokens in styles.css. */
+.today-heading .greeting { text-transform: none; }
+.today-list, .comment-list, .top-videos, .failed-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.today-post { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.today-post time { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 13px; }
+.today-post-text { min-width: 0; display: grid; }
+.today-post-text strong, .today-post-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-post-text small { color: var(--text-3); }
+.today-socials { display: inline-flex; gap: 4px; }
+.status-chip.state-posted { color: var(--success); }
+.status-chip.state-scheduled { color: var(--accent-text); }
+.status-chip.state-failed { color: var(--danger); }
+.status-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; display: inline-block; margin-right: 5px; }
+
+/* Calendar */
+.calendar-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; }
+.calendar-bar .week-label { font-weight: 600; min-width: 170px; text-align: center; }
+.calendar-bar .spacer { flex: 1; }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-2); }
+.calendar-legend span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; background: var(--brand-color); }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.calendar-day { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); min-height: 220px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.calendar-day.today { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line) inset; }
+.calendar-day.past { opacity: 0.75; }
+.calendar-day h3 { margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.calendar-day.today h3 { color: var(--accent-text); }
+.calendar-post { text-align: left; border: 1px solid var(--border); border-left: 3px solid var(--brand-color); border-radius: var(--radius-sm); background: var(--surface-2); padding: 6px 7px; display: grid; gap: 3px; cursor: pointer; color: var(--text); font: inherit; }
+.calendar-post:hover, .calendar-post.selected { background: var(--surface-hover); border-color: var(--border-strong); border-left-color: var(--brand-color); }
+.calendar-post time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.calendar-post strong { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-post .today-socials .platform-mark { transform: scale(0.85); }
+.calendar-post.state-posted { opacity: 0.8; }
+.calendar-post.state-failed { border-color: var(--danger-line); }
+.calendar-open { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 6px 7px; font-size: 11.5px; color: var(--text-3); }
+.calendar-detail { margin-top: 14px; }
+.calendar-detail .detail-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }
+.calendar-detail input[type='datetime-local'] { width: auto; }
+.calendar-settings { margin-bottom: 14px; }
+@media (max-width: 1100px) { .calendar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .calendar-day { min-height: 0; } }
+
+/* Results */
+.range-tabs { margin-bottom: 14px; }
+.stat .change { font-size: 12px; font-weight: 600; }
+.stat .change.up { color: var(--success); }
+.stat .change.down { color: var(--danger); }
+.results-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+.bars { display: flex; align-items: flex-end; gap: 4px; height: 160px; padding-top: 8px; }
+.bars .bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; min-width: 0; }
+.bars .bar span { width: 100%; max-width: 28px; border-radius: 4px 4px 0 0; background: var(--accent); min-height: 2px; }
+.bars .bar small { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.social-bars { display: grid; gap: 10px; }
+.social-bar { display: grid; grid-template-columns: 24px 80px minmax(0, 1fr) 56px; align-items: center; gap: 8px; font-size: 13px; }
+.social-bar .track { height: 8px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.social-bar .track span { display: block; height: 100%; background: var(--splash); }
+.social-bar strong { text-align: right; font-variant-numeric: tabular-nums; }
+.results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.results-table th { text-align: left; font-weight: 600; color: var(--text-3); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.results-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+.results-table td.num, .results-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 1000px) { .results-grid { grid-template-columns: 1fr; } }
+
+/* Comments */
+.comment-card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 12px 14px; display: grid; gap: 8px; }
+.comment-head { display: flex; align-items: center; gap: 8px; font-size: 13px; flex-wrap: wrap; }
+.comment-head small { color: var(--text-3); }
+.comment-text { margin: 0; white-space: pre-wrap; }
+.comment-reply { display: grid; gap: 6px; }
+.comment-reply textarea { min-height: 60px; resize: vertical; }
+.comment-reply .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.comment-reply .row small { color: var(--text-3); flex: 1; }
+.comment-card.done { opacity: 0.7; }
+
+/* Settings facts (Ayrshare) */
+.settings-facts { display: grid; gap: 0; margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius); }
+.settings-facts > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 12px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.settings-facts > div:first-child { border-top: 0; }
+.settings-facts dt { color: var(--text-3); font-size: 13px; }
+.settings-facts dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 13.5px; }
+.usage-bar { display: inline-block; width: 140px; height: 7px; border-radius: 4px; background: var(--surface-3); overflow: hidden; }
+.usage-bar span { display: block; height: 100%; background: var(--splash); }
+.look-options { margin: 8px 0 12px; }
+.settings-more { margin: 18px 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+.ayrshare-pill { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 6px 0; border-radius: var(--radius); border: 1px solid var(--success-line); background: var(--success-soft); font-size: 12px; }
+.ayrshare-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+.ayrshare-pill > span:last-child { display: grid; }
+.ayrshare-pill small { color: var(--text-2); }
+.ayrshare-pill.off { border-color: var(--border); background: var(--surface-2); }
+.ayrshare-pill.off .dot { background: var(--text-3); }
+.brand-card-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.brand-card-stats span { display: grid; }
+.brand-card-stats strong { font-size: 17px; }
+.brand-card-stats small { color: var(--text-3); font-size: 11.5px; }
+.brand-card-socials { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.brand-linked { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-2); margin: 4px 0 0; }
+.heading-buttons select { width: auto; min-width: 150px; }
+.settings-card h3 { display: flex; align-items: center; gap: 6px; margin: 18px 0 4px; font-size: 14px; }
+.settings-card h2 + h3 { margin-top: 6px; }
+.range-tabs + .status-line, .range-tabs + .status-line + .error-message { margin-bottom: 14px; }
+.brand-card-socials > small { white-space: nowrap; }

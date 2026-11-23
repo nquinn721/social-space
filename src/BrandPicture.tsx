@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, FolderOpen, ImagePlus, Loader2, RotateCcw, Sparkles, Wand2, X as Close } from 'lucide-react';
-import { getPlatform, normalizeHandle, type Account, type Brand, type BrandImage, type View, type Workspace } from './model';
+import { getPlatform, normalizeHandle, type Account, type Brand, type BrandImage, type View } from './model';
 import { buildPrompt, buildRefinePrompt, pictureIdeaFor, STYLES, suggestStyle, type BrandContext, type ImageStyle } from './imageAiService';
 import { BANNER, bannerPrompt, brandImagePreview, generatePictures, keepBanner, keepFile, keepSquare, pictureFileFor, PROFILE_SIZES, profilePicturePath, revealBrandImage, type Aspect, type GeneratedImage } from './brandImageService';
 import { chooseImageFile } from './profileService';
-import { openProfileEditor } from './postingService';
-import { brandLogin } from './useBrowserPosting';
+import { brandLogin, openProfileEditor } from './brandWindowService';
+
 import { AccountAvatar, BrandMark, errorText } from './ui';
 import './imageStudio.css';
 import './brandPicture.css';
@@ -107,7 +107,6 @@ type Props = {
   onSaveImage: (image: BrandImage | undefined, message: string) => Promise<unknown>;
   onSaveAccountImage: (account: Account, file: string | undefined, message: string) => Promise<unknown>;
   onNavigate?: (view: View, section?: string) => void;
-  developerLogins?: Workspace['developerLogins'];
 };
 
 /**
@@ -115,7 +114,7 @@ type Props = {
  * Each social can have its own instead. Putting it on a live profile opens that social's profile
  * settings for review; X requires choosing the picture manually.
  */
-export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSaveAccountImage, onNavigate, developerLogins }: Props) {
+export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSaveAccountImage, onNavigate }: Props) {
   const [target, setTarget] = useState<Target | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
@@ -172,11 +171,11 @@ export default function BrandPicture({ brand, accounts, busy, onSaveImage, onSav
     const path = await profilePicturePath(file, account.platform);
     // The brand's own window (its signed-in folder), so the picture lands on this brand's profile and
     // a sign-in page there fills the brand's login.
-    await openProfileEditor({ platform: account.platform, brandId: brand.id, ...brandLogin(developerLogins, account), handle: normalizeHandle(account.handle), fields: {}, imagePath: path });
+    await openProfileEditor({ platform: account.platform, brandId: brand.id, ...brandLogin(account), handle: normalizeHandle(account.handle), fields: {}, imagePath: path });
     setNote(account.platform === 'x' ? 'Opened X profile settings. Choose your picture and save it on X yourself.' : `Opened ${getPlatform(account.platform).name} profile settings with the picture filled in (${PROFILE_SIZES[account.platform]} x ${PROFILE_SIZES[account.platform]}). Check the crop there, then press Save on the page.${account.platform === 'youtube' && image?.banner ? ' For the banner: on Branding press Upload under Banner image and pick the file Show banner file selects.' : ''}`);
   });
   const showBanner = () => run(async () => { if (image?.banner) await revealBrandImage(image.banner); });
-  const needKey = onNavigate ? () => onNavigate('settings', 'video-sources') : undefined;
+  const needKey = onNavigate ? () => onNavigate('settings', 'grok') : undefined;
   const studioFor = (what: Target) => setTarget((open) => open && open.kind === what.kind && (open.kind !== 'account' || what.kind !== 'account' || open.account.id === what.account.id) ? null : what);
 
   return <section className="card brand-picture" aria-labelledby="brand-picture-title">

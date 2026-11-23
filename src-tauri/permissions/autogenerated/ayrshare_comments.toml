@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-comments"
+description = "Enables the ayrshare_comments command without any pre-configured scope."
+commands.allow = ["ayrshare_comments"]
+
+[[permission]]
+identifier = "deny-ayrshare-comments"
+description = "Denies the ayrshare_comments command without any pre-configured scope."
+commands.deny = ["ayrshare_comments"]

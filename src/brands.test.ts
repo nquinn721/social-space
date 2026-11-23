@@ -15,15 +15,14 @@ describe('brand model', () => {
     expect(migrateWorkspace(migrated)).toEqual(migrated);
   });
 
-  it('keeps series and developer logins on save, and unlinks videos from a series that is gone', () => {
+  it('keeps series on save, and unlinks videos from a series that is gone', () => {
     const brands = [{ id: 'b', name: 'Mia', notes: '' }];
     const categories = [{ id: 'c', brandId: 'b', name: 'Stories' }];
     const story = { id: 's', brandId: 'b', categoryId: 'c', title: 'Knots', premise: '', bible: '', characters: [], episodes: [], aspectRatio: '9:16', duration: 10, createdAt: 1 };
     const video = { id: 'v', brandId: 'b', categoryId: 'c', title: 'Part 1', mediaSource: '', caption: '', posted: [], createdAt: 1, seriesId: 's', episode: 1 };
-    const saved = { businessName: '', brands, accounts: [], channels: [], categories, videos: [video], series: [story, { ...story, id: 'gone', brandId: 'nobody' }], developerLogins: { x: { email: 'dev@x.com' } } };
+    const saved = { businessName: '', brands, accounts: [], channels: [], categories, videos: [video], series: [story, { ...story, id: 'gone', brandId: 'nobody' }] };
     const migrated = migrateWorkspace(saved);
     expect(migrated.series?.map((item) => item.id)).toEqual(['s']);
-    expect(migrated.developerLogins).toEqual({ x: { email: 'dev@x.com' } });
     expect(migrated.videos?.[0].seriesId).toBe('s');
     expect(migrateWorkspace({ ...saved, series: [] }).videos?.[0]).toMatchObject({ seriesId: undefined, episode: undefined });
     expect('series' in migrateWorkspace({ ...saved, series: [] })).toBe(false);

@@ -2,12 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { formFieldsFor, runTool, TOOL_SPECS, type ToolContext } from './tools';
 import type { Account, Workspace } from '../model';
 import * as profile from '../profileService';
-import * as x from '../xService';
 import * as email from '../emailService';
 import * as sources from '../videoSourcesService';
 
 vi.mock('../profileService', async (original) => ({ ...(await original<typeof import('../profileService')>()), openPlatformWindow: vi.fn(), fillSiteForm: vi.fn(), chooseImageFile: vi.fn(), ensureAccountPassword: vi.fn() }));
-vi.mock('../xService', () => ({ postToX: vi.fn() }));
 vi.mock('../emailService', () => ({ listEmails: vi.fn(), readEmail: vi.fn() }));
 vi.mock('../queueService', () => ({ listQueue: vi.fn() }));
 vi.mock('../videoSourcesService', () => ({ listVideoSources: vi.fn(), generateVideo: vi.fn() }));
@@ -81,16 +79,6 @@ describe('assistant tools', () => {
     vi.mocked(profile.openPlatformWindow).mockResolvedValue('site-9');
     await expect(runTool('open_platform_page', { platform: 'x', page: 'signup' }, context(workspace()))).resolves.toMatchObject({ windowId: 'site-9' });
     expect(profile.openPlatformWindow).toHaveBeenCalledWith('x', 'create');
-  });
-
-  it('asks before posting to X and respects a decline', async () => {
-    const declined = context(workspace(), false);
-    await expect(runTool('post_to_x', { text: 'Hello world' }, declined)).resolves.toMatchObject({ posted: false });
-    expect(x.postToX).not.toHaveBeenCalled();
-    vi.mocked(x.postToX).mockResolvedValue({ id: '1', text: 'Hello world' });
-    const approved = context(workspace(), true);
-    await expect(runTool('post_to_x', { text: 'Hello world' }, approved)).resolves.toMatchObject({ posted: true });
-    expect(approved.confirm).toHaveBeenCalledWith(expect.objectContaining({ detail: 'Hello world' }));
   });
 
   it('labels email bodies as untrusted', async () => {

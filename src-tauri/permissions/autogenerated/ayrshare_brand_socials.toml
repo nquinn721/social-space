@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-brand-socials"
+description = "Enables the ayrshare_brand_socials command without any pre-configured scope."
+commands.allow = ["ayrshare_brand_socials"]
+
+[[permission]]
+identifier = "deny-ayrshare-brand-socials"
+description = "Denies the ayrshare_brand_socials command without any pre-configured scope."
+commands.deny = ["ayrshare_brand_socials"]

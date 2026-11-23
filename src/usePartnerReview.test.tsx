@@ -4,11 +4,9 @@ import { isTauri } from '@tauri-apps/api/core';
 import type { Workspace } from './model';
 import { usePartnerReview } from './usePartnerReview';
 import { claimReviewPost, importReviewVideo, listReviewPosts, publishReviewCatalog, recordReviewResult, reviewConnection, type ReviewPost } from './reviewService';
-import { claimInstagramConnection, publishInstagramReelFile } from './instagramService';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }));
 vi.mock('./reviewService', () => ({ claimReviewPost: vi.fn(), listReviewPosts: vi.fn(), recordReviewResult: vi.fn(), reviewConnection: vi.fn(), submitForReview: vi.fn(), publishReviewCatalog: vi.fn(), importReviewVideo: vi.fn() }));
-vi.mock('./instagramService', () => ({ claimInstagramConnection: vi.fn(), publishInstagramReelFile: vi.fn() }));
 
 const workspace: Workspace = {
   businessName: '', channels: [], brands: [{ id: 'b1', name: 'Animals', notes: '' }],
@@ -33,34 +31,21 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('usePartnerReview', () => {
-  it('posts an approved post to Instagram with the approved text, records it and marks the video posted', async () => {
+  it('puts an approved post in the queue with the approved text, and records that Ayrshare schedules it', async () => {
     vi.mocked(listReviewPosts).mockResolvedValueOnce([approved]).mockResolvedValue([{ ...approved, status: 'posted' }]);
-    vi.mocked(claimInstagramConnection).mockResolvedValue({ id: '1', username: 'animals', login: 'facebook' });
-    vi.mocked(publishInstagramReelFile).mockResolvedValue({ id: 'm1', permalink: 'https://www.instagram.com/reel/abc/' });
     const save = vi.fn().mockResolvedValue(true);
     const { result } = renderHook(() => usePartnerReview(workspace, true, save));
 
     await waitFor(() => expect(save).toHaveBeenCalled());
-    expect(publishInstagramReelFile).toHaveBeenCalledWith('C:\\v\\bunny.mp4', 'Approved text\n\n#bunny #AIgenerated', 'ig1', expect.objectContaining({ expectedId: '1' }));
     expect(claimReviewPost).toHaveBeenCalledWith('v1');
     const [, status, results, events] = vi.mocked(recordReviewResult).mock.calls[0];
     expect(status).toBe('posted');
-    expect(results).toMatchObject({ instagram: { status: 'posted', url: 'https://www.instagram.com/reel/abc/' }, tiktok: { status: 'manual' } });
-    expect(events.map((event) => event.text)).toEqual(['Posted to Instagram', 'TikTok is posted by hand from Social Space']);
-    const saved: Workspace = save.mock.calls[0][0];
-    expect(saved.videos?.[0]).toMatchObject({ posted: ['instagram'], caption: 'Approved text', links: { instagram: 'https://www.instagram.com/reel/abc/' } });
+    expect(results).toMatchObject({ instagram: { status: 'manual' }, tiktok: { status: 'manual' } });
+    expect(events.map((event) => event.text)).toEqual(["Instagram is in Social Space's queue, scheduled through Ayrshare", "TikTok is in Social Space's queue, scheduled through Ayrshare"]);
+    const [saved, message] = save.mock.calls[0] as [Workspace, string];
+    expect(saved.videos?.[0]).toMatchObject({ posted: [], caption: 'Approved text' });
+    expect(message).toContain('is in the queue');
     await waitFor(() => expect(result.current.posts.v1?.status).toBe('posted'));
-  });
-
-  it('records a failure instead of posting when Instagram is not connected', async () => {
-    vi.mocked(listReviewPosts).mockResolvedValue([{ ...approved, platforms: ['instagram'] }]);
-    vi.mocked(claimInstagramConnection).mockResolvedValue(null);
-    const save = vi.fn();
-    renderHook(() => usePartnerReview(workspace, true, save));
-    await waitFor(() => expect(recordReviewResult).toHaveBeenCalledTimes(1));
-    expect(vi.mocked(recordReviewResult).mock.calls[0][1]).toBe('failed');
-    expect(publishInstagramReelFile).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
   });
 
   it('leaves an approved post alone when the other PC claimed it first', async () => {
@@ -69,7 +54,6 @@ describe('usePartnerReview', () => {
     const save = vi.fn();
     renderHook(() => usePartnerReview(workspace, true, save));
     await waitFor(() => expect(claimReviewPost).toHaveBeenCalledWith('v1'));
-    expect(publishInstagramReelFile).not.toHaveBeenCalled();
     expect(recordReviewResult).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
   });

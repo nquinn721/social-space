@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-forget-profile"
+description = "Enables the ayrshare_forget_profile command without any pre-configured scope."
+commands.allow = ["ayrshare_forget_profile"]
+
+[[permission]]
+identifier = "deny-ayrshare-forget-profile"
+description = "Denies the ayrshare_forget_profile command without any pre-configured scope."
+commands.deny = ["ayrshare_forget_profile"]

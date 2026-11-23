@@ -1,64 +1,56 @@
 import { describe, expect, it } from 'vitest';
-import { brandStatuses, brandSummary, needsAttention, progressLabel, socialStatus, videoProgress } from './brandStatus';
+import { brandStatuses, brandSummary, chipLabel, needsAttention, progressLabel, socialStatus, videoProgress, type StatusInputs } from './brandStatus';
 import type { Account, Workspace } from './model';
 
-const account = (id: string, platform: Account['platform'], extra: Partial<Account> = {}): Account => ({ id, platform, label: 'Bunny', handle: 'bunny', status: 'active', notes: '', brandId: 'b', ...extra });
+const account = (id: string, platform: Account['platform'], extra: Partial<Account> = {}): Account => ({ id, platform, label: 'Bunny', handle: 'bunny', status: 'active', notes: '', brandId: 'b', signupEmail: 'softwings25+bunny@gmail.com', ...extra });
 const base = (accounts: Account[]): Workspace => ({ businessName: '', brands: [{ id: 'b', name: 'Bunny', notes: '' }], accounts, channels: [] });
+const connected = (linked: StatusInputs['socials'] = { hasProfile: true, linked: [] }, xKeys = true): StatusInputs => ({ ayrshare: { connected: true, xKeys }, socials: linked });
 
 describe('brand status', () => {
-  it('does not claim a YouTube channel is verified without a current channel check', () => {
-    const ws = base([account('y', 'youtube', { signupEmail: 'softwings25@gmail.com' })]);
-    expect(socialStatus(ws, 'b', 'youtube')).toMatchObject({ kind: 'verify-session', label: 'Not checked', canPost: true, via: 'browser' });
+  it('tells a missing profile from one not created yet', () => {
+    const ws = base([account('t', 'tiktok', { status: 'planned' })]);
+    expect(socialStatus(ws, 'b', 'instagram')).toMatchObject({ kind: 'no-profile', action: { kind: 'create' }, canPost: false });
+    expect(socialStatus(ws, 'b', 'tiktok', connected())).toMatchObject({ kind: 'not-created', action: { kind: 'finish-signup' }, canPost: false });
   });
-  it('flags TikTok and X saved with the main Gmail', () => {
-    const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25@gmail.com' }), account('x', 'x', { signupEmail: 'softwings25+bunny@gmail.com' })]);
-    expect(socialStatus(ws, 'b', 'tiktok')).toMatchObject({ kind: 'main-login', canPost: false, action: { kind: 'own-login' } });
-    expect(socialStatus(ws, 'b', 'x')).toMatchObject({ kind: 'verify-session', canPost: true });
+  it('flags Instagram, Facebook, TikTok and X saved with the main Gmail, but not YouTube', () => {
+    const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25@gmail.com' }), account('y', 'youtube', { signupEmail: 'softwings25@gmail.com' })]);
+    expect(socialStatus(ws, 'b', 'tiktok', connected())).toMatchObject({ kind: 'main-login', canPost: false, action: { kind: 'own-login' } });
+    expect(socialStatus(ws, 'b', 'youtube', connected())).toMatchObject({ kind: 'not-linked' });
   });
-  it('treats Instagram and Facebook as standalone accounts that post through the brand window', () => {
-    const ws = base([account('i', 'instagram', { signupEmail: 'softwings25+bunny@gmail.com' }), account('f', 'facebook', { signupEmail: 'softwings25+bunny@gmail.com' })]);
-    for (const platform of ['instagram', 'facebook'] as const) {
-      expect(socialStatus(ws, 'b', platform)).toMatchObject({ kind: 'verify-session', via: 'browser', canPost: true });
-      expect(socialStatus(ws, 'b', platform, { signIns: { [platform]: { signedIn: true, checkedAt: 1, handle: 'bunny' } } })).toMatchObject({ kind: 'ready', label: 'Signed in' });
-    }
-    expect(socialStatus(ws, 'b', 'facebook', { passwords: { f: false } })).toMatchObject({ kind: 'no-password', action: { kind: 'save-login' } });
-    // Neither is ever on the main Gmail, and a brand without Facebook simply has no profile there.
-    const main = base([account('i', 'instagram', { signupEmail: 'softwings25@gmail.com' }), account('f', 'facebook', { signupEmail: 'softwings25@gmail.com' })]);
-    expect(socialStatus(main, 'b', 'instagram')).toMatchObject({ kind: 'main-login', canPost: false });
-    expect(socialStatus(main, 'b', 'facebook')).toMatchObject({ kind: 'main-login', canPost: false });
-    expect(socialStatus(base([]), 'b', 'facebook')).toMatchObject({ kind: 'no-profile', action: { kind: 'create' } });
+  it('walks through what Ayrshare needs: the key, the brand profile, then each linked social', () => {
+    const ws = base([account('i', 'instagram')]);
+    expect(socialStatus(ws, 'b', 'instagram')).toMatchObject({ kind: 'checking', canPost: false });
+    expect(socialStatus(ws, 'b', 'instagram', { ayrshare: { connected: false, xKeys: false } })).toMatchObject({ kind: 'no-ayrshare', action: { kind: 'connect-ayrshare' } });
+    expect(socialStatus(ws, 'b', 'instagram', { ayrshare: { connected: true, xKeys: false } })).toMatchObject({ kind: 'checking', tone: 'checking' });
+    expect(socialStatus(ws, 'b', 'instagram', connected(null))).toMatchObject({ kind: 'checking', tone: 'problem' });
+    expect(socialStatus(ws, 'b', 'instagram', connected({ hasProfile: false, linked: [] }))).toMatchObject({ kind: 'no-brand-profile', action: { kind: 'setup-posting' } });
+    expect(socialStatus(ws, 'b', 'instagram', connected())).toMatchObject({ kind: 'not-linked', action: { kind: 'link' }, canPost: false });
+    const ready = socialStatus(ws, 'b', 'instagram', connected({ hasProfile: true, linked: [{ platform: 'instagram', name: 'bunny', refresh: false }] }));
+    expect(ready).toMatchObject({ kind: 'ready', canPost: true, linkedAs: 'bunny' });
+    expect(ready.detail).toContain('@bunny');
+    expect(socialStatus(ws, 'b', 'instagram', connected({ hasProfile: true, linked: [{ platform: 'instagram', name: 'bunny', refresh: true }] }))).toMatchObject({ kind: 'relink', canPost: true, action: { kind: 'link' } });
   });
-  it('asks to sign in when the brand window is not signed in, and never says Ready then', () => {
-    const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' }), account('y', 'youtube')]);
-    const signIns = { tiktok: { signedIn: false, checkedAt: 0 }, youtube: { signedIn: true, checkedAt: 0 } };
-    expect(socialStatus(ws, 'b', 'tiktok', { signIns })).toMatchObject({ kind: 'sign-in', tone: 'todo', action: { kind: 'sign-in' }, canPost: true });
-    expect(socialStatus(ws, 'b', 'youtube', { signIns })).toMatchObject({ kind: 'ready', label: 'Signed in', canPost: true });
-    expect(socialStatus(ws, 'b', 'youtube', { signIns }).detail).toContain('selected YouTube channel has not been verified');
-  });
-  it('blocks a last-seen browser account mismatch and does not treat matching or unknown cookies as proof', () => {
-    const ws = base([account('t', 'tiktok', { signupEmail: 'softwings25+bunny@gmail.com' })]);
-    const signIn = (handle?: string) => ({ tiktok: { signedIn: true, checkedAt: 1, handle } });
-    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('other') })).toMatchObject({ label: 'Wrong account', canPost: false, tone: 'problem' });
-    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') })).toMatchObject({ kind: 'ready', label: 'Signed in', canPost: true });
-    expect(socialStatus(ws, 'b', 'tiktok', { signIns: signIn() }).detail).toContain('username was not available');
-    expect(needsAttention(socialStatus(ws, 'b', 'tiktok', { signIns: signIn('BUNNY') }))).toBe(false);
-    expect(needsAttention(socialStatus(ws, 'b', 'instagram'))).toBe(false);
-  });
-  it('tells a missing profile from one not created yet, and a missing saved login', () => {
-    const ws = base([account('t', 'tiktok', { status: 'planned' }), account('x', 'x')]);
-    expect(socialStatus(ws, 'b', 'instagram')).toMatchObject({ kind: 'no-profile', action: { kind: 'create' } });
-    expect(socialStatus(ws, 'b', 'tiktok')).toMatchObject({ kind: 'not-created', action: { kind: 'finish-signup' } });
-    expect(socialStatus(ws, 'b', 'x', { passwords: { x: false } })).toMatchObject({ kind: 'verify-session', canPost: true });
+  it('needs the X app keys before X can post', () => {
+    const ws = base([account('x', 'x')]);
+    const linked = { hasProfile: true, linked: [{ platform: 'x' as const, name: 'bunny', refresh: false }] };
+    expect(socialStatus(ws, 'b', 'x', connected(linked, false))).toMatchObject({ kind: 'no-x-keys', canPost: false, action: { kind: 'x-keys' } });
+    expect(socialStatus(ws, 'b', 'x', connected(linked, true))).toMatchObject({ kind: 'ready', canPost: true });
   });
   it('sums a brand up from its own socials only', () => {
     const ws = base([account('i', 'instagram'), account('t', 'tiktok')]);
-    expect(brandSummary(brandStatuses(ws, 'b')).text).toBe('Ready on 0 of 2 · Instagram: not checked +1 more');
-    expect(brandSummary(brandStatuses(ws, 'b', { signIns: { instagram: { signedIn: true, checkedAt: 1, handle: 'bunny' } } })).text).toBe('Ready on 1 of 2 · TikTok: not checked');
+    expect(brandSummary(brandStatuses(ws, 'b', { ayrshare: { connected: false, xKeys: false } })).short).toBe('Connect Ayrshare to post');
+    expect(brandSummary(brandStatuses(ws, 'b', connected({ hasProfile: false, linked: [] }))).short).toBe('Set up posting');
+    const one = connected({ hasProfile: true, linked: [{ platform: 'instagram', name: 'bunny', refresh: false }] });
+    expect(brandSummary(brandStatuses(ws, 'b', one)).text).toBe('Ready on 1 of 2 · TikTok: not linked');
+    expect(needsAttention(socialStatus(ws, 'b', 'tiktok', one))).toBe(true);
+    expect(needsAttention(socialStatus(ws, 'b', 'instagram', one))).toBe(false);
+    expect(chipLabel(socialStatus(ws, 'b', 'tiktok', one))).toBe('Link');
   });
   it('labels how far a video is', () => {
     const video = { id: 'v', brandId: 'b', categoryId: 'c', title: 'Hop', mediaSource: '', caption: '', posted: ['instagram' as const], createdAt: 0 };
     expect(progressLabel(videoProgress(video, ['instagram', 'tiktok']))).toBe('Posted on 1 of 2');
     expect(progressLabel(videoProgress(video, ['instagram']))).toBe('Posted');
-    expect(progressLabel(videoProgress({ ...video, posted: [] }, ['instagram', 'x']))).toBe('Ready to post');
+    expect(progressLabel(videoProgress({ ...video, posted: [] }, ['instagram', 'x']))).toBe('Waiting in queue');
+    expect(progressLabel(videoProgress({ ...video, posted: [] }, ['instagram', 'x']), 2)).toBe('Scheduled');
   });
 });

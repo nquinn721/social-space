@@ -1,10 +1,7 @@
-//! Posting a video through the social's own upload page, in a visible app window, while its API
-//! is not approved yet (TikTok Sandbox, YouTube audit) or not used (X, and Instagram and Facebook,
-//! whose brand accounts are standalone accounts the Meta API cannot publish to).
-//!
-//! Each brand gets its own browser profile (cookie folder) for posting, so every brand stays signed in
-//! to its own TikTok, YouTube, X, Instagram and Facebook account. TikTok, YouTube, Instagram and Facebook windows can fill upload details;
-//! X is a manual handoff with no page automation. Nate reviews and posts on each site himself.
+//! Brand windows: app windows with one browser profile (cookie folder) per brand, so every brand stays
+//! signed in to its own TikTok, YouTube, X, Instagram and Facebook account. They open a brand profile's
+//! page, its profile editor, its password reset, and Ayrshare's linking page (where each social is linked
+//! for posting through Ayrshare). Sign-in pages get the brand profile's saved login; X is never scripted.
 
 use std::{
     path::PathBuf,
@@ -12,99 +9,30 @@ use std::{
     time::Duration,
 };
 
-use base64::{engine::general_purpose::STANDARD, Engine};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::{
     webview::{NewWindowFeatures, NewWindowResponse, PageLoadEvent},
-    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 
 use crate::Platform;
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
-/// Videos bigger than this are attached by hand: the page gets the file in pieces through script calls.
-const MAX_ATTACH_BYTES: u64 = 512 * 1024 * 1024;
-const CHUNK_BYTES: usize = 1024 * 1024;
-const MAX_TEXT_CHARS: usize = 5_000;
-/// Marks a page that showed its post went up (set by the post script with `history.replaceState`).
-const POSTED_MARK: &str = "socialspace-posted";
-pub const EVENT: &str = "posting-window";
 
-/// What goes into the upload page. Sent by the app for one video and one social.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PostRequest {
+/// Which brand profile a window is for. Its saved login fills the social's sign-in page.
+#[derive(Debug, Clone)]
+pub struct WindowRequest {
     platform: Platform,
     brand_id: String,
-    video_id: String,
-    /// The brand's profile on this social: its saved password fills the sign-in page.
-    #[serde(default)]
-    account_id: Option<String>,
-    #[serde(default)]
     handle: String,
-    #[serde(default)]
-    email: String,
-    #[serde(default)]
-    video_path: String,
-    #[serde(default)]
-    title: String,
-    /// The description followed by the hashtags.
-    #[serde(default)]
-    text: String,
-    #[serde(default)]
-    made_with_ai: bool,
-    #[serde(default)]
-    made_for_kids: bool,
-    /// "0:03.2", or empty for the first frame.
-    #[serde(default)]
-    cover: String,
-    /// The cover moment in ms; None keeps the social's own pick.
-    #[serde(default)]
-    cover_ms: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PostConfig<'a> {
-    platform: Platform,
-    handle: &'a str,
-    title: &'a str,
-    text: &'a str,
-    made_with_ai: bool,
-    made_for_kids: bool,
-    cover: &'a str,
-    cover_ms: Option<u64>,
-    upload_url: &'a str,
-    file_name: String,
-    /// Why the video is not attached by the app, if it isn't.
-    file_note: Option<String>,
-    /// Whether sign-in pages get the profile's saved login (its own, or the parent login of an
-    /// Instagram profile or YouTube channel).
-    login_filled: bool,
+/// An Ayrshare linking window: it can land on any social's sign-in, so it holds every brand login.
+struct LinkWindow {
+    brand: String,
+    /// Sign-in fill per social, for the brand's own profile there.
+    logins: Vec<(Platform, String)>,
 }
-
-/// What the app hears about a posting window.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PostingUpdate {
-    video_id: String,
-    platform: Platform,
-    /// "posted": the page showed the post went up. "closed": the window was closed.
-    state: &'static str,
-    posted: bool,
-}
-
-pub(crate) fn upload_url(platform: Platform) -> Option<&'static str> {
-    match platform {
-        Platform::Tiktok => Some("https://www.tiktok.com/tiktokstudio/upload"),
-        Platform::Youtube => Some("https://www.youtube.com/upload"),
-        Platform::X => Some("https://x.com/compose/post"),
-        // Instagram has no upload address: its home page opens "New post", which the post script presses.
-        Platform::Instagram => Some("https://www.instagram.com/"),
-        Platform::Facebook => Some("https://www.facebook.com/reels/create/"),
-    }
-}
-
 /// Sign-in pages, where the account's username and password are filled in.
 pub(crate) fn is_sign_in(url: &url::Url) -> bool {
     let host = url.host_str().unwrap_or("").trim_start_matches("www.");
@@ -139,26 +67,6 @@ fn may_fill_page(url: &url::Url) -> bool {
     on_social(url) && !crate::browser::is_x_site(url)
 }
 
-/// Whether the page shows the post went up: the post script marked it, or TikTok Studio moved on
-/// from the upload page to the list of posts after Post was pressed.
-pub(crate) fn shows_posted(platform: Platform, url: &url::Url, was_uploading: bool) -> bool {
-    if url.fragment() == Some(POSTED_MARK) {
-        return true;
-    }
-    platform == Platform::Tiktok && was_uploading && url.path().starts_with("/tiktokstudio/content")
-}
-
-fn is_upload_page(platform: Platform, url: &url::Url) -> bool {
-    let host = url.host_str().unwrap_or("");
-    match platform {
-        Platform::Tiktok => host.ends_with("tiktok.com") && url.path().starts_with("/tiktokstudio/upload"),
-        Platform::Youtube => host == "studio.youtube.com" || (host.ends_with("youtube.com") && url.path().starts_with("/upload")),
-        Platform::X => (host == "x.com" || host == "twitter.com") && !is_sign_in(url),
-        Platform::Instagram => host.ends_with("instagram.com") && !is_sign_in(url),
-        Platform::Facebook => host.ends_with("facebook.com") && url.path().starts_with("/reels/create"),
-    }
-}
-
 /// One cookie folder per brand, so each brand stays signed in to its own accounts.
 fn profile_dir(app: &AppHandle, brand_id: &str) -> Result<PathBuf, String> {
     let safe: String = brand_id.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').take(64).collect();
@@ -169,77 +77,45 @@ fn profile_dir(app: &AppHandle, brand_id: &str) -> Result<PathBuf, String> {
     Ok(base.join("posting").join(safe))
 }
 
-fn check(request: &PostRequest) -> Result<(), String> {
-    if request.text.chars().count() > MAX_TEXT_CHARS || request.title.chars().count() > 200 || request.cover.len() > 20 {
-        return Err("The post text is too long.".into());
-    }
-    if request.handle.len() > 200 || request.email.len() > 320 || request.video_id.len() > 100 {
-        return Err("The account details are not valid.".into());
-    }
-    Ok(())
-}
-
-/// The video to attach, or why it is attached by hand.
-fn attachable(path: &str) -> Result<PathBuf, String> {
-    if path.trim().is_empty() {
-        return Err("This video has no file on this PC yet.".into());
-    }
-    let file = crate::video_files::video_file(path)?;
-    let size = std::fs::metadata(&file).map_err(|_| "The video file can't be read.".to_string())?.len();
-    if size > MAX_ATTACH_BYTES {
-        return Err("The video is over 512 MB, so pick it on the page yourself.".into());
-    }
-    Ok(file)
-}
-
-fn mime_of(path: &std::path::Path) -> &'static str {
-    match path.extension().and_then(|ext| ext.to_str()).map(|ext| ext.to_ascii_lowercase()).as_deref() {
-        Some("mov") => "video/quicktime",
-        Some("webm") => "video/webm",
-        Some("m4v") => "video/x-m4v",
-        _ => "video/mp4",
-    }
-}
-
-/// Hands the video to the page in pieces, then tells the post script it is ready to attach.
-async fn send_file(window: tauri::Webview, path: PathBuf) {
-    let read_path = path.clone();
-    let read = tauri::async_runtime::spawn_blocking(move || std::fs::read(read_path)).await;
-    let Ok(Ok(bytes)) = read else {
-        let _ = window.eval("window.__socialspacePost && window.__socialspacePost.fileFailed('The video file could not be read.')");
-        return;
-    };
-    let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_else(|| "video.mp4".into());
-    if window.eval("window.__socialspaceParts = [];").is_err() {
-        return;
-    }
-    for chunk in bytes.chunks(CHUNK_BYTES) {
-        let script = format!("window.__socialspaceParts && window.__socialspaceParts.push('{}');", STANDARD.encode(chunk));
-        if window.eval(&script).is_err() {
-            return;
-        }
-    }
-    let done = format!(
-        "window.__socialspacePost && window.__socialspacePost.fileReady({}, {});",
-        serde_json::to_string(&name).unwrap_or_else(|_| "\"video.mp4\"".into()),
-        serde_json::to_string(mime_of(&path)).unwrap_or_else(|_| "\"video/mp4\"".into()),
-    );
-    let _ = window.eval(&done);
-}
-
 struct Posting {
-    request: PostRequest,
-    /// None for a profile window, which only signs in and shows the page.
-    config_script: Option<String>,
+    request: WindowRequest,
     sign_in_script: Option<String>,
     /// A profile-edit window: fills the brand's picture, name, bio and keywords (never on a sign-in page).
     profile_script: Option<String>,
-    file: Option<PathBuf>,
+    link: Option<LinkWindow>,
     /// Set once the other PC's sign-in was put into this window's folder.
     shared_session: std::sync::atomic::AtomicBool,
 }
 
+/// The social a sign-in page belongs to (Google's is YouTube's).
+fn social_of(url: &url::Url) -> Option<Platform> {
+    let host = url.host_str()?.trim_start_matches("www.");
+    let on = |site: &str| host == site || host.ends_with(&format!(".{site}"));
+    if host == "accounts.google.com" { return Some(Platform::Youtube); }
+    if on("tiktok.com") { return Some(Platform::Tiktok); }
+    if on("instagram.com") { return Some(Platform::Instagram); }
+    if on("facebook.com") { return Some(Platform::Facebook); }
+    None
+}
+
+fn link_page_loaded(link: &LinkWindow, webview: &tauri::Webview) {
+    if crate::browser::to_email_login(webview) {
+        return;
+    }
+    let Ok(url) = webview.url() else { return };
+    if !may_fill_page(&url) || !is_sign_in(&url) {
+        return;
+    }
+    let script = social_of(&url).and_then(|social| link.logins.iter().find(|(platform, _)| *platform == social));
+    if let Some((_, script)) = script {
+        let _ = webview.eval(script);
+    }
+}
+
 fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
+    if let Some(link) = &posting.link {
+        return link_page_loaded(link, webview);
+    }
     if !may_automate(posting.request.platform) { return; }
     if crate::browser::to_email_login(webview) {
         return;
@@ -257,14 +133,8 @@ fn page_loaded(posting: &Posting, webview: &tauri::Webview) {
             let _ = webview.eval(crate::browser_sessions::REJECTED_NOTICE);
         }
     }
-    if let Some(script) = &posting.config_script {
-        let _ = webview.eval(script);
-    }
     if let (Some(script), false) = (&posting.profile_script, is_sign_in(&url)) {
         let _ = webview.eval(script);
-    }
-    if let (Some(path), true) = (&posting.file, is_upload_page(posting.request.platform, &url)) {
-        tauri::async_runtime::spawn(send_file(webview.clone(), path.clone()));
     }
 }
 
@@ -288,8 +158,11 @@ fn build_window(
         Platform::Facebook => "Facebook",
     };
     let handle = &posting.request.handle;
-    let verb = window_verb(&posting.request.video_id);
-    let title = if handle.is_empty() { format!("Socialspace · {verb} {name}") } else { format!("Socialspace · {verb} {name} as @{handle}") };
+    let title = match &posting.link {
+        Some(link) => format!("Socialspace · Link {}'s socials", link.brand),
+        None if handle.is_empty() => format!("Socialspace · {name}"),
+        None => format!("Socialspace · {name} as @{handle}"),
+    };
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title(title)
         .inner_size(1200.0, 860.0)
@@ -297,7 +170,7 @@ fn build_window(
         // WebView2's own form autofill would offer whatever was typed in this brand window before (the
         // main Gmail, another profile's login) and fill it over the app's fill; the app fills logins itself.
         .general_autofill_enabled(false);
-    let builder = if may_automate(posting.request.platform) {
+    let builder = if posting.link.is_some() || may_automate(posting.request.platform) {
         builder.initialization_script(crate::browser::EMAIL_LOGIN_SCRIPT)
     } else { builder };
     let builder = builder
@@ -319,94 +192,7 @@ fn build_window(
             }
         });
     let builder = if let Some(features) = features { builder.window_features(features) } else { builder };
-    builder.build().map_err(|_| "Could not open the upload page inside the app.".into())
-}
-
-fn window_verb(video_id: &str) -> &'static str {
-    if video_id.is_empty() { "Profile on" } else { "Post on" }
-}
-
-/// Watches the window for the post going up, and tells the app when it does or when the window closes.
-fn watch(app: AppHandle, window: WebviewWindow, request: PostRequest) {
-    let platform = request.platform;
-    let video_id = request.video_id.clone();
-    let closed_app = app.clone();
-    let closed_video = video_id.clone();
-    let posted = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let posted_on_close = posted.clone();
-    window.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Destroyed) {
-            let update = PostingUpdate { video_id: closed_video.clone(), platform, state: "closed", posted: posted_on_close.load(Ordering::Relaxed) };
-            let _ = closed_app.emit(EVENT, update);
-        }
-    });
-    if !may_automate(platform) { return; }
-    tauri::async_runtime::spawn(async move {
-        let mut was_uploading = false;
-        loop {
-            tokio::time::sleep(Duration::from_millis(1500)).await;
-            let Ok(url) = window.url() else { return };
-            was_uploading = was_uploading || is_upload_page(platform, &url);
-            if shows_posted(platform, &url, was_uploading) {
-                posted.store(true, Ordering::Relaxed);
-                let _ = app.emit(EVENT, PostingUpdate { video_id, platform, state: "posted", posted: true });
-                return;
-            }
-        }
-    });
-}
-
-/// Opens a brand's upload page for review. X is entirely manual; other supported pages attempt to fill details.
-#[tauri::command]
-pub async fn open_posting_window(app: AppHandle, request: PostRequest) -> Result<String, String> {
-    check(&request)?;
-    let address = upload_url(request.platform).ok_or("This social has no upload page.")?;
-    let dir = profile_dir(&app, &request.brand_id)?;
-    std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
-    if !may_automate(request.platform) {
-        let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: None, sign_in_script: None, profile_script: None, file: None, shared_session: Default::default() });
-        let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
-        let window = open_signed_in(&app, url, dir, posting)?;
-        let label = window.label().to_owned();
-        watch(app, window, request);
-        return Ok(label);
-    }
-    let (file, file_note) = match attachable(&request.video_path) {
-        Ok(file) => (Some(file), None),
-        Err(note) => (None, Some(note)),
-    };
-    let file_name = file
-        .as_ref()
-        .and_then(|file| file.file_name())
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let config = PostConfig {
-        platform: request.platform,
-        handle: &request.handle,
-        title: &request.title,
-        text: &request.text,
-        made_with_ai: request.made_with_ai,
-        made_for_kids: request.made_for_kids,
-        cover: &request.cover,
-        cover_ms: request.cover_ms,
-        upload_url: address,
-        file_name,
-        file_note,
-        login_filled: request.account_id.as_deref().is_some_and(|id| !id.is_empty()),
-    };
-    let data = serde_json::to_string(&config).map_err(|_| "Could not prepare the post.")?;
-    let config_script = format!("({POST_SCRIPT})({data});");
-    let password = match request.account_id.as_deref().filter(|id| !id.is_empty()) {
-        Some(id) => crate::account_passwords::read(id).ok().flatten(),
-        None => None,
-    };
-    let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
-    let posting = std::sync::Arc::new(Posting { request: request.clone(), config_script: Some(config_script), sign_in_script, profile_script: None, file, shared_session: Default::default() });
-    let url: url::Url = address.parse().map_err(|_| "Invalid upload address.")?;
-    let window = open_signed_in(&app, url, dir, posting)?;
-    let label = window.label().to_owned();
-    watch(app, window, request);
-    Ok(label)
+    builder.build().map_err(|_| "Could not open the brand window.".into())
 }
 
 /// How often an open brand window's sign-in is saved for the other PC.
@@ -563,22 +349,12 @@ pub async fn open_profile_page(app: AppHandle, request: ProfileRequest) -> Resul
         request.account_id.as_deref().filter(|id| !id.is_empty()).and_then(|id| crate::account_passwords::read(id).ok().flatten())
     } else { None };
     let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
-    let post = PostRequest {
+    let post = WindowRequest {
         platform: request.platform,
         brand_id: request.brand_id.clone(),
-        video_id: String::new(),
-        account_id: request.account_id.clone(),
         handle: request.handle.trim().trim_start_matches('@').to_owned(),
-        email: request.email.clone(),
-        video_path: String::new(),
-        title: String::new(),
-        text: String::new(),
-        made_with_ai: false,
-        made_for_kids: false,
-        cover: String::new(),
-        cover_ms: None,
     };
-    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script: None, file: None, shared_session: Default::default() });
+    let posting = std::sync::Arc::new(Posting { request: post, sign_in_script, profile_script: None, link: None, shared_session: Default::default() });
     let address = signed_out_entry(request.platform, &address, crate::sign_in_state::known_signed_in(&app, &request.brand_id, request.platform));
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
     open_signed_in(&app, url, dir, posting).map(|_| ())
@@ -622,24 +398,14 @@ pub async fn open_password_reset(app: AppHandle, request: ProfileRequest) -> Res
     }
     let dir = profile_dir(&app, &request.brand_id)?;
     std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
-    let post = PostRequest {
+    let post = WindowRequest {
         platform: request.platform,
         brand_id: request.brand_id.clone(),
-        video_id: String::new(),
-        account_id: Some(account_id),
         handle: request.handle.trim().trim_start_matches('@').to_owned(),
-        email: request.email.clone(),
-        video_path: String::new(),
-        title: String::new(),
-        text: String::new(),
-        made_with_ai: false,
-        made_for_kids: false,
-        cover: String::new(),
-        cover_ms: None,
     };
     // The same fill runs on the reset page and on the sign-in page the social may return to afterwards,
     // where the new password is then already filled.
-    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script: Some(script.clone()), profile_script: Some(script), file: None, shared_session: Default::default() });
+    let posting = std::sync::Arc::new(Posting { request: post, sign_in_script: Some(script.clone()), profile_script: Some(script), link: None, shared_session: Default::default() });
     let url: url::Url = address.parse().map_err(|_| "Invalid reset address.")?;
     open_signed_in(&app, url, dir, posting).map(|_| ())
 }
@@ -652,355 +418,30 @@ pub fn save_reset_password(account_id: String) -> Result<(), String> {
     crate::account_passwords::set_account_password(account_id, password)
 }
 
-/// Runs in the upload page. Shows a panel with the post (and Copy buttons as a fallback), attaches the
-/// video once the app has handed it over, fills the caption and title once each, sets the cover, the
-/// AI label and YouTube's audience, steps YouTube through to Visibility and picks Public, and watches
-/// for the page saying the post went up. The one button it never presses is Post / Publish: Nate does.
-const POST_SCRIPT: &str = r#"function (data) {
-  const state = window.__socialspacePostState || (window.__socialspacePostState = { attached: false, filled: {}, posted: false, nexts: 0, lastClick: 0, auto: true });
-  // The moment Nate clicks or types on the page himself, the script stops pressing anything (it still
-  // fills fields once), so it never fights him or moves the steps under his hand.
-  if (!window.__socialspaceHands) {
-    window.__socialspaceHands = true;
-    const takeOver = (event) => { if (event.isTrusted && !(event.target && event.target.closest && event.target.closest('#socialspace-post'))) state.auto = false; };
-    document.addEventListener('pointerdown', takeOver, true);
-    document.addEventListener('keydown', takeOver, true);
-  }
-  // YouTube always gets a thumbnail: the chosen moment, or else the first frame.
-  if (data.coverMs == null && data.platform === 'youtube') data.coverMs = 0;
-  const visible = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
-  const names = { tiktok: 'TikTok', youtube: 'YouTube', x: 'X', instagram: 'Instagram', facebook: 'Facebook' };
-  const name = names[data.platform] || data.platform;
-  const ours = (el) => !!(el && el.closest && el.closest('#socialspace-post, #socialspace-fill-banner, #socialspace-code'));
-  const all = (selector) => Array.from(document.querySelectorAll(selector)).filter((el) => visible(el) && !ours(el));
-  const first = (selectors) => {
-    for (const selector of selectors) { const found = all(selector)[0]; if (found) return found; }
-    return null;
-  };
-  /** The smallest visible element (of the given kinds) whose own text matches. */
-  const byText = (pattern, selector) => all(selector || 'button, [role=button], [role=tab], a, span, div, label')
-    .filter((el) => pattern.test((el.textContent || '').trim()) && (el.textContent || '').trim().length < 80)
-    .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0] || null;
-  const now = () => Date.now();
-  /** Clicks that open a section or step through the form, spaced out so the page can keep up. Never Post or Publish. */
-  const press = (el) => {
-    if (!el || !state.auto || now() - state.lastClick < 1500) return false;
-    if (/^(post|publish|share|schedule|upload|save|done)$/i.test((el.textContent || '').trim())) return false;
-    state.lastClick = now();
-    el.click();
-    return true;
-  };
-  const setText = (el, text, replace) => {
-    el.focus();
-    if (replace) document.execCommand('selectAll', false);
-    document.execCommand('insertText', false, text);
-    el.style.outline = '2px solid #8b5cf6';
-  };
-  const fillOnce = (key, selectors, text, replace) => {
-    if (!text || state.filled[key]) return;
-    const el = first(selectors);
-    if (!el) return;
-    state.filled[key] = true;
-    setText(el, text, replace);
-  };
-  const attachTo = (input, file) => {
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    input.files = transfer.files;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  };
-  const fileInputs = (kind) => Array.from(document.querySelectorAll('input[type=file]')).filter((el) => !ours(el) &&
-    (kind === 'image' ? /image|jpe?g|png/.test(el.accept || '') : (!el.accept || /video|mp4|mov|\*/.test(el.accept))));
-  const switchOn = (row) => {
-    const control = row && (row.querySelector('[role=switch], input[type=checkbox]'));
-    if (!control) return null;
-    return control.getAttribute('aria-checked') === 'true' || control.checked === true;
-  };
-
-  /**
-   * Turns on a page's AI label switch for an AI-made video: finds the row whose text matches, opening the
-   * section it hides in first (expander) when it is not showing. True once it is on, or when there is
-   * nothing to do; gives up after 10 seconds without a switch and leaves a reminder in the panel.
-   */
-  const labelOn = (pattern, expander) => {
-    if (!data.madeWithAi || state.filled.ai === true || state.filled.ai === 'missing') return true;
-    state.aiSince = state.aiSince || now();
-    const late = now() - state.aiSince > 10000;
-    const label = byText(pattern);
-    if (!label) {
-      if (expander && !state.filled.aiMore) { const more = byText(expander); if (more && press(more)) state.filled.aiMore = true; }
-      if (late || !state.auto) state.filled.ai = 'missing';
-      return state.filled.ai === 'missing';
-    }
-    let row = label;
-    for (let i = 0; i < 5 && row && switchOn(row) === null; i++) row = row.parentElement;
-    const on = switchOn(row);
-    if (on === true) { state.filled.ai = true; return true; }
-    if (on === false && !press(row.querySelector('[role=switch], input[type=checkbox]')) && !state.auto) state.filled.ai = 'missing';
-    if (on === null && late) state.filled.ai = 'missing';
-    return state.filled.ai === 'missing';
-  };
-
-  // The cover: the chosen moment of the video, drawn to a picture in the page.
-  const makeCover = async () => {
-    if (state.coverFile || state.coverTried || data.coverMs == null || !state.file) return;
-    state.coverTried = true;
-    try {
-      const url = URL.createObjectURL(state.file);
-      const video = document.createElement('video');
-      video.muted = true; video.preload = 'auto'; video.src = url;
-      await new Promise((resolve, reject) => { video.onloadeddata = resolve; video.onerror = reject; setTimeout(reject, 20000); });
-      video.currentTime = Math.min(data.coverMs / 1000, Math.max(0, (video.duration || 0) - 0.05));
-      await new Promise((resolve, reject) => { video.onseeked = resolve; setTimeout(reject, 10000); });
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      canvas.getContext('2d').drawImage(video, 0, 0);
-      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
-      URL.revokeObjectURL(url);
-      if (blob) state.coverFile = new File([blob], 'cover.jpg', { type: 'image/jpeg' });
-    } catch (e) { state.coverFailed = true; }
-  };
-
-  const steps = {
-    tiktok: () => {
-      fillOnce('caption', ['.public-DraftEditor-content[contenteditable="true"]', '[data-e2e="caption_container"] [contenteditable="true"]', '.caption-editor [contenteditable="true"]'], data.text, true);
-      if (!state.filled.caption) return;
-      // "AI-generated content" sits under Show more; turning it on may ask to confirm.
-      if (data.madeWithAi && !state.filled.ai) {
-        const confirm = byText(/^Turn on$/i, 'button');
-        if (confirm) { press(confirm); state.filled.ai = true; return; }
-        const label = byText(/AI-generated content/i);
-        if (!label) { if (!state.filled.more) { const more = byText(/^Show more$/i); if (more && press(more)) state.filled.more = true; } return; }
-        let row = label;
-        for (let i = 0; i < 5 && row && switchOn(row) === null; i++) row = row.parentElement;
-        const on = switchOn(row);
-        if (on === true) state.filled.ai = true;
-        else if (on === false) press(row.querySelector('[role=switch], input[type=checkbox]'));
-        return;
-      }
-      if (data.coverMs != null && !state.filled.cover && state.coverFile) {
-        const input = fileInputs('image')[0];
-        if (input && state.cover === 'tab') { attachTo(input, state.coverFile); state.cover = 'attached'; state.coverAt = now(); return; }
-        if (state.cover === 'attached') {
-          if (now() - state.coverAt < 2500) return;
-          const ok = byText(/^(Confirm|Save|Done|Apply)$/i, 'button');
-          if (ok) { state.lastClick = 0; ok.click(); state.filled.cover = true; }
-          return;
+/// Opens Ayrshare's linking page in the brand's window. When a social asks to sign in on the way, its
+/// page gets the brand profile's own saved login (never the main Google login or another brand's).
+pub(crate) fn open_link_window(app: &AppHandle, brand_id: &str, brand: &str, url: url::Url, logins: Vec<crate::ayrshare::LinkLogin>) -> Result<(), String> {
+    let dir = profile_dir(app, brand_id)?;
+    std::fs::create_dir_all(&dir).map_err(|_| "Could not make the brand's browser folder.")?;
+    let mut scripts = Vec::new();
+    for login in logins {
+        if scripts.iter().any(|(platform, _)| *platform == login.platform) {
+            continue;
         }
-        if (state.cover === 'open') { const tab = byText(/^Upload cover$/i); if (tab && press(tab)) state.cover = 'tab'; else if (input) state.cover = 'tab'; return; }
-        const edit = byText(/^Edit cover$/i);
-        if (edit && press(edit)) state.cover = 'open';
-      }
-    },
-    youtube: () => {
-      fillOnce('title', ['#title-textarea #textbox', 'ytcp-social-suggestions-textbox#title-textarea [contenteditable="true"]'], data.title, true);
-      fillOnce('description', ['#description-textarea #textbox', 'ytcp-social-suggestions-textbox#description-textarea [contenteditable="true"]'], data.text, true);
-      if (!state.filled.title) return;
-      if (data.coverMs != null && state.coverFile && !state.filled.cover) {
-        // Only when YouTube offers its thumbnail upload: a Short or a channel that is not phone-verified has a
-        // hidden file input, and a picture slipped into it makes YouTube fail to save the whole video.
-        const offer = byText(/^Upload (file|thumbnail)$/i);
-        const offered = offer && offer.getAttribute('aria-disabled') !== 'true' && !offer.hasAttribute('disabled') && !(offer.closest && offer.closest('[disabled], [aria-disabled="true"]'));
-        const input = offered && (document.querySelector('input#file-loader') || fileInputs('image')[0]);
-        if (input) { attachTo(input, state.coverFile); state.filled.cover = true; }
-        else if (!state.coverWait) state.coverWait = now();
-        else if (now() - state.coverWait > 8000) state.coverMissing = true;
-      }
-      const kids = document.querySelector('tp-yt-paper-radio-button[name="' + (data.madeForKids ? 'VIDEO_MADE_FOR_KIDS_MFK' : 'VIDEO_MADE_FOR_KIDS_NOT_MFK') + '"]');
-      if (!state.filled.kids && visible(kids)) { state.filled.kids = true; if (kids.getAttribute('aria-checked') !== 'true') kids.click(); }
-      if (!state.filled.altered) {
-        const altered = document.querySelector('tp-yt-paper-radio-button[name="' + (data.madeWithAi ? 'VIDEO_HAS_ALTERED_CONTENT_YES' : 'VIDEO_HAS_ALTERED_CONTENT_NO') + '"]');
-        if (visible(altered)) { state.filled.altered = true; if (altered.getAttribute('aria-checked') !== 'true') altered.click(); }
-        else if (!state.filled.more) { const more = document.querySelector('#toggle-button'); if (visible(more) && press(more)) { state.filled.more = true; state.moreAt = now(); } if (!state.auto) state.filled.altered = 'skipped'; return; }
-        else if (now() - (state.moreAt || 0) > 6000) state.filled.altered = 'skipped';
-        else return;
-      }
-      // Step through Video elements and Checks to Visibility, choose Public, and stop before Publish.
-      const isPublic = document.querySelector('tp-yt-paper-radio-button[name="PUBLIC"]');
-      if (visible(isPublic)) {
-        if (!state.filled.public && state.auto) { state.filled.public = true; if (isPublic.getAttribute('aria-checked') !== 'true') isPublic.click(); }
-        state.auto = false;
-        return;
-      }
-      // At most three Nexts (Details, Video elements, Checks), spaced out so each step can load.
-      const next = document.querySelector('#next-button');
-      if (state.filled.kids && state.nexts < 3 && now() - state.lastClick > 2500 && visible(next) && next.getAttribute('aria-disabled') !== 'true' && press(next)) state.nexts += 1;
-    },
-    x: () => {
-      fillOnce('text', ['[data-testid="tweetTextarea_0"]', 'div[role="textbox"][contenteditable="true"]'], data.text, false);
-    },
-    // Instagram's New post dialog: "Video posts are now shared as reels" (OK), then Next past Crop and
-    // Edit, then the caption. Nate presses Share.
-    instagram: () => {
-      const caption = first(['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]']);
-      if (caption) {
-        fillOnce('caption', ['div[aria-label^="Write a caption"][contenteditable="true"]', '[role=dialog] div[contenteditable="true"][role=textbox]'], data.text, true);
-        // "Add AI label" sits under Advanced settings on the caption step.
-        if (labelOn(/^(Add )?AI label$|^Label as AI|^Made with AI$/i, /^Advanced settings$/i)) state.auto = false;
-        return;
-      }
-      const ok = byText(/^OK$/i, '[role=dialog] button, [role=dialog] [role=button]');
-      if (ok && press(ok)) return;
-      const next = byText(/^Next$/i, '[role=dialog] [role=button], [role=dialog] button, [role=dialog] div');
-      if (next && state.nexts < 2 && now() - state.lastClick > 2500 && press(next)) state.nexts += 1;
-    },
-    // Facebook's reel composer: Next past the video and edit steps, then the description. Nate presses Publish.
-    facebook: () => {
-      const box = first(['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]']);
-      if (box) {
-        fillOnce('caption', ['div[contenteditable="true"][aria-label*="escri" i]', 'div[contenteditable="true"][role=textbox]'], data.text, true);
-        // The reel's AI label switch, sometimes under More options.
-        if (labelOn(/^(Add )?AI (label|info)$|^Label as AI|^Made with AI$|^AI-generated$/i, /^(More options|Advanced settings)$/i)) state.auto = false;
-        return;
-      }
-      const next = byText(/^Next$/i, '[role=button], button');
-      if (next && next.getAttribute('aria-disabled') !== 'true' && state.nexts < 2 && now() - state.lastClick > 2500 && press(next)) state.nexts += 1;
-    },
-  };
-  /** Opens the page's own upload dialog when the upload box only shows up after a click (Instagram's New post). */
-  const openUpload = () => {
-    if (data.platform !== 'instagram' || fileInputs('video').length || !state.auto || now() - state.lastClick < 2000) return;
-    const menuPost = Array.from(document.querySelectorAll('svg[aria-label="Post"]')).map((svg) => svg.closest('a, [role=link], [role=button], [role=menuitem]')).find((el) => el && visible(el) && !ours(el));
-    const create = Array.from(document.querySelectorAll('svg[aria-label="New post"], svg[aria-label="Create"]')).map((svg) => svg.closest('a, [role=link], [role=button]')).find((el) => el && visible(el) && !ours(el));
-    const target = menuPost || create;
-    if (!target) return;
-    state.lastClick = now();
-    target.click();
-  };
-
-  const reminders = () => {
-    const list = [];
-    if (data.coverMs != null && !state.filled.cover && (data.platform === 'tiktok' || data.platform === 'youtube')) {
-      const at = data.cover || 'the start';
-      if (state.coverFailed) list.push('Cover: the frame at ' + at + ' could not be made here; pick it on the page.');
-      else if (state.coverMissing) list.push(data.platform === 'youtube' ? 'Thumbnail: YouTube only takes an uploaded thumbnail on a phone-verified channel, so it picks one itself for now.' : 'Cover: pick the frame at ' + at + ' under Edit cover.');
-      else list.push('Cover: setting the frame at ' + at + '.');
+        let account = Some(login.account_id.clone()).filter(|id| !id.is_empty());
+        let password = if may_automate(login.platform) { account.as_deref().and_then(|id| crate::account_passwords::read(id).ok().flatten()) } else { None };
+        if let Some(script) = brand_sign_in(&account, login.platform, &login.handle, &login.email, password)? {
+            scripts.push((login.platform, script));
+        }
     }
-    if (data.madeWithAi && data.platform === 'tiktok' && !state.filled.ai) list.push('Turning on "AI-generated content" under Show more.');
-    if (data.madeWithAi && (data.platform === 'instagram' || data.platform === 'facebook') && state.attached && state.filled.ai !== true) list.push(state.filled.ai === 'missing'
-      ? (data.platform === 'instagram' ? 'AI label: turn on "Add AI label" under Advanced settings before you share.' : 'AI label: turn on the AI label for this reel before you publish.')
-      : 'Turning on the AI label.');
-    if (data.madeWithAi && data.platform === 'youtube' && state.filled.altered === 'skipped') list.push('AI label: under Show more, set "Altered content" to Yes before you publish.');
-    return list;
-  };
-  const status = () => {
-    if (state.posted) return 'Posted. Socialspace marked it. You can close this window.';
-    if (window.__socialspaceSignUpBlocked && !state.attached) return name + ' offered to create a new account, so this login has no account there. Socialspace filled nothing. Go back, sign in to @' + data.handle + ' with the email or username you made it with, and save that login on its card under Edit details.';
-    const signingIn = location.hostname === 'accounts.google.com' || /\/login|\/i\/flow\//.test(location.pathname)
-      || all('input[type=password], input[autocomplete="username"], input[name="text"][autocomplete]').length > 0;
-    if (signingIn && !state.attached) return data.loginFilled
-      ? 'Sign in as @' + data.handle + '. Its username and password are filled in step by step; press Next or Log in.'
-      : 'Sign in as @' + data.handle + ' yourself: this profile has no login of its own saved in Social Space (it is on your main Gmail). Once signed in, it stays signed in.';
-    if (data.fileNote && !state.attached) return data.fileNote;
-    if (!state.attached) return 'Attaching ' + (data.fileName || 'the video') + '…';
-    if (data.platform === 'youtube') {
-      if (state.filled.public) return 'Everything is filled in and set to Public. Press Publish.';
-      if (!state.auto || state.filled.altered) return 'Details are filled in. Go on with Next, choose Public, then press Publish.';
-      return 'Filling in the details…';
-    }
-    if (reminders().some((line) => !/^(AI label|Cover|Thumbnail):/.test(line) || /^Cover: setting/.test(line))) return 'Filling in the details…';
-    if (reminders().length) return 'Check the note below, then press Post.';
-    return 'Everything is filled in. Press Post.';
-  };
-
-  const box = () => {
-    let el = document.getElementById('socialspace-post');
-    if (el) return el;
-    el = document.createElement('div');
-    el.id = 'socialspace-post';
-    el.setAttribute('data-ss-keep', '');
-    el.style.cssText = 'position:fixed;left:16px;bottom:16px;z-index:2147483647;width:320px;max-height:60vh;overflow:auto;' +
-      'background:#1b1b24;color:#f1f1f6;border:1px solid #8b5cf6;border-radius:12px;padding:12px 14px;' +
-      'font:13px/1.45 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
-    document.body.appendChild(el);
-    return el;
-  };
-  const copyButton = (label, text) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = label;
-    button.style.cssText = 'margin:6px 6px 0 0;padding:4px 10px;border-radius:8px;border:1px solid #8b5cf6;background:transparent;color:#e9e3ff;cursor:pointer;font:inherit';
-    button.onclick = () => navigator.clipboard.writeText(text).then(() => { button.textContent = 'Copied'; setTimeout(() => { button.textContent = label; }, 1500); });
-    return button;
-  };
-  const render = (text) => {
-    const el = box();
-    el.textContent = '';
-    const head = document.createElement('strong');
-    head.textContent = 'Socialspace · ' + name + (data.handle ? ' as @' + data.handle : '');
-    head.style.display = 'block';
-    el.appendChild(head);
-    const line = document.createElement('div');
-    line.textContent = text;
-    line.style.margin = '4px 0';
-    el.appendChild(line);
-    for (const item of reminders()) {
-      const row = document.createElement('div');
-      row.textContent = '• ' + item;
-      row.style.opacity = '.85';
-      el.appendChild(row);
-    }
-    if (!state.attached && !state.posted && data.uploadUrl && !fileInputs('video').length) {
-      const go = document.createElement('a');
-      go.href = data.uploadUrl;
-      go.textContent = 'Go to the upload page';
-      go.style.cssText = 'display:inline-block;margin:6px 6px 0 0;color:#c4b5fd';
-      el.appendChild(go);
-    }
-    if (data.title && data.platform === 'youtube') el.appendChild(copyButton('Copy title', data.title));
-    if (data.text) el.appendChild(copyButton(data.platform === 'youtube' ? 'Copy description' : 'Copy caption', data.text));
-    const hide = document.createElement('button');
-    hide.type = 'button';
-    hide.textContent = 'Hide';
-    hide.style.cssText = 'margin:6px 0 0;padding:4px 10px;border:0;background:transparent;color:#aaa;cursor:pointer;font:inherit';
-    hide.onclick = () => { state.hidden = true; el.remove(); };
-    el.appendChild(hide);
-  };
-
-  const success = () => {
-    const text = (document.body && document.body.innerText) || '';
-    if (data.platform === 'youtube') return state.attached && /Video published|Video scheduled|Video saved as (private|unlisted|public)/i.test(text);
-    if (data.platform === 'x') return /Your post was sent/i.test(text);
-    if (data.platform === 'instagram') return state.attached && /Your (reel|post) has been shared|(Reel|Post) shared/i.test(text);
-    if (data.platform === 'facebook') return state.attached && /Your reel (is|was|has been) (now )?(published|live|shared)|Reel published/i.test(text);
-    if (data.platform === 'tiktok') return state.attached && (/Your video (has been|was) (uploaded|posted)|Video (published|posted)/i.test(text) || /\/tiktokstudio\/content/.test(location.pathname));
-    return false;
-  };
-  const markPosted = () => {
-    if (state.posted) return;
-    state.posted = true;
-    try { history.replaceState(history.state, '', location.pathname + location.search + '#socialspace-posted'); } catch (e) { /* the app asks when the window closes */ }
-  };
-  window.__socialspacePost = {
-    fileReady: (fileName, mime) => {
-      try {
-        const parts = (window.__socialspaceParts || []).map((part) => Uint8Array.from(atob(part), (c) => c.charCodeAt(0)));
-        window.__socialspaceParts = null;
-        state.file = new File(parts, fileName, { type: mime });
-        makeCover();
-        tick();
-      } catch (e) { data.fileNote = 'The video could not be attached here: pick it on the page.'; tick(); }
-    },
-    fileFailed: (note) => { data.fileNote = note; tick(); },
-  };
-  let last = '';
-  const tick = () => {
-    if (!document.body) return;
-    if (!state.attached && state.file) {
-      openUpload();
-      const input = fileInputs('video')[0];
-      if (input) { attachTo(input, state.file); state.attached = true; }
-    }
-    if (state.attached && !state.posted) { try { (steps[data.platform] || (() => {}))(); } catch (e) { console.warn('[Socialspace]', e); } }
-    if (success()) markPosted();
-    const text = status() + '|' + reminders().join('|');
-    if (!state.hidden && (text !== last || !document.getElementById('socialspace-post'))) { last = text; render(status()); }
-  };
-  clearInterval(window.__socialspacePostTimer);
-  window.__socialspacePostTimer = setInterval(tick, 1000);
-  tick();
-}"#;
+    let request = WindowRequest { platform: Platform::Youtube, brand_id: brand_id.to_owned(), handle: String::new() };
+    let posting = std::sync::Arc::new(Posting { request, sign_in_script: None, profile_script: None, link: Some(LinkWindow { brand: brand.to_owned(), logins: scripts }), shared_session: Default::default() });
+    let blank: url::Url = "about:blank".parse().expect("valid blank URL");
+    let window = build_window(app, blank, dir, posting, None)?;
+    window.navigate(url).map_err(|_| "Could not open Ayrshare's linking page.")?;
+    let _ = window.set_focus();
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -1008,14 +449,6 @@ mod tests {
 
     fn url(value: &str) -> url::Url {
         value.parse().unwrap()
-    }
-
-    #[test]
-    fn youtube_thumbnail_only_goes_where_youtube_offers_an_upload() {
-        let youtube = POST_SCRIPT.split("youtube: () => {").nth(1).unwrap().split("x: () => {").next().unwrap();
-        let guard = youtube.find("const offered").unwrap();
-        assert!(guard < youtube.find("attachTo(input, state.coverFile)").unwrap());
-        assert!(youtube.contains("const input = offered &&"));
     }
 
     #[test]
@@ -1028,15 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn every_social_has_an_upload_page() {
-        for platform in [Platform::Tiktok, Platform::Youtube, Platform::X, Platform::Instagram, Platform::Facebook] {
-            let page = url(upload_url(platform).unwrap());
-            assert!(crate::browser::allowed_navigation(&page, false));
-            assert!(on_social(&page));
-        }
-    }
-
-    #[test]
     fn sign_in_pages_are_recognised() {
         assert!(is_sign_in(&url("https://accounts.google.com/v3/signin/identifier?x=1")));
         assert!(is_sign_in(&url("https://www.tiktok.com/login/phone-or-email/email")));
@@ -1045,29 +469,19 @@ mod tests {
         assert!(is_sign_in(&url("https://www.instagram.com/accounts/login/")));
         assert!(is_sign_in(&url("https://www.facebook.com/login/?next=%2Freels%2Fcreate%2F")));
         assert!(!is_sign_in(&url("https://www.facebook.com/reels/create/")));
-        assert!(is_upload_page(Platform::Facebook, &url("https://www.facebook.com/reels/create/")));
-        assert!(is_upload_page(Platform::Instagram, &url("https://www.instagram.com/")));
-        assert!(!is_upload_page(Platform::Instagram, &url("https://www.instagram.com/accounts/login/")));
         assert!(!may_fill_page(&url("https://x.com/compose/post")));
         assert!(!may_fill_page(&url("https://mobile.twitter.com/i/flow/login")));
         assert!(may_fill_page(&url("https://www.tiktok.com/tiktokstudio/upload")));
-        assert!(!is_sign_in(&url("https://www.tiktok.com/tiktokstudio/upload")));
     }
 
     #[test]
-    fn posted_only_when_the_page_shows_it() {
-        assert!(shows_posted(Platform::X, &url("https://x.com/home#socialspace-posted"), false));
-        assert!(!shows_posted(Platform::X, &url("https://x.com/home"), true));
-        assert!(shows_posted(Platform::Tiktok, &url("https://www.tiktok.com/tiktokstudio/content"), true));
-        assert!(!shows_posted(Platform::Tiktok, &url("https://www.tiktok.com/tiktokstudio/content"), false));
-        assert!(!shows_posted(Platform::Youtube, &url("https://studio.youtube.com/channel/x/videos"), true));
-    }
-
-    #[test]
-    fn only_video_files_are_attached() {
-        assert!(attachable("").is_err());
-        assert!(attachable("C:\\Windows\\win.ini").is_err());
-        assert!(attachable("relative.mp4").is_err());
+    fn linking_fills_the_sign_in_of_the_social_it_lands_on() {
+        assert_eq!(social_of(&url("https://accounts.google.com/v3/signin/identifier")), Some(Platform::Youtube));
+        assert_eq!(social_of(&url("https://www.tiktok.com/login/phone-or-email/email")), Some(Platform::Tiktok));
+        assert_eq!(social_of(&url("https://www.instagram.com/accounts/login/")), Some(Platform::Instagram));
+        assert_eq!(social_of(&url("https://m.facebook.com/login/")), Some(Platform::Facebook));
+        assert_eq!(social_of(&url("https://x.com/i/flow/login")), None);
+        assert_eq!(social_of(&url("https://profile.ayrshare.com/social-accounts")), None);
     }
 
     #[test]
@@ -1103,19 +517,6 @@ mod tests {
         assert!(fb.contains("x+bunnywhispers@example.com") && fb.contains("\"signInOnly\":true"));
         let yt = brand_sign_in(&Some("a1".into()), Platform::Youtube, "animals", "x+animals@example.com", None).unwrap().unwrap();
         assert!(yt.contains("x+animals@example.com"));
-        assert_eq!(window_verb("video-1"), "Post on");
-        assert_eq!(window_verb(""), "Profile on");
-    }
-
-    #[test]
-    fn long_text_is_refused() {
-        let request: PostRequest = serde_json::from_value(serde_json::json!({
-            "platform": "tiktok", "brandId": "b1", "videoId": "v1", "text": "a".repeat(MAX_TEXT_CHARS + 1)
-        }))
-        .unwrap();
-        assert!(check(&request).is_err());
-        let fine: PostRequest = serde_json::from_value(serde_json::json!({ "platform": "x", "brandId": "b1", "videoId": "v1", "text": "hi" })).unwrap();
-        assert!(check(&fine).is_ok());
     }
 }
 
@@ -1189,22 +590,12 @@ pub async fn open_profile_editor(app: AppHandle, request: ProfileEditRequest) ->
         request.account_id.as_deref().filter(|id| !id.is_empty()).and_then(|id| crate::account_passwords::read(id).ok().flatten())
     } else { None };
     let sign_in_script = brand_sign_in(&request.account_id, request.platform, &request.handle, &request.email, password)?;
-    let post = PostRequest {
+    let post = WindowRequest {
         platform: request.platform,
         brand_id: request.brand_id.clone(),
-        video_id: String::new(),
-        account_id: request.account_id.clone(),
         handle: request.handle.trim().trim_start_matches('@').to_owned(),
-        email: request.email.clone(),
-        video_path: String::new(),
-        title: String::new(),
-        text: String::new(),
-        made_with_ai: false,
-        made_for_kids: false,
-        cover: String::new(),
-        cover_ms: None,
     };
-    let posting = std::sync::Arc::new(Posting { request: post, config_script: None, sign_in_script, profile_script, file: None, shared_session: Default::default() });
+    let posting = std::sync::Arc::new(Posting { request: post, sign_in_script, profile_script, link: None, shared_session: Default::default() });
     let address = signed_out_entry(request.platform, &address, crate::sign_in_state::known_signed_in(&app, &request.brand_id, request.platform));
     let url: url::Url = address.parse().map_err(|_| "Invalid profile address.")?;
     open_signed_in(&app, url, dir, posting).map(|window| window.label().to_owned())

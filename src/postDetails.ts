@@ -62,11 +62,11 @@ export const hashtagText = (tags: string[]) => tags.map((tag) => `#${tag}`).join
 /** The hashtag that discloses an AI-made video where a social has no AI label of its own to set. */
 export const AI_TAG = 'AIgenerated';
 /**
- * Socials whose upload page has no AI label switch, so the disclosure goes in the text. TikTok
- * ("AI-generated content"), YouTube ("Altered or synthetic content"), Instagram and Facebook ("AI label")
- * get their own label set by the posting window.
+ * Socials where the AI disclosure also goes in the text. Ayrshare sets each social's own AI label
+ * (YouTube "altered or synthetic content", TikTok and Instagram "AI-generated", X "Made with AI"); Facebook
+ * has none to set through Ayrshare, so it gets #AIgenerated, and X keeps the tag as well, as before.
  */
-export const TEXT_LABEL_SOCIALS: Platform[] = ['x'];
+export const TEXT_LABEL_SOCIALS: Platform[] = ['x', 'facebook'];
 
 /**
  * The text that goes out with the video: its description, then its hashtags. With labelInText (or for a

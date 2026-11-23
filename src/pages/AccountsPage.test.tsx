@@ -12,12 +12,12 @@ afterEach(cleanup);
 const account = (id: string, platform: Account['platform'], label: string, status: Account['status'] = 'planned'): Account => ({ id, platform, label, handle: 'softwings', status, notes: '', bio: 'Wings.', signupEmail: 'softwings25@gmail.com' });
 const accounts = [account('1', 'x', 'Soft Wings'), account('2', 'instagram', 'soft wings ', 'active'), { ...account('3', 'youtube', 'Clip Lab'), handle: 'cliplab' }, { ...account('4', 'instagram', 'Clip Lab'), handle: 'cliplab' }];
 const workspace = (list: Account[] = accounts): Workspace => migrateWorkspace({ businessName: '', brands: [], accounts: list, channels: [] });
-const renderPage = (props: Partial<Parameters<typeof AccountsPage>[0]> = {}) => render(<AccountsPage workspace={workspace()} loaded busy={false} onAddAccount={vi.fn()} onEditAccount={vi.fn()} onCreateAccounts={vi.fn()} onSignUp={vi.fn()} onOpen={vi.fn()} {...props}/>);
-/** Opens a brand on its Accounts tab (a brand opens on its posts). */
+const renderPage = (props: Partial<Parameters<typeof AccountsPage>[0]> = {}) => render(<AccountsPage workspace={workspace()} loaded busy={false} onEditAccount={vi.fn()} onCreateAccounts={vi.fn()} onSignUp={vi.fn()} onOpen={vi.fn()} {...props}/>);
+/** Opens a brand on its Socials tab (a brand opens on its videos). */
 async function openBrand(name: string) {
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: `Open ${name}` }));
-  await user.click(screen.getByRole('tab', { name: 'Accounts' }));
+  await user.click(screen.getByRole('tab', { name: /^Socials/ }));
   return user;
 }
 
@@ -28,11 +28,16 @@ describe('brands page', () => {
     expect(brands[0].accounts.map((item) => item.platform)).toEqual(['instagram', 'x']);
   });
 
-  it('lists brands first, with how many profiles are live', () => {
+  it('lists brands with what is linked and scheduled, and no way to import an account', () => {
     renderPage();
     expect(screen.getByRole('heading', { name: 'Brands' })).toBeInTheDocument();
-    expect(within(screen.getByRole('button', { name: 'Open Soft Wings' })).getByText(/of 2/)).toBeInTheDocument();
-    expect(within(screen.getByRole('button', { name: 'Open Clip Lab' })).getByText(/of 2/)).toBeInTheDocument();
+    const card = screen.getByRole('button', { name: 'Open Soft Wings' });
+    expect(within(card).getByText('No socials linked yet')).toBeInTheDocument();
+    expect(within(card).getByText('scheduled')).toBeInTheDocument();
+    expect(within(card).getByText('ready to schedule')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add an existing account/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /New brand/ }).length).toBeGreaterThan(0);
   });
 
   it('opens a brand to its profiles and creates a missing one in one click', async () => {
@@ -42,7 +47,7 @@ describe('brands page', () => {
     const profiles = screen.getByRole('region', { name: 'Soft Wings profiles' });
     expect(within(profiles).getByRole('listitem', { name: 'Instagram profile' })).toBeInTheDocument();
     expect(within(profiles).getByText('Not created yet')).toBeInTheDocument();
-    await user.click(within(profiles).getByRole('button', { name: 'Create on X' }));
+    await user.click(within(profiles).getByRole('button', { name: 'Finish sign-up' }));
     await vi.waitFor(() => expect(onSignUp).toHaveBeenCalledWith([expect.objectContaining({ id: '1' })]));
     expect(ensureSharedPassword).not.toHaveBeenCalled();
     expect(within(profiles).queryByRole('button', { name: 'Create on Instagram' })).not.toBeInTheDocument();
@@ -50,13 +55,12 @@ describe('brands page', () => {
     expect(screen.getByRole('button', { name: 'Open Clip Lab' })).toBeInTheDocument();
   });
 
-  it('starts a standalone Facebook account for a brand from its chip, with its own email, never a business Page', async () => {
+  it('starts a standalone Facebook account for a brand, with its own email, never a business Page', async () => {
     const onSave = vi.fn(async () => true);
     const onSignUp = vi.fn();
     renderPage({ onSave, onSignUp });
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: 'Open Soft Wings' }));
-    await user.click(screen.getByRole('listitem', { name: /Facebook: No profile/ }));
+    const user = await openBrand('Soft Wings');
+    await user.click(within(screen.getByRole('region', { name: 'Soft Wings profiles' })).getByRole('button', { name: /Add Facebook/ }));
     await vi.waitFor(() => expect(onSave).toHaveBeenCalled());
     const saved = (onSave.mock.calls[0] as unknown as [Workspace])[0];
     const facebook = saved.accounts.find((item) => item.platform === 'facebook');
@@ -136,14 +140,15 @@ describe('brands page', () => {
     expect(screen.getByText('No brands yet')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'New brand' })[0]).toBeEnabled();
   });
-  it('opens a brand on its posts, with its accounts on their own tab', async () => {
+  it('opens a brand on its videos, with its socials on their own tab', async () => {
     const user = userEvent.setup();
     renderPage({ onSave: vi.fn(async () => true) });
     await user.click(screen.getByRole('button', { name: 'Open Soft Wings' }));
-    expect(screen.getByRole('tab', { name: 'Posts' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Videos' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Videos', 'Stories', 'Schedule', 'Results', expect.stringMatching(/^Socials/)]);
     expect(screen.getByRole('navigation', { name: 'Categories' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Soft Wings profiles' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: 'Accounts' }));
+    await user.click(screen.getByRole('tab', { name: /^Socials/ }));
     expect(screen.getByRole('region', { name: 'Soft Wings profiles' })).toBeInTheDocument();
   });
   it('renames a brand', async () => {

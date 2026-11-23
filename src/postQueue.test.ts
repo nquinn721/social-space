@@ -1,85 +1,100 @@
 import { describe, expect, it } from 'vitest';
 import type { Account, Platform, Video, Workspace } from './model';
 import type { SocialStatus } from './brandStatus';
-import { brandLanes, dailyLimitReason, dayStart, finishDay, leftToday, postedToday, queueOrder, todaysSteps, waitingFor } from './postQueue';
-import { markPosted } from './useBrowserPosting';
-import { moveTestVideos, withPosted } from './appReviews';
-import { batchPlan } from './batchPosting';
+import { brandLanes, DAILY_LIMIT, dayStart, nextSlot, notReady, planSchedule, postingSettings, queueOrder, todayCount, usedSlots, waitingFor } from './postQueue';
 
 const NOW = new Date(2026, 10, 22, 15, 0).getTime();
+const at = (dayOffset: number, hours: number, minutes = 0) => { const day = new Date(NOW); day.setDate(day.getDate() + dayOffset); day.setHours(hours, minutes, 0, 0); return day.getTime(); };
 const account = (platform: Platform): Account => ({ id: `a-${platform}`, platform, label: 'Bunny', handle: 'bunny', status: 'active', notes: '', brandId: 'b' });
 let made = 0;
 const video = (extra: Partial<Video> = {}): Video => ({ id: `v${++made}`, brandId: 'b', categoryId: 'c', title: `Video ${made}`, mediaSource: 'C:\\videos\\v.mp4', caption: 'Hi', posted: [], createdAt: made, ...extra });
 const workspace = (videos: Video[], platforms: Platform[] = ['tiktok', 'x']): Workspace => ({ businessName: '', brands: [{ id: 'b', name: 'Bunny', notes: '' }], accounts: platforms.map(account), channels: [], videos });
-const status = (platform: Platform, canPost = true): SocialStatus => ({ platform, kind: canPost ? 'ready' : 'sign-in', tone: canPost ? 'ready' : 'todo', label: canPost ? 'Ready' : 'Sign in', detail: '', canPost, via: 'browser' });
+const status = (platform: Platform, canPost = true): SocialStatus => ({ platform, kind: canPost ? 'ready' : 'not-linked', tone: canPost ? 'ok' : 'todo', label: canPost ? 'Ready' : 'Not linked', detail: '', canPost });
+const TIMES = ['09:00', '13:00', '18:00'];
 
-describe('post queue', () => {
-  it('counts only posts made today on that social', () => {
-    const yesterday = dayStart(NOW) - 1000;
-    const videos = [video({ posted: ['tiktok'], postedAt: { tiktok: NOW - 60_000 } }), video({ posted: ['tiktok'], postedAt: { tiktok: yesterday } }), video({ posted: ['tiktok'] }), video({ posted: ['x'], postedAt: { x: NOW } })];
-    expect(postedToday(workspace(videos), 'b', 'tiktok', NOW)).toHaveLength(1);
-    expect(leftToday(workspace(videos), 'b', 'tiktok', NOW)).toBe(2);
+describe('posting settings', () => {
+  it('defaults to automatic scheduling at three times a day, and keeps saved times sorted, valid and at most three', () => {
+    expect(postingSettings(workspace([]))).toEqual({ autoSchedule: true, times: TIMES });
+    expect(postingSettings({ ...workspace([]), posting: { autoSchedule: false, times: ['20:00', '08:30', 'bad', '08:30', '12:00', '23:00'] } }))
+      .toEqual({ autoSchedule: false, times: ['08:30', '12:00', '20:00'] });
   });
+});
 
-  it('never lets more than 3 a day go to one account', () => {
-    const today = [1, 2, 3].map((n) => video({ posted: ['tiktok'], postedAt: { tiktok: NOW - n * 1000 } }));
-    const waiting = [video(), video(), video(), video()];
-    const ws = workspace([...today, ...waiting]);
-    expect(dailyLimitReason(ws, 'b', 'tiktok', NOW)).toMatch(/3 posts/);
-    const lanes = brandLanes(ws, 'b', [status('tiktok'), status('x')], NOW);
-    const tiktok = lanes.find((lane) => lane.platform === 'tiktok')!;
-    expect(tiktok.due).toEqual([]);
-    expect(tiktok.doneIn).toBe(2);
-    const x = lanes.find((lane) => lane.platform === 'x')!;
-    expect(x.due.map((item) => item.id)).toEqual(today.map((item) => item.id));
+describe('next free slot', () => {
+  it('takes the next posting time at least 15 minutes from now', () => {
+    expect(nextSlot([], TIMES, NOW)).toBe(at(0, 18));
+    expect(nextSlot([], TIMES, at(0, 17, 50))).toBe(at(1, 9));
   });
+  it('skips times already used and days that have their 3 posts', () => {
+    expect(nextSlot([at(0, 18)], TIMES, NOW)).toBe(at(1, 9));
+    const full = [at(1, 9), at(1, 10), at(1, 11)];
+    expect(nextSlot([at(0, 18), ...full], TIMES, NOW)).toBe(at(2, 9));
+  });
+  it('stays after the last scheduled post, so the order holds', () => {
+    expect(nextSlot([], TIMES, NOW, at(1, 13))).toBe(at(1, 18));
+  });
+});
 
-  it('walks one account at a time, oldest first, skipping socials that cannot post', () => {
+describe('the schedule plan', () => {
+  it('puts at most 3 a day on each account, oldest first, on every social that can post', () => {
     const videos = [video(), video(), video(), video(), video()];
-    const ws = workspace(videos, ['tiktok', 'x', 'youtube']);
-    const steps = todaysSteps(brandLanes(ws, 'b', [status('tiktok'), status('x'), status('youtube', false)], NOW));
-    expect(steps.map((step) => `${step.platform}:${step.videoId}`)).toEqual([
-      ...videos.slice(0, 3).map((item) => `tiktok:${item.id}`),
-      ...videos.slice(0, 3).map((item) => `x:${item.id}`),
-    ]);
+    const plan = planSchedule(workspace(videos), 'b', ['tiktok', 'x'], NOW);
+    const tiktok = plan.filter((item) => item.platform === 'tiktok');
+    expect(tiktok.map((item) => item.videoId)).toEqual(videos.map((item) => item.id));
+    expect(tiktok.map((item) => item.at)).toEqual([at(0, 18), at(1, 9), at(1, 13), at(1, 18), at(2, 9)]);
+    expect(plan.filter((item) => item.platform === 'x')).toHaveLength(5);
+    for (let day = 0; day < 3; day++) expect(tiktok.filter((item) => item.at >= at(day, 0) && item.at < at(day + 1, 0)).length).toBeLessThanOrEqual(DAILY_LIMIT);
   });
+  it('fits around posts already up or scheduled today, and leaves those videos out', () => {
+    const up = video({ posted: ['tiktok'], postedAt: { tiktok: at(0, 9) } });
+    const booked = video({ scheduled: { tiktok: { id: 'p1', at: at(0, 18), state: 'scheduled' } } });
+    const failed = video({ scheduled: { tiktok: { id: 'p2', at: at(0, 13), state: 'failed', error: 'no' } } });
+    const next = video();
+    const ws = workspace([up, booked, failed, next], ['tiktok']);
+    expect(usedSlots(ws, 'b', 'tiktok')).toEqual([at(0, 9), at(0, 18)]);
+    expect(todayCount(ws, 'b', 'tiktok', NOW)).toBe(2);
+    expect(planSchedule(ws, 'b', ['tiktok'], NOW)).toEqual([{ brandId: 'b', platform: 'tiktok', videoId: next.id, at: at(1, 9) }]);
+  });
+  it('schedules only three weeks ahead; the rest waits in the app', () => {
+    const videos = Array.from({ length: 100 }, () => video());
+    const plan = planSchedule(workspace(videos, ['tiktok']), 'b', ['tiktok'], NOW);
+    expect(plan.length).toBeGreaterThan(60);
+    expect(plan.length).toBeLessThan(100);
+    expect(Math.max(...plan.map((item) => item.at))).toBeLessThanOrEqual(NOW + 21 * 86_400_000);
+  });
+});
 
+describe('queue order', () => {
   it('leaves out unfinished videos and keeps series parts in order', () => {
     const p2 = video({ seriesId: 's', episode: 2 });
     const p1 = video({ seriesId: 's', episode: 1 });
     const making = video({ generation: { sourceId: 's', sourceName: 'Grok', provider: 'grok', taskId: 't', prompt: '', status: 'working' } });
     const noFile = video({ mediaSource: '' });
     expect(queueOrder([p2, p1]).map((item) => item.id)).toEqual([p1.id, p2.id]);
-    expect(waitingFor(workspace([p2, p1, making, noFile]), 'b', 'tiktok').map((item) => item.id)).toEqual([p1.id, p2.id]);
-    const p4 = video({ seriesId: 't', episode: 2 });
-    expect(waitingFor(workspace([p4]), 'b', 'tiktok')).toEqual([]);
-  });
-
-  it('says when the queue is done', () => {
-    expect(finishDay(0, 3)).toBeNull();
-    expect(finishDay(3, 3)).toBe(0);
-    expect(finishDay(4, 3)).toBe(1);
-    expect(finishDay(10, 1)).toBe(3);
-    expect(finishDay(3, 0)).toBe(1);
+    const ws = workspace([p2, p1, making, noFile]);
+    expect(waitingFor(ws, 'b', 'tiktok').map((item) => item.id)).toEqual([p1.id, p2.id]);
+    expect(notReady(ws, 'b').map((item) => item.id)).toEqual([making.id, noFile.id]);
+    // Part 2 alone can't go before part 1 exists there.
+    expect(waitingFor(workspace([video({ seriesId: 't', episode: 2 })]), 'b', 'tiktok')).toEqual([]);
+    // A scheduled part 1 lets part 2 follow.
+    const first = video({ seriesId: 'u', episode: 1, scheduled: { tiktok: { id: 'p', at: at(1, 9), state: 'scheduled' } } });
+    const second = video({ seriesId: 'u', episode: 2 });
+    expect(waitingFor(workspace([first, second]), 'b', 'tiktok').map((item) => item.id)).toEqual([second.id]);
   });
 });
 
-describe('recording when posts went up', () => {
-  it('stamps the time on every way a post is recorded and clears it when undone', () => {
-    const v = video();
-    const marked = markPosted(workspace([v]), v.id, 'tiktok', NOW)!;
-    expect(marked.videos![0].postedAt).toEqual({ tiktok: NOW });
-    const toggled = withPosted(v, ['x'], undefined, NOW);
-    expect(toggled.postedAt).toEqual({ x: NOW });
-    expect(withPosted(toggled, [], undefined, NOW).postedAt).toBeUndefined();
-    const moved = moveTestVideos([{ ...toggled, testPosts: { x: NOW } }], 'x')[0];
-    expect(moved.postedAt).toBeUndefined();
-  });
-
-  it('blocks a batch destination whose account is full for today', () => {
-    const v = video();
-    const plan = batchPlan({ video: v, socials: ['tiktok'], statuses: [{ ...status('tiktok'), account: account('tiktok') }], instagramReady: false, facebookReady: false, browserAvailable: true,
-      isOpen: () => false, isAsking: () => false, waitingOn: () => null, dailyLimit: () => 'full' });
-    expect(plan[0]).toMatchObject({ method: 'blocked', reason: 'full' });
+describe('queue lanes', () => {
+  it('shows what is scheduled, failed and waiting on each social with a profile', () => {
+    const booked = video({ scheduled: { tiktok: { id: 'p', at: at(1, 9), state: 'scheduled' } } });
+    const failed = video({ scheduled: { tiktok: { id: 'q', at: at(0, 18), state: 'failed', error: 'Too long' } } });
+    const waiting = video();
+    const lanes = brandLanes(workspace([booked, failed, waiting]), 'b', [status('tiktok'), status('x', false)], NOW);
+    const tiktok = lanes.find((lane) => lane.platform === 'tiktok')!;
+    expect(tiktok.scheduled.map((item) => item.id)).toEqual([booked.id]);
+    expect(tiktok.failed.map((item) => item.id)).toEqual([failed.id]);
+    expect(tiktok.waiting.map((item) => item.id)).toEqual([waiting.id]);
+    expect(tiktok.lastAt).toBe(at(1, 13));
+    expect(lanes.find((lane) => lane.platform === 'x')!.waiting).toHaveLength(3);
+    expect(dayStart(NOW)).toBe(at(0, 0));
   });
 });

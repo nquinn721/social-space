@@ -1,29 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { isTauri } from '@tauri-apps/api/core';
+import { useMemo } from 'react';
 import { getPlatform, PLATFORMS, type Account, type Platform, type Video, type Workspace } from './model';
-import { postMode, type PostMode } from './postingMode';
-import { wrongLogin } from './useBrowserPosting';
-import { hasAccountPassword } from './profileService';
-import type { ConnectionCheck } from './setupNeeds';
-import type { BrandInstagram } from './useBrandInstagram';
-import { useBrandFacebook, type BrandFacebook } from './useBrandFacebook';
-import type { BrandSignIn } from './postingService';
-import { useSignIns } from './useSignIns';
-import { browserSession } from './browserSession';
+import { wrongLogin } from './brandWindowService';
+import type { BrandSocials } from './ayrshareService';
+import { useAyrshare } from './useAyrshare';
 
 /**
- * Where a brand stands on each social, worked out from the real data: whether its profile exists, which
- * login it uses, whether Instagram is connected, whether the sign-in is saved. Every page reads this
- * instead of writing its own guesses, so the labels and the next step agree everywhere.
- *
- * Posting model: every brand account is a standalone account with its own login, and every social posts
- * through its own upload page in a per-brand app window (needs the profile and its login). A social switched
- * to 'api' in postingMode uses its connection instead. YouTube channels live under the main Google account on
- * purpose, so that is never a problem.
+ * Where a brand stands on each social, worked out from the real data: whether its profile exists and, for
+ * posting, what Ayrshare says (is Ayrshare connected, does the brand have its Ayrshare profile, is this social
+ * linked on it). Every page reads this instead of writing its own guesses, so labels and next steps agree.
  */
-export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'connect' | 'reconnect' | 'sign-in' | 'verify-session' | 'no-password' | 'ready';
+export type SocialKind = 'no-profile' | 'not-created' | 'main-login' | 'checking' | 'no-ayrshare' | 'no-brand-profile' | 'not-linked' | 'relink' | 'no-x-keys' | 'ready';
 export type Tone = 'ok' | 'ready' | 'todo' | 'problem' | 'muted' | 'checking';
-export type SocialAction = 'create' | 'finish-signup' | 'own-login' | 'connect' | 'sign-in' | 'save-login';
+/** connect-ayrshare: Settings → Ayrshare. setup-posting: make the brand's Ayrshare profile. link: open the linking page. x-keys: Settings → Ayrshare. */
+export type SocialAction = 'create' | 'finish-signup' | 'own-login' | 'connect-ayrshare' | 'setup-posting' | 'link' | 'x-keys';
 export type SocialStatus = {
   platform: Platform;
   account?: Account;
@@ -35,70 +24,38 @@ export type SocialStatus = {
   detail: string;
   /** What fixes it, when something does. */
   action?: { kind: SocialAction; label: string; short: string };
-  /** Whether the app may start this destination's posting or manual handoff flow. */
+  /** Whether Ayrshare can post to it now. */
   canPost: boolean;
-  via: PostMode;
+  /** The linked account's name on Ayrshare, when linked. */
+  linkedAs?: string;
 };
-/** What the app knows about connections and saved sign-ins; a missing entry means still checking. */
+/** What Ayrshare said. Missing means still checking. ayrshare.connected false: no working API key. socials null: couldn't be read. */
 export type StatusInputs = {
-  connections?: Record<string, ConnectionCheck | undefined>;
-  passwords?: Record<string, boolean | undefined>;
-  /** Whether this brand's window is signed in on each social (checked when it was last open). */
-  signIns?: Partial<Record<Platform, BrandSignIn>>;
+  ayrshare?: { connected: boolean; xKeys: boolean };
+  socials?: BrandSocials | null;
 };
-
-const via = (platform: Platform) => postMode(platform);
-const viaText = (platform: Platform) => via(platform) === 'api' ? 'Posts by itself through the API.' : 'Posts through its upload page in a brand window; you press Post.';
 
 export function socialStatus(workspace: Workspace, brandId: string, platform: Platform, inputs: StatusInputs = {}): SocialStatus {
   const name = getPlatform(platform).name;
   const account = workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform && item.status === 'active')
     ?? workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform);
-  const base = { platform, account, via: via(platform) };
+  const base = { platform, account };
   if (!account) return { ...base, kind: 'no-profile', tone: 'muted', label: 'No profile', detail: `This brand has no ${name} profile.`, action: { kind: 'create', label: `Create ${name} profile`, short: 'Create' }, canPost: false };
   if (account.status !== 'active') return { ...base, kind: 'not-created', tone: 'todo', label: 'Not created yet', detail: `Saved here, but the ${name} account isn't made yet.`, action: { kind: 'finish-signup', label: 'Finish sign-up', short: 'Sign up' }, canPost: false };
-  if (wrongLogin(workspace.developerLogins, account)) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs its own email per account, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };
-  if (platform === 'instagram' && via(platform) === 'api') {
-    const check = inputs.connections?.[account.id];
-    if (!check) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking the Instagram connection.', canPost: false };
-    const connectedAs = check.username.replace(/^@/, '');
-    if (check.state === 'ok' && connectedAs && account.handle && connectedAs.toLowerCase() !== account.handle.replace(/^@/, '').toLowerCase()) {
-      return { ...base, kind: 'reconnect', tone: 'problem', label: 'Wrong account', detail: `Meta connected @${connectedAs}, not @${account.handle.replace(/^@/, '')}, so posts would go to @${connectedAs}. Connect again and pick @${account.handle.replace(/^@/, '')} in the Meta window.`, action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
-    }
-    if (check.state === 'ok' && (!connectedAs || !account.handle)) {
-      return { ...base, kind: 'reconnect', tone: 'problem', label: 'Identity not verified', detail: 'The connected Instagram identity or saved handle is missing. Check the account and reconnect before publishing.', action: { kind: 'connect', label: 'Check Instagram connection', short: 'Check account' }, canPost: false };
-    }
-    if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` as @${check.username.replace(/^@/, '')}` : ''}. ${viaText(platform)}`, canPost: true };
-    if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Instagram connection ran out.', action: { kind: 'connect', label: 'Reconnect Instagram', short: 'Reconnect' }, canPost: false };
-    return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect it through Meta so the app can post Reels for it.', action: { kind: 'connect', label: 'Connect Instagram', short: 'Connect' }, canPost: false };
-  }
-  if (platform === 'facebook' && via(platform) === 'api') {
-    const check = inputs.connections?.[account.id];
-    if (!check) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking the Facebook Page connection.', canPost: false };
-    if (check.state === 'ok') return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Connected${check.username ? ` to the Page ${check.username}` : ''}. ${viaText(platform)}`, canPost: true };
-    if (check.state === 'expired') return { ...base, kind: 'reconnect', tone: 'problem', label: 'Reconnect', detail: check.detail || 'The Facebook Page connection stopped working.', action: { kind: 'connect', label: 'Reconnect Facebook', short: 'Reconnect' }, canPost: false };
-    return { ...base, kind: 'connect', tone: 'todo', label: 'Not connected', detail: 'Connect the brand\'s Page through Meta so the app can post Reels to it.', action: { kind: 'connect', label: 'Connect Facebook Page', short: 'Connect' }, canPost: false };
-  }
-  // Browser session checks are snapshots: they do not guarantee the current account or channel.
-  const signIn = inputs.signIns?.[platform];
-  const session = browserSession(platform, account.handle, signIn);
-  if (session === 'signed-out') {
-    return { ...base, kind: 'sign-in', tone: 'todo', label: 'Not signed in', detail: `The last check found no ${name} session. Open the window and sign in.`, action: { kind: 'sign-in', label: `Sign in to ${name}`, short: 'Sign in' }, canPost: true };
-  }
-  if (session === 'mismatch') {
-    return { ...base, kind: 'sign-in', tone: 'problem', label: 'Wrong account', detail: `The last check found @${signIn?.handle}, not @${account.handle}. Check the account in the ${name} window before posting.`, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: false };
-  }
-  if (session === 'matched' || session === 'unverified') {
-    const detail = platform === 'youtube'
-      ? `Google was signed in at the last check. ${account.handle ? `This brand's saved channel is @${account.handle.replace(/^@/, '')}. ` : ''}The selected YouTube channel has not been verified.`
-      : session === 'matched' ? `Last seen as @${signIn?.handle}. The session may expire or change.` : `A ${name} sign-in was detected at the last check; its username was not available.`;
-    return { ...base, kind: 'ready', tone: 'ok', label: 'Signed in', detail, canPost: true };
-  }
-  if (session === 'not-checked' && platform !== 'youtube' && platform !== 'x' && inputs.passwords && inputs.passwords[account.id] === false) {
-    return { ...base, kind: 'no-password', tone: 'todo', label: 'Login not saved', detail: 'The window can only fill the sign-in after its username and password are saved.', action: { kind: 'save-login', label: 'Save its login', short: 'Save login' }, canPost: true };
-  }
-  return { ...base, kind: 'verify-session', tone: 'todo', label: 'Not checked', detail: `Open ${name} to check the sign-in.`, action: { kind: 'sign-in', label: `Check ${name} account`, short: 'Check account' }, canPost: true };
-
+  if (wrongLogin(account)) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs the brand's own email, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };
+  const ayrshare = inputs.ayrshare;
+  if (!ayrshare) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking Ayrshare.', canPost: false };
+  if (!ayrshare.connected) return { ...base, kind: 'no-ayrshare', tone: 'todo', label: 'Ayrshare not connected', detail: 'Posting goes through Ayrshare. Connect it under Settings → Ayrshare.', action: { kind: 'connect-ayrshare', label: 'Connect Ayrshare', short: 'Connect' }, canPost: false };
+  const socials = inputs.socials;
+  if (socials === undefined) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Asking Ayrshare which socials are linked.', canPost: false };
+  if (socials === null) return { ...base, kind: 'checking', tone: 'problem', label: 'Couldn\'t check', detail: 'Ayrshare could not be asked which socials are linked. Check again in a moment.', canPost: false };
+  if (!socials.hasProfile) return { ...base, kind: 'no-brand-profile', tone: 'todo', label: 'Posting not set up', detail: 'The brand needs its Ayrshare profile, where its socials are linked.', action: { kind: 'setup-posting', label: 'Set up posting', short: 'Set up' }, canPost: false };
+  const linked = socials.linked.find((item) => item.platform === platform);
+  if (!linked) return { ...base, kind: 'not-linked', tone: 'todo', label: 'Not linked', detail: `Link ${account.handle ? `@${account.handle.replace(/^@/, '')}` : `the brand's ${name}`} on Ayrshare so posts can go there.`, action: { kind: 'link', label: `Link ${name}`, short: 'Link' }, canPost: false };
+  const as = linked.name ? ` as ${platform === 'youtube' || platform === 'facebook' ? linked.name : `@${linked.name.replace(/^@/, '')}`}` : '';
+  if (platform === 'x' && !ayrshare.xKeys) return { ...base, kind: 'no-x-keys', tone: 'todo', label: 'Needs X app keys', detail: 'X takes posts only with your own X app\'s API key and secret (X bills about 2¢ a post). Add them under Settings → Ayrshare.', action: { kind: 'x-keys', label: 'Add X app keys', short: 'Add keys' }, canPost: false, linkedAs: linked.name };
+  if (linked.refresh) return { ...base, kind: 'relink', tone: 'problem', label: 'Link again', detail: `Linked${as}, but ${name} wants the link renewed soon. Link it again.`, action: { kind: 'link', label: `Link ${name} again`, short: 'Relink' }, canPost: true, linkedAs: linked.name };
+  return { ...base, kind: 'ready', tone: 'ok', label: 'Ready', detail: `Linked${as}. Posts go out through Ayrshare.`, canPost: true, linkedAs: linked.name };
 }
 
 /** The brand's status on every social, in platform order. */
@@ -108,7 +65,7 @@ export function brandStatuses(workspace: Workspace, brandId: string, inputs: Sta
 /** Only the socials the brand has a profile on (planned or live). */
 export const withProfile = (statuses: SocialStatus[]) => statuses.filter((status) => status.kind !== 'no-profile');
 
-/** Include unverified browser sessions as attention items, even when a manual handoff can be opened. */
+/** Socials that need something done before posts can go there. */
 export const needsAttention = (status: SocialStatus) => status.kind !== 'ready' && (status.tone === 'todo' || status.tone === 'problem');
 
 /** A word or two for a small chip. */
@@ -116,20 +73,20 @@ export function chipLabel(status: SocialStatus): string {
   switch (status.kind) {
     case 'ready': return 'Ready';
     case 'no-profile': return 'Not added';
-    case 'checking': return '…';
-    case 'no-password': return 'Save login';
-    case 'sign-in': return status.action?.short ?? status.label;
-    case 'verify-session': return status.label;
+    case 'checking': return status.tone === 'problem' ? 'Not checked' : '…';
+    case 'no-ayrshare': return 'No Ayrshare';
     default: return status.action?.short ?? status.label;
   }
 }
-/** A one-line summary of a brand, e.g. "Ready on 3 of 4 · Instagram not connected". */
+/** A one-line summary of a brand, e.g. "Ready on 3 of 4 · Instagram: not linked". */
 export function brandSummary(statuses: SocialStatus[]): { tone: Tone; text: string; short: string } {
   const own = withProfile(statuses);
   if (own.length === 0) return { tone: 'muted', text: 'No profiles yet', short: 'No profiles yet' };
-  const ready = own.filter((status) => status.kind === 'ready').length;
-  const blocking = own.filter((status) => status.kind !== 'ready' && status.kind !== 'checking');
-  const checking = own.some((status) => status.kind === 'checking');
+  if (own.some((status) => status.kind === 'no-ayrshare')) return { tone: 'todo', text: 'Connect Ayrshare under Settings to post', short: 'Connect Ayrshare to post' };
+  if (own.some((status) => status.kind === 'no-brand-profile')) return { tone: 'todo', text: 'Set up posting: the brand needs its Ayrshare profile', short: 'Set up posting' };
+  const ready = own.filter((status) => status.canPost).length;
+  const blocking = own.filter((status) => !status.canPost && status.kind !== 'checking');
+  const checking = own.some((status) => status.kind === 'checking' && status.tone === 'checking');
   if (blocking.length === 0) return { tone: checking ? 'checking' : 'ok', text: checking ? `Ready on ${ready} of ${own.length} · checking…` : `Ready to post on all ${own.length}`, short: checking ? 'Checking…' : `Ready on all ${own.length}` };
   const first = blocking[0];
   const more = blocking.length > 1 ? ` +${blocking.length - 1} more` : '';
@@ -145,53 +102,24 @@ export function videoProgress(video: Video, socials: Platform[]): VideoProgress 
     : socials.length > 0 && toDo.length === 0 ? 'done' : posted.length > 0 ? 'partial' : 'waiting';
   return { posted, toDo, total: socials.length, state };
 }
-export function progressLabel(progress: VideoProgress): string {
+export function progressLabel(progress: VideoProgress, scheduled = 0): string {
   switch (progress.state) {
     case 'making': return 'Being made';
     case 'failed': return 'Not made';
     case 'done': return progress.total === 1 ? 'Posted' : 'Posted everywhere';
     case 'partial': return `Posted on ${progress.posted.length} of ${progress.total}`;
-    default: return progress.total ? 'Ready to post' : 'No socials yet';
+    default: return !progress.total ? 'No socials yet' : scheduled ? 'Scheduled' : 'Waiting in queue';
   }
 }
 
-/**
- * Checks what the status needs for a set of profiles: Instagram connections (passed in by the caller, who
- * already checks them) and whether each own-login profile's password is saved. Outside the desktop app
- * nothing can be checked, so passwords stay unknown rather than shown as missing.
- */
-export function useSavedPasswords(accounts: Account[]): Record<string, boolean | undefined> {
-  const [passwords, setPasswords] = useState<Record<string, boolean | undefined>>({});
-  const ids = accounts.filter((account) => account.status === 'active' && account.platform !== 'youtube').map((account) => account.id).join('|');
-  useEffect(() => {
-    if (!ids || !isTauri()) return;
-    let live = true;
-    for (const id of ids.split('|')) {
-      hasAccountPassword(id).then((saved) => { if (live) setPasswords((current) => ({ ...current, [id]: saved })); }).catch(() => undefined);
-    }
-    return () => { live = false; };
-  }, [ids]);
-  return useMemo(() => passwords, [passwords]);
+/** The brand's status on every social, from what Ayrshare says (read once by the Ayrshare provider). */
+export function useBrandStatuses(workspace: Workspace, brandId: string | undefined): SocialStatus[] {
+  const ayrshare = useAyrshare();
+  const inputs = ayrshare.inputs(brandId);
+  return useMemo(() => brandId ? brandStatuses(workspace, brandId, inputs) : [], [workspace, brandId, inputs]);
 }
-
-/** The brand's Instagram connection as a status input: null while checking, and only Meta logins can upload files. */
-export function instagramConnection(instagram: BrandInstagram | null): Record<string, ConnectionCheck | undefined> {
-  if (!instagram || instagram.connected === null) return {};
-  if (!instagram.connected) return { [instagram.accountId]: { state: 'none', username: '', detail: '' } };
-  if (!instagram.canUploadFiles) return { [instagram.accountId]: { state: 'expired', username: instagram.username, detail: 'Connected with an Instagram login, which can\'t upload videos from this PC. Connect again through Meta.' } };
-  return { [instagram.accountId]: { state: 'ok', username: instagram.username, detail: '' } };
-}
-
-/** The brand's Facebook Page connection as a status input: nothing while checking. */
-export function facebookConnection(facebook: BrandFacebook | null): Record<string, ConnectionCheck | undefined> {
-  if (!facebook || facebook.connected === null) return {};
-  return { [facebook.accountId]: facebook.connected ? { state: 'ok', username: facebook.page, detail: '' } : { state: 'none', username: '', detail: '' } };
-}
-
-/** A brand's status on every social, with its Instagram and Facebook connections and saved logins checked. */
-export function useBrandStatuses(workspace: Workspace, brandId: string | undefined, instagram: BrandInstagram | null): SocialStatus[] {
-  const passwords = useSavedPasswords(workspace.accounts.filter((account) => account.brandId === brandId));
-  const signIns = useSignIns()[brandId ?? ''];
-  const facebook = useBrandFacebook(workspace, brandId);
-  return useMemo(() => brandId ? brandStatuses(workspace, brandId, { connections: { ...instagramConnection(instagram), ...facebookConnection(facebook) }, passwords, signIns }) : [], [workspace, brandId, instagram, facebook, passwords, signIns]);
+/** Every brand's statuses, for lists. */
+export function useAllStatuses(workspace: Workspace): Record<string, SocialStatus[]> {
+  const ayrshare = useAyrshare();
+  return useMemo(() => Object.fromEntries(workspace.brands.map((brand) => [brand.id, brandStatuses(workspace, brand.id, ayrshare.inputs(brand.id))])), [workspace, ayrshare]);
 }

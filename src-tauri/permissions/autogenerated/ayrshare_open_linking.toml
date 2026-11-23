@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-open-linking"
+description = "Enables the ayrshare_open_linking command without any pre-configured scope."
+commands.allow = ["ayrshare_open_linking"]
+
+[[permission]]
+identifier = "deny-ayrshare-open-linking"
+description = "Denies the ayrshare_open_linking command without any pre-configured scope."
+commands.deny = ["ayrshare_open_linking"]

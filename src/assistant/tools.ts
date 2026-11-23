@@ -2,8 +2,6 @@ import { BIO_LIMITS, createAccount, PLATFORMS, VIEWS, type Account, type Platfor
 import { listEmails, readEmail } from '../emailService';
 import { chooseImageFile, ensureAccountPassword, fillSiteForm, formFieldsFor, openPlatformWindow } from '../profileService';
 export { formFieldsFor };
-import { listQueue } from '../queueService';
-import { postToX } from '../xService';
 import { generateVideo, listVideoSources } from '../videoSourcesService';
 import { PROVIDERS } from '../videoProviders';
 import type { ToolSpec } from './grokClient';
@@ -22,7 +20,7 @@ const PLATFORM_IDS = PLATFORMS.map((platform) => platform.id);
 const PAGES = { signup: 'create', profile: 'manage', post: 'post', developer: 'developer' } as const;
 
 export const SYSTEM_PROMPT = `You are the assistant inside Social Space, a desktop app where the user manages their own business's social accounts on Instagram, TikTok, YouTube and X.
-You can look at the workspace, draft and save account profiles (display name, bio, website, sign-up email), ask the user to pick a profile image, open platform pages in app windows, pre-fill the visible form in those windows, read the user's inbox, list the video queue, post to X through its official API, start AI video generation (Kling or Grok, whichever video source is active), and switch app pages.
+You can look at the workspace, draft and save account profiles (display name, bio, website, sign-up email), ask the user to pick a profile image, open platform pages in app windows, pre-fill the visible form in those windows, read the user's inbox, list what is scheduled to post (Ayrshare posts and schedules every video), start AI video generation (Kling or Grok, whichever video source is active), and switch app pages.
 Rules:
 - Write like a top brand strategist. Names are catchy (wordplay, alliteration, a vivid image), usernames short and easy to type, and bios have personality: a punchy first line, a promise or proof, and a call to action, with 1 to 3 fitting emojis and at most one hashtag. Never write filler like "Welcome to my page" or "high quality". Tailor the bio to each platform: X is witty, Instagram aesthetic, TikTok playful, YouTube says what videos to expect and how often.
 - Keep bios within each platform's limit: Instagram 150, TikTok 80, X 160, YouTube 1000 characters. Save drafts with save_account_profile before filling a form.
@@ -46,8 +44,7 @@ export const TOOL_SPECS: ToolSpec[] = [
     windowId: str('Window id from open_platform_page'), accountId: str('Account whose profile to use'), includeImage: { type: 'boolean', description: 'Also attach the profile image' }, includePassword: { type: 'boolean', description: 'Sign-up pages: fill the account\'s saved strong password (created if missing). You never see it.' }, verificationCode: str('Code from email to enter') }, required: ['windowId', 'accountId'] } } },
   { type: 'function', function: { name: 'list_emails', description: 'List recent inbox emails (newest first) without marking them read.', parameters: { type: 'object', properties: { limit: { type: 'number' }, unreadOnly: { type: 'boolean' }, search: str('Words to search for') } } } },
   { type: 'function', function: { name: 'read_email', description: 'Read one email by uid.', parameters: { type: 'object', properties: { uid: { type: 'number' } }, required: ['uid'] } } },
-  { type: 'function', function: { name: 'list_video_queue', description: 'List scheduled and finished items in the video queue.', parameters: { type: 'object', properties: {} } } },
-  { type: 'function', function: { name: 'post_to_x', description: 'Publish a post as one X profile through its own connection (asks the user first).', parameters: { type: 'object', properties: { text: str('Post text, up to 280 characters'), accountId: str('Id of the live X profile to post as; omit for the first live X profile') }, required: ['text'] } } },
+  { type: 'function', function: { name: 'list_video_queue', description: 'List every video with where it is posted and when it is scheduled to go up on each social (through Ayrshare).', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'generate_video', description: 'Start an AI video with the active video source, or a named one (paid; asks the user first).', parameters: { type: 'object', properties: { prompt: str('Video prompt'), source: str('Name of the video source to use; omit to use the active one'), aspectRatio: { type: 'string', enum: ['16:9', '9:16', '1:1'] }, duration: { type: 'number', enum: [5, 8, 10, 15] } }, required: ['prompt'] } } },
   { type: 'function', function: { name: 'go_to_page', description: 'Show a page of the app.', parameters: { type: 'object', properties: { page: { type: 'string', enum: VIEWS } }, required: ['page'] } } },
 ];
@@ -118,16 +115,11 @@ export async function runTool(name: string, args: Record<string, unknown>, ctx: 
       return { emails: await listEmails({ limit, unreadOnly: args.unreadOnly === true, search: text(args.search) }) };
     }
     case 'read_email': return { untrustedEmail: await readEmail(Number(args.uid)) };
-    case 'list_video_queue': return { items: await listQueue() };
-    case 'post_to_x': {
-      const post = text(args.text);
-      if (!post) throw new Error('The post is empty.');
-      if (post.length > 280) throw new Error(`The post is ${post.length} characters; X allows 280.`);
-      const xProfiles = ctx.getWorkspace().accounts.filter((account) => account.platform === 'x' && account.status === 'active');
-      const profile = args.accountId ? xProfiles.find((account) => account.id === args.accountId) : xProfiles[0];
-      if (args.accountId && !profile) throw new Error('No live X profile with that id. Call get_workspace to see the ids.');
-      if (!await ctx.confirm({ title: profile ? `Post to X as @${profile.handle}?` : 'Post to X?', detail: post })) return { posted: false, note: 'The user declined.' };
-      return { posted: true, post: await postToX(post, profile?.id) };
+    case 'list_video_queue': {
+      const workspace = ctx.getWorkspace();
+      const brand = (id: string) => workspace.brands.find((item) => item.id === id)?.name ?? '';
+      return { videos: (workspace.videos ?? []).map((video) => ({ title: video.title, brand: brand(video.brandId), posted: video.posted,
+        scheduled: Object.fromEntries(Object.entries(video.scheduled ?? {}).map(([platform, post]) => [platform, { state: post?.state, at: post ? new Date(post.at).toISOString() : undefined, error: post?.error }])) })) };
     }
     case 'generate_video': {
       const prompt = text(args.prompt);

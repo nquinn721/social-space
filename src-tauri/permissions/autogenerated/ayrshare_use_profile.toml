@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-use-profile"
+description = "Enables the ayrshare_use_profile command without any pre-configured scope."
+commands.allow = ["ayrshare_use_profile"]
+
+[[permission]]
+identifier = "deny-ayrshare-use-profile"
+description = "Denies the ayrshare_use_profile command without any pre-configured scope."
+commands.deny = ["ayrshare_use_profile"]

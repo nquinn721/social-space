@@ -59,12 +59,17 @@ video to every social the brand has: TikTok, YouTube (Shorts), X, Instagram (Ree
 - A **Brand** (e.g. "Massage with Mia") **is** the account on each social: one account per social, named after
   the brand. No profile may be named "softwings". Nate expects about 5 or 6 brands.
 - Categories or segments (e.g. bunny videos, goat videos) live inside a brand and post to that brand's accounts.
-- UI: the sidebar has Overview, Brands, Inbox, Updates and Settings. Each brand page has the tabs Posts, Series
-  and Accounts.
-  - Accounts shows one line per social with a status, Sign in or Reconnect, View, and Details.
+- UI (0.40.0, the design Nate approved 2026-11-22): the sidebar has Today, Brands, Calendar, Results and
+  Comments, with Updates, Settings and an Ayrshare status pill at the bottom. There is no Inbox page and no
+  "Add an existing account". Each brand page has the tabs Videos, Stories, Schedule, Results and Socials.
+  - Today: what goes out today, week stats, Schedule N ready videos, and Needs you.
+  - Calendar: the week, open slots at the posting times, Fill open slots, move or unschedule a post.
+  - Results and Comments read Ayrshare analytics and comments every 30 minutes (`useResults.tsx`); Grok
+    drafts each reply (`assistant/replyWriter.ts`), Nate edits and sends it through Ayrshare.
+  - Settings: Ayrshare (key, profiles, posts this month, posting times, AI label, X keys), Grok, Look, then More.
+  - Socials starts with the brand's Posting panel (Ayrshare: connect, set up posting, link socials), then one
+  line per social with its status from Ayrshare, View, and Details.
   - Each video has Post details: caption, hashtags, cover frame, YouTube title and an AI flag.
-- Brands → Setup (`SetupTracker.tsx`, `setupNeeds.ts`) lists everything each social still needs before it can
-  post.
 - Series (`SeriesPanel.tsx`, `series.ts`, `seriesWriter.ts`) are stories across several videos, written by
   Grok, with consistent character pictures.
 
@@ -72,10 +77,8 @@ video to every social the brand has: TikTok, YouTube (Shorts), X, Instagram (Ree
 
 - **Verification inbox:** every sign-up uses `softwings25@gmail.com`. TikTok and X get a plus-address per brand,
   e.g. `softwings25+massagewithmia@gmail.com`. Instagram and YouTube can sit under the main login.
-- **Developer accounts:** TikTok for Developers, Google/YouTube, X and Meta use the main email, with no
-  plus-address. There is one per platform, not one per brand. They are tracked separately from brand accounts.
-- **Rule: brand windows never fill the main Gmail or a developer account's password.** TikTok and X fill only
-  the brand's own login. `usesMainLogin`, `wrongLogin` and `brandLogin` in `useBrowserPosting.ts` enforce this.
+- **Rule: brand windows never fill the main Gmail.** They fill only the brand's own login.
+  `usesMainLogin`, `wrongLogin` and `brandLogin` in `brandWindowService.ts` enforce this.
 - Passwords are generated, saved in Credential Manager, backed up, viewable by Nate, and listed in the JSON
   export. Sign-in pages always open on the email/password form, prefilled. Never generate a password for the
   main Google login.
@@ -88,38 +91,35 @@ video to every social the brand has: TikTok, YouTube (Shorts), X, Instagram (Ree
 - Every brand has its own WebView2 data folder, `%LOCALAPPDATA%\com.socialmanager.desktop\posting\<brandId>`, so
   each brand stays signed in separately. `sign_in_state.rs` records who is signed in.
 
-## 6. How each social posts
+## 6. How posting works (Ayrshare, since 0.39.0)
 
-| Social | Method | State |
-| --- | --- | --- |
-| Instagram | Meta Graph API (`instagram.rs`, `instagram_login.rs`) | The Meta app is in Development mode, which is fine for accounts Nate manages. |
-| Facebook Reels | Meta Graph API, posting to the brand's Page (`facebook.rs`, 0.29.0+) | Works: Massage with Mia posted. |
-| TikTok | In-app browser window on TikTok's upload page (`posting.rs`); Nate presses Post | The API is on Sandbox keys until TikTok's review, which needs a demo video. |
-| YouTube | In-app browser window on Studio's upload page; Nate presses Publish | The Google app is in Testing until the audit. |
-| X | In-app browser window; Nate presses Post | The X API is pay-per-use with $0 credits, so the browser is used. X has posted. |
+Every post goes out through Ayrshare (Business plan). The app no longer talks to the socials' own APIs, and
+the developer apps, app reviews and upload windows are gone.
 
-- **Browser posting** (`posting.rs` `POST_SCRIPT`):
-  - It attaches the video and fills the caption and title.
-  - It makes the cover from a chosen frame, sets TikTok's AI label, and sets YouTube's made-for-kids and
-    altered-content answers.
-  - It steps YouTube to Visibility and picks Public.
-  - It never presses Post or Publish. It stops pressing anything once Nate clicks on the page himself.
-- App review tracking: `appReviews.ts` and `ReviewNotice.tsx` watch the TikTok and Google review emails. Test
-  mode badges show while reviews are pending.
+- **Settings → Posting** (`AyrshareSettings.tsx`): the Ayrshare API key, checked and kept in Credential Manager
+  (`ayrshare.rs`). X needs Nate's own X developer app keys too (Ayrshare's BYO rule since 2026-03-31; X bills
+  about 2¢ per video post).
+- **One Ayrshare profile per brand:** Accounts → Set up posting creates it (`POST /profiles`); its profile key is
+  saved in Credential Manager as `profile-<brandId>`, and `Brand.ayrshare` keeps its refId. A key made on
+  Ayrshare's site can be pasted instead.
+- **Linking:** Link socials opens Ayrshare's linking page in the brand's own window (`open_link_window` in
+  `posting.rs`), which fills each social's sign-in with the brand's saved login. Nate signs in and allows.
+- **Posting:** `useAyrshare.tsx` uploads the file once (`/media/upload` or a presigned URL; kept 90 days, reused
+  via `Video.media`), then posts with the caption, YouTube title, cover frame and each social's AI flag
+  (`ayrsharePosting.ts`). Post now posts at once; the queue schedules with `scheduleDate`.
+- **Queue:** `postQueue.ts` plans each brand's finished videos into the next posting time (default 9:00,
+  13:00, 18:00; at most 3 a day per account; at most 21 days ahead). With automatic scheduling on, the app
+  schedules them one at a time while it is open, and Ayrshare posts them on time even when it is closed.
+- **State:** `Video.scheduled[platform]` holds each Ayrshare post id and its state (scheduled, posted, failed).
+  `applyHistory` reads Ayrshare's history back every few minutes; Ayrshare is the truth.
 
 ## 7. Instagram and Facebook (standalone accounts)
 
 - **Rule (Nate, 2026-11-22, since 0.34.0):** every brand's Instagram, Facebook, TikTok and X is its own
   standalone account with its own email (a plus-address of the base inbox) and generated password. None is tied
   to the main softwings25 account, to another brand's login, or to a Page in the SoftWings business portfolio.
-- Because Meta's API only publishes to Professional Instagram accounts linked to a Page it manages, Instagram and
-  Facebook post through their own sites in the brand's window, like TikTok and X (`postingMode.ts`:
-  `API_UPLOADS` is empty). Instagram opens instagram.com and presses New post; Facebook opens
-  facebook.com/reels/create. The post script attaches the video, steps through Next and fills the caption.
-  Nate presses Share / Publish.
 - Facebook sign-up opens facebook.com/r.php and fills first name, surname, birthday, email and password.
-- The Meta API code (`instagram*.rs`, `facebook.rs`, Connect buttons) is kept for a social switched back to
-  'api' in `postingMode.ts`. Meta app "SocialSpace", app id 1766190812180262.
+- Both are linked on the brand's Ayrshare profile and post through Ayrshare like every other social.
 
 ## 8. AI
 
@@ -175,13 +175,8 @@ Goal: post "Neck Relief with Mia: Part 1 of 3" for the brand **Massage with Mia*
 
 - AI computer-use screenshots of Nate's PC come back blank. Driving his Edge browser with the Claude-in-Chrome
   extension works. That extension can't act on accountscenter.instagram.com, so renames there are Nate's job.
-- Browser-posting selectors for TikTok and YouTube are best guesses and break when the sites change. The panel
-  bottom-left has Copy buttons as a fallback.
-- When TikTok's review is approved, use the saved production keys (`use_production_app`) and build API upload.
-  Do the same for YouTube once the Google audit passes. Until then, post through the browser windows.
 - Automate the rest of new-brand setup, starting from the Page creation and "Create a new Instagram profile".
-- Facebook connect picks the Page by saved id, then by brand name, then the only Page. Reels must be 3-90 s,
-  9:16, at least 540x960. The limit is 30 API posts per Page per 24 h.
+- Facebook Reels must be 3-90 s, 9:16, at least 540x960.
 
 ## 13. Key files
 
@@ -189,10 +184,10 @@ Goal: post "Neck Relief with Mia: Part 1 of 3" for the brand **Massage with Mia*
 | --- | --- |
 | Navigation and pages | `src/App.tsx`, `src/model.ts` (`VIEWS`), `src/pages/` |
 | Brands and accounts | `src/pages/AccountsPage.tsx`, `BrandAccounts.tsx`, `brandStatus.ts`, `brands.ts`, `CreateAccountWizard.tsx` |
-| Setup tracker | `SetupTracker.tsx`, `setupNeeds.ts`, `setupService.ts`, `setup_pages.rs`, `DevAppSetupGuide.tsx`, `devAppGuides.ts` |
-| Posting | `VideoLibrary.tsx`, `postDetails.ts`, `useBrowserPosting.ts`, `postingService.ts`, `posting.rs`, `queue.rs` |
-| Meta | `instagram.rs`, `instagram_login.rs`, `facebook.rs`, `useBrandInstagram.ts`, `useBrandFacebook.ts` |
-| TikTok, YouTube and X APIs | `social_connect.rs`, `x_integration.rs`, `dev_apps.rs` |
+| Posting (Ayrshare) | `ayrshare.rs`, `ayrshareService.ts`, `ayrsharePosting.ts`, `useAyrshare.tsx`, `AyrshareSettings.tsx`, `VideoLibrary.tsx`, `postDetails.ts` |
+| Queue and calendar | `postQueue.ts`, `calendar.ts`, `useFillSlots.ts`, `pages/CalendarPage.tsx`, `BrandSchedule.tsx` |
+| Today, Results, Comments | `pages/TodayPage.tsx`, `pages/ResultsPage.tsx`, `pages/CommentsPage.tsx`, `results.ts`, `useResults.tsx` |
+| Brand windows | `posting.rs`, `brandWindowService.ts` |
 | Browser windows and autofill | `browser.rs`, `autofill.rs`, `embedded.rs`, `sign_in_state.rs`, `browser_sessions.rs` |
 | Credentials and backup | `account_passwords.rs`, `backup.rs`, `AccountCredentials.tsx` |
 | Email and codes | `email.rs`, `gmail_session.rs`, `InboxList.tsx` |

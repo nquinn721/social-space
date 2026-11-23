@@ -64,16 +64,15 @@ describe('mergeShared', () => {
     expect(sharedOf(linked).videos[0].mediaSource).toBe('https://example.com/v.mp4');
   });
 
-  it('brings in a new brand with its profiles and developer sign-ins from the other PC', () => {
-    const remote = { ...sharedOf(base), brands: [...base.brands, { id: 'b2', name: 'Cooking', notes: '' }], accounts: [...base.accounts, account('k1', { brandId: 'b2', label: 'Cooking' })], developerLogins: { tiktok: { email: 'dev@x.com' } } };
+  it('brings in a new brand with its profiles from the other PC', () => {
+    const remote = { ...sharedOf(base), brands: [...base.brands, { id: 'b2', name: 'Cooking', notes: '' }], accounts: [...base.accounts, account('k1', { brandId: 'b2', label: 'Cooking' })] };
     const merged = mergeShared(sharedOf(base), base, remote);
     expect(merged.brands.map((brand) => brand.name)).toEqual(['Animals', 'Cooking']);
     expect(merged.accounts.find((item) => item.id === 'k1')?.brandId).toBe('b2');
-    expect(merged.developerLogins).toEqual({ tiktok: { email: 'dev@x.com' } });
   });
 
   it('reads a shared copy from before videos were shared', () => {
-    const { videos: _v, developerLogins: _d, ...old } = sharedOf(base);
+    const { videos: _v, ...old } = sharedOf(base);
     const merged = mergeShared(old as SharedWorkspace, base, old as SharedWorkspace);
     expect(merged.videos?.[0].mediaSource).toBe(base.videos![0].mediaSource);
   });
@@ -130,8 +129,8 @@ describe('mergeShared', () => {
 
 describe('sharedOf', () => {
   it('shares every part of the workspace (a new field fails to compile here until it is shared)', () => {
-    const full: Required<Workspace> = { ...base, categories: base.categories!, videos: base.videos!, setup: { 'x:app:plan': 1 }, developerLogins: { x: { email: 'a@b.c' } }, series: [] };
-    expect(Object.keys(sharedOf(full)).sort()).toEqual(Object.keys(full).sort());
+    const full: Required<Workspace> = { ...base, categories: base.categories!, videos: base.videos!, series: [], posting: { autoSchedule: true, times: ['09:00'] } };
+    expect(Object.keys(sharedOf(full)).sort()).toEqual(Object.keys(full).filter((key) => key !== 'posting').sort());
   });
 });
 

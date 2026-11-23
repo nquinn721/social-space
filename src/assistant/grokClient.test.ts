@@ -7,12 +7,12 @@ describe('grok client', () => {
   it('sends tool calls and results in the shape xAI expects', () => {
     expect(toApiMessages([
       { role: 'user', content: 'go' },
-      { role: 'assistant', content: '', tool_calls: [{ id: 'call_9', function: { name: 'go_to_page', arguments: { page: 'accounts' } } }, { function: { name: 'get_workspace', arguments: '{}' } }] },
+      { role: 'assistant', content: '', tool_calls: [{ id: 'call_9', function: { name: 'go_to_page', arguments: { page: 'brands' } } }, { function: { name: 'get_workspace', arguments: '{}' } }] },
       { role: 'tool', tool_call_id: 'call_9', tool_name: 'go_to_page', content: '{"ok":true}' },
     ])).toEqual([
       { role: 'user', content: 'go' },
       { role: 'assistant', content: '', tool_calls: [
-        { id: 'call_9', type: 'function', function: { name: 'go_to_page', arguments: '{"page":"accounts"}' } },
+        { id: 'call_9', type: 'function', function: { name: 'go_to_page', arguments: '{"page":"brands"}' } },
         { id: 'call_1', type: 'function', function: { name: 'get_workspace', arguments: '{}' } },
       ] },
       { role: 'tool', content: '{"ok":true}', tool_call_id: 'call_9' },

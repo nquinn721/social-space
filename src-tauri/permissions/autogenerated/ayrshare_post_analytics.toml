@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ayrshare-post-analytics"
+description = "Enables the ayrshare_post_analytics command without any pre-configured scope."
+commands.allow = ["ayrshare_post_analytics"]
+
+[[permission]]
+identifier = "deny-ayrshare-post-analytics"
+description = "Denies the ayrshare_post_analytics command without any pre-configured scope."
+commands.deny = ["ayrshare_post_analytics"]

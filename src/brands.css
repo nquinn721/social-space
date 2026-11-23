@@ -207,3 +207,11 @@
 .social-row-links { display: flex; flex-wrap: wrap; gap: 6px; }
 .social-row-details .footnote { margin: 0; }
 .add-socials { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The brand's posting on Ayrshare, above its socials on the Accounts tab. */
+.brand-posting { display: grid; gap: 10px; padding: 12px 14px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.brand-posting.tone-todo, .brand-posting.tone-problem { border-color: var(--tone-line, var(--border)); }
+.brand-posting-line { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; }
+.brand-posting-line svg { flex: none; margin-top: 2px; }
+.brand-posting .heading-buttons { margin: 0; }
+.brand-posting .inline-add input { flex: 1; min-width: 220px; }

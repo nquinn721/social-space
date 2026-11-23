@@ -57,14 +57,6 @@ pub async fn embed_platform_page(
     embed_address(&app, address, bounds, false)
 }
 
-/// Opens one of the fixed developer setup pages (see `setup_pages::page_url`) inside the app
-/// window, for the guided developer-app setup. Only known pages open, never a free-form URL.
-#[tauri::command]
-pub async fn embed_setup_page(app: AppHandle, page: String, bounds: Bounds) -> Result<String, String> {
-    let address = crate::setup_pages::page_url(&page).ok_or("That setup page is not known.")?;
-    embed_address(&app, address, bounds, true)
-}
-
 /// How far developer sites are zoomed out inside the guide.
 const SETUP_ZOOM: f64 = 0.8;
 

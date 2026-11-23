@@ -16,3 +16,5 @@ export async function saveEditedVideo(bytes: Uint8Array, video: { brand: string;
   desktopOnly();
   return invoke<string>('save_edited_video', bytes, { headers: { 'x-video': encodeURIComponent(JSON.stringify(video)) } });
 }
+/** Asks for a video file on this PC; null when nothing was picked. */
+export async function chooseVideoFile(): Promise<string | null> { desktopOnly(); return invoke<string | null>('choose_video_file'); }
