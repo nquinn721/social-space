@@ -67,7 +67,8 @@ function setup(workspace = base, extra: { onShowAccounts?: () => void; onCreateP
 }
 
 describe('video library', () => {
-  it('never posts through a profile saved with the main Gmail', () => {
+  it('never posts through a profile saved with the main Gmail until Ayrshare has it linked', () => {
+    ayrshare.linked = ['instagram'];
     const tiktok = { ...profile('2', 'tiktok'), signupEmail: 'SoftWings25@gmail.com' };
     setup({ ...base, accounts: [profile('1', 'instagram'), tiktok] });
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
@@ -76,6 +77,7 @@ describe('video library', () => {
   });
 
   it('offers to create a profile instead of posting where the brand has none yet', async () => {
+    ayrshare.linked = ['instagram'];
     const onCreateProfile = vi.fn();
     const { user } = setup({ ...base, accounts: [profile('1', 'instagram'), profile('2', 'tiktok', 'planned')] }, { onCreateProfile });
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
@@ -98,7 +100,7 @@ describe('video library', () => {
   it('posts to one social right away through Ayrshare after asking', async () => {
     const { user } = setup({ ...base, videos: [{ ...bunny, caption: 'Hop hop' }] });
     const video = screen.getByRole('listitem', { name: 'Bunny hop' });
-    expect(within(video).getByText('In the queue')).toBeInTheDocument();
+    expect(within(video).getAllByText('In the queue').length).toBeGreaterThan(0);
     await user.click(within(video).getByRole('button', { name: 'Post to TikTok now' }));
     const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveTextContent('@mia');

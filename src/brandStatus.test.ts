@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { brandStatuses, brandSummary, chipLabel, needsAttention, progressLabel, socialStatus, videoProgress, type StatusInputs } from './brandStatus';
+import { brandStatuses, brandToDo, brandSummary, chipLabel, needsAttention, progressLabel, socialStatus, videoProgress, type StatusInputs } from './brandStatus';
 import type { Account, Workspace } from './model';
 
 const account = (id: string, platform: Account['platform'], extra: Partial<Account> = {}): Account => ({ id, platform, label: 'Bunny', handle: 'bunny', status: 'active', notes: '', brandId: 'b', signupEmail: 'softwings25+bunny@gmail.com', ...extra });
@@ -52,5 +52,16 @@ describe('brand status', () => {
     expect(progressLabel(videoProgress(video, ['instagram']))).toBe('Posted');
     expect(progressLabel(videoProgress({ ...video, posted: [] }, ['instagram', 'x']))).toBe('Waiting in queue');
     expect(progressLabel(videoProgress({ ...video, posted: [] }, ['instagram', 'x']), 2)).toBe('Scheduled');
+  });
+  it('gives a brand one thing to do, from what Ayrshare has linked', () => {
+    const ws = base([account('i', 'instagram', { signupEmail: 'softwings25@gmail.com' }), account('t', 'tiktok', { status: 'planned' }), account('y', 'youtube')]);
+    expect(brandToDo(brandStatuses(ws, 'b', { ayrshare: { connected: false, xKeys: false } }))).toBeNull();
+    expect(brandToDo(brandStatuses(ws, 'b', connected({ hasProfile: false, linked: [] })))).toMatchObject({ kind: 'setup' });
+    expect(brandToDo(brandStatuses(ws, 'b', connected()))).toMatchObject({ kind: 'link', platforms: ['instagram', 'tiktok', 'youtube'] });
+    // Linked on Ayrshare wins over a main-Gmail login or a profile not marked live here.
+    const all = connected({ hasProfile: true, linked: ['instagram', 'tiktok', 'youtube'].map((platform) => ({ platform: platform as 'instagram', name: 'bunny', refresh: platform === 'youtube' })) });
+    expect(socialStatus(ws, 'b', 'instagram', all)).toMatchObject({ kind: 'ready' });
+    expect(socialStatus(ws, 'b', 'tiktok', all)).toMatchObject({ kind: 'ready' });
+    expect(brandToDo(brandStatuses(ws, 'b', all))).toMatchObject({ kind: 'relink', platforms: ['youtube'] });
   });
 });

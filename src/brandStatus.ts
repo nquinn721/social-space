@@ -40,9 +40,11 @@ export function socialStatus(workspace: Workspace, brandId: string, platform: Pl
   const account = workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform && item.status === 'active')
     ?? workspace.accounts.find((item) => item.brandId === brandId && item.platform === platform);
   const base = { platform, account };
+  const ayrshareLinked = inputs.ayrshare?.connected && inputs.socials?.hasProfile && inputs.socials.linked.some((item) => item.platform === platform);
   if (!account) return { ...base, kind: 'no-profile', tone: 'muted', label: 'No profile', detail: `This brand has no ${name} profile.`, action: { kind: 'create', label: `Create ${name} profile`, short: 'Create' }, canPost: false };
-  if (account.status !== 'active') return { ...base, kind: 'not-created', tone: 'todo', label: 'Not created yet', detail: `Saved here, but the ${name} account isn't made yet.`, action: { kind: 'finish-signup', label: 'Finish sign-up', short: 'Sign up' }, canPost: false };
-  if (wrongLogin(account)) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs the brand's own email, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };
+  // Linked on Ayrshare is the truth: the account exists and posts go there, whatever is saved here about it.
+  if (account.status !== 'active' && !ayrshareLinked) return { ...base, kind: 'not-created', tone: 'todo', label: 'Not created yet', detail: `Saved here, but the ${name} account isn't made yet.`, action: { kind: 'finish-signup', label: 'Finish sign-up', short: 'Sign up' }, canPost: false };
+  if (wrongLogin(account) && !ayrshareLinked) return { ...base, kind: 'main-login', tone: 'problem', label: 'Uses main Gmail', detail: `${name} needs the brand's own email, but this profile is saved with your main Gmail.`, action: { kind: 'own-login', label: 'Give it its own login', short: 'Fix login' }, canPost: false };
   const ayrshare = inputs.ayrshare;
   if (!ayrshare) return { ...base, kind: 'checking', tone: 'checking', label: 'Checking…', detail: 'Checking Ayrshare.', canPost: false };
   if (!ayrshare.connected) return { ...base, kind: 'no-ayrshare', tone: 'todo', label: 'Ayrshare not connected', detail: 'Posting goes through Ayrshare. Connect it under Settings → Ayrshare.', action: { kind: 'connect-ayrshare', label: 'Connect Ayrshare', short: 'Connect' }, canPost: false };
@@ -67,6 +69,26 @@ export const withProfile = (statuses: SocialStatus[]) => statuses.filter((status
 
 /** Socials that need something done before posts can go there. */
 export const needsAttention = (status: SocialStatus) => status.kind !== 'ready' && (status.tone === 'todo' || status.tone === 'problem');
+
+/**
+ * The one thing a brand needs for posting, from Ayrshare's linked state: set up its Ayrshare profile, link the
+ * socials that aren't linked yet (made here or not), link one again, or add the X app keys. Nothing while
+ * Ayrshare isn't connected or is still being asked, since that is one step for every brand.
+ */
+export type BrandToDo = { kind: 'setup' | 'link' | 'relink' | 'x-keys'; platforms: Platform[]; label: string; detail: string };
+export function brandToDo(statuses: SocialStatus[]): BrandToDo | null {
+  const own = withProfile(statuses);
+  if (own.some((status) => status.kind === 'no-ayrshare' || status.kind === 'checking')) return null;
+  if (own.some((status) => status.kind === 'no-brand-profile')) return { kind: 'setup', platforms: [], label: 'Set up posting', detail: 'Makes its Ayrshare profile; then you link its socials.' };
+  const names = (list: SocialStatus[]) => list.map((status) => getPlatform(status.platform).name).join(', ');
+  const unlinked = own.filter((status) => status.kind === 'not-linked' || status.kind === 'not-created' || status.kind === 'main-login');
+  if (unlinked.length) return { kind: 'link', platforms: unlinked.map((status) => status.platform), label: 'Link socials', detail: `Not linked in Ayrshare yet: ${names(unlinked)}.` };
+  const relink = own.filter((status) => status.kind === 'relink');
+  if (relink.length) return { kind: 'relink', platforms: relink.map((status) => status.platform), label: 'Link again', detail: `${names(relink)} ${relink.length === 1 ? 'wants' : 'want'} the link renewed.` };
+  const keys = own.filter((status) => status.kind === 'no-x-keys');
+  if (keys.length) return { kind: 'x-keys', platforms: ['x'], label: 'Add X app keys', detail: 'X takes posts only with your own X app\'s keys.' };
+  return null;
+}
 
 /** A word or two for a small chip. */
 export function chipLabel(status: SocialStatus): string {

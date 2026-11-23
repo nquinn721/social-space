@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronRight, Loader2, MessageCircle, RotateCcw, Send, Sparkles, UserPlus, Wand2 } from 'lucide-react';
+import { CalendarDays, ChevronRight, Link2, Loader2, MessageCircle, RotateCcw, Send, Sparkles, UserPlus, Wand2 } from 'lucide-react';
 import { getPlatform, type View, type Workspace } from '../model';
-import { BrandMark } from '../ui';
-import { needsAttention, useAllStatuses } from '../brandStatus';
+import { BrandMark, errorText } from '../ui';
+import { brandToDo, useAllStatuses } from '../brandStatus';
 import { useAyrshare } from '../useAyrshare';
 import { useResults } from '../useResults';
 import { useFillSlots } from '../useFillSlots';
@@ -47,12 +47,8 @@ export default function TodayPage({ workspace: saved, loaded, onNavigate, onOpen
   const views = rangeTotals(workspace, results.posts, '7d', now).current.views;
   const failed = failedPosts(workspace);
   const making = (workspace.videos ?? []).filter((video) => video.generation);
-  // Connecting Ayrshare is one step for every brand, and setting up posting one step per brand, not one per social.
-  const attention = workspace.brands.flatMap((brand) => {
-    const statuses = (all[brand.id] ?? []).filter(needsAttention).filter((status) => status.kind !== 'no-ayrshare');
-    const setupPosting = statuses.find((status) => status.kind === 'no-brand-profile');
-    return (setupPosting ? [setupPosting] : statuses).map((status) => ({ brand, status, wholeBrand: status === setupPosting }));
-  });
+  // One item per brand at most, from what Ayrshare has linked; connecting Ayrshare is one step for all of them.
+  const attention = workspace.brands.flatMap((brand) => { const todo = brandToDo(all[brand.id] ?? []); return todo ? [{ brand, todo }] : []; });
   const connected = Boolean(ayrshare.status?.connected && ayrshare.status.working !== false);
   const auto = postingSettings(workspace).autoSchedule;
   const brandName = (id: string) => workspace.brands.find((brand) => brand.id === id)?.name ?? '';
@@ -106,9 +102,9 @@ export default function TodayPage({ workspace: saved, loaded, onNavigate, onOpen
         {retryError && <div className="error-message" role="alert">{retryError}</div>}
         {needs === 0 ? <p className="library-hint">Everything is linked, scheduled and answered.</p> : <div className="quick-actions">
           {setup.map((step) => <button key={step.key} className="quick-action attention tone-todo" onClick={step.run}><Sparkles size={18}/><div><strong>{step.title}</strong><small>{step.detail}</small></div><span className="status-chip"><span className="dot"/>{step.label}</span></button>)}
-          {attention.map(({ brand, status, wholeBrand }) => <button key={`${brand.id}:${status.platform}`} className={`quick-action attention tone-${status.tone}`} onClick={() => onOpenBrand(brand.id, 'accounts')}>
-            {wholeBrand ? <Sparkles size={18}/> : <BrandMark platform={status.platform} small/>}<div><strong>{wholeBrand ? `Set up posting for ${brand.name}` : `${brand.name} · ${getPlatform(status.platform).name}`}</strong><small>{wholeBrand ? 'Makes its Ayrshare profile; then you link its socials.' : status.detail}</small></div>
-            <span className="status-chip"><span className="dot"/>{status.action?.short ?? status.label}</span></button>)}
+          {attention.map(({ brand, todo }) => <button key={brand.id} className={`quick-action attention tone-${todo.kind === 'relink' ? 'problem' : 'todo'}`} onClick={() => { setRetryError(''); if (todo.kind === 'x-keys') onNavigate('settings', 'ayrshare'); else if (todo.kind === 'setup') onOpenBrand(brand.id, 'accounts'); else ayrshare.link(brand).catch((reason) => setRetryError(errorText(reason))); }}>
+            {todo.platforms.length === 1 ? <BrandMark platform={todo.platforms[0]} small/> : <Link2 size={18}/>}<div><strong>{todo.label} · {brand.name}</strong><small>{todo.detail}</small></div>
+            <span className="status-chip"><span className="dot"/>{todo.kind === 'setup' ? 'Set up' : todo.kind === 'x-keys' ? 'Add keys' : 'Link'}</span></button>)}
           {failed.slice(0, 5).map((item) => <div key={`${item.video.id}:${item.platform}`} className="quick-action attention tone-problem">
             <BrandMark platform={item.platform} small/><div><strong>{item.video.title} didn't post on {getPlatform(item.platform).name}</strong><small>{item.error ?? 'Ayrshare could not post it.'}</small></div>
             <button type="button" className="outline-button small-button" onClick={() => { setRetryError(''); ayrshare.retry(item.video.id, item.platform).catch((reason) => setRetryError(String(reason instanceof Error ? reason.message : reason))); }}><RotateCcw size={13}/> Retry</button></div>)}

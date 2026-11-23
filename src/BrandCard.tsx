@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { getPlatform, type Account, type Brand, type Platform, type Workspace } from './model';
-import { needsAttention, type SocialStatus } from './brandStatus';
+import { brandToDo, type SocialStatus } from './brandStatus';
 import { useResults } from './useResults';
 import { compact, rangeTotals } from './results';
 import { BrandAvatar } from './BrandPicture';
@@ -55,12 +55,11 @@ export default function BrandCard({ brand, accounts, statuses, workspace, onOpen
   const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
   const posts = postsToMake(workspace, brand.id, statuses);
   const linked = statuses.filter((status) => status.canPost);
-  // Ayrshare not being connected shows once in the sidebar, not on every brand.
-  const attention = statuses.filter(needsAttention).filter((status) => status.kind !== 'no-ayrshare');
+  const todo = brandToDo(statuses);
   const categories = (workspace.categories ?? []).filter((category) => category.brandId === brand.id).map((category) => category.name);
   const views = rangeTotals(workspace, results.posts, '7d', now, brand.id).current.views;
   const next = nextPost(workspace, brand.id, now);
-  const chip = attention.length === 0 ? null : attention.length === 1 ? `${attention[0].action?.short ?? attention[0].label}: ${getPlatform(attention[0].platform).name}` : `${attention.length} socials need you`;
+  const chip = !todo ? null : todo.kind === 'link' ? `Link ${todo.platforms.length === 1 ? getPlatform(todo.platforms[0]).name : `${todo.platforms.length} socials`}` : todo.label;
   return <button type="button" className="brand-card" aria-label={`Open ${brand.name}`} onClick={onOpen}>
     <div className="brand-card-head">
       <BrandAvatar brand={brand} lead={lead}/>

@@ -1,5 +1,5 @@
 {
-  "summary": "The approved design (0.40.0): sidebar Today, Brands, Calendar, Results and Comments. Today shows what goes out, week stats and what needs Nate; Calendar shows the week with open slots and moves or unschedules posts; Results and Comments come from Ayrshare analytics and comments, with Grok-drafted replies sent through Ayrshare. Brands drop Add an existing account; each brand has tabs Videos, Stories, Schedule, Results and Socials. Settings leads with Ayrshare (profiles, monthly posts, posting times, AI label), Grok and Look. The Inbox page and the sidebar colours menu are gone.",
+  "summary": "The approved design (0.40.0): sidebar Today, Brands, Calendar, Results and Comments. Today shows what goes out, week stats and what needs Nate; Calendar shows the week with open slots and moves or unschedules posts; Results and Comments come from Ayrshare analytics and comments, with Grok-drafted replies sent through Ayrshare. Brands drop Add an existing account; each brand has tabs Videos, Stories, Schedule, Results and Socials. Settings leads with Ayrshare (profiles, monthly posts, posting times, AI label), Grok and Look. The Inbox page and the sidebar colours menu are gone. Needs you lists Connect Ayrshare and at most one item per brand from Ayrshare's linked state; per-social sign-up and login items stay on the brand's Socials tab.",
   "features": [
     "overview",
     "navigation",
@@ -147,7 +147,7 @@
     },
     {
       "path": "src/BrandCard.tsx",
-      "note": "brand card: categories, linked socials, a chip when one needs you, scheduled/ready/views and the next post"
+      "note": "brand card: categories, linked socials, a chip when one needs you, scheduled/ready/views and the next post; chip from brandToDo"
     },
     {
       "path": "src/BrandPicture.test.tsx",
@@ -199,7 +199,7 @@
     },
     {
       "path": "src/brandStatus.ts",
-      "note": "points to Settings → Ayrshare"
+      "note": "points to Settings → Ayrshare; brandToDo: one thing per brand from Ayrshare's linked state; a social linked on Ayrshare is ready whatever its saved login or sign-up state"
     },
     {
       "path": "src/calendar.test.ts",
@@ -227,7 +227,7 @@
     },
     {
       "path": "src/pages/AccountsPage.tsx",
-      "note": "Brands: no Add an existing account; brand header with linked socials, Link socials and Make a video; tabs Videos, Stories, Schedule, Results, Socials"
+      "note": "Brands: no Add an existing account; brand header with linked socials, Link socials and Make a video; tabs Videos, Stories, Schedule, Results, Socials; header chip and Socials tab count from brandToDo"
     },
     {
       "path": "src/pages/CalendarPage.tsx",
@@ -267,7 +267,7 @@
     },
     {
       "path": "src/pages/TodayPage.tsx",
-      "note": "Today page"
+      "note": "Today page; Needs you: Connect Ayrshare, then at most one item per brand (set up posting, link socials in one click, link again, X keys); no sign-up or login items"
     },
     {
       "path": "src/results.test.ts",
@@ -292,6 +292,14 @@
     {
       "path": "src/useResults.tsx",
       "note": "reads results and comments from Ayrshare every 30 minutes; reply, skip and Grok drafts"
+    },
+    {
+      "path": "src/brandStatus.test.ts",
+      "note": "tests for brandToDo and linked-wins"
+    },
+    {
+      "path": "src/VideoLibrary.test.tsx",
+      "note": "tests unlink TikTok to check the login and sign-up states"
     }
   ]
 }

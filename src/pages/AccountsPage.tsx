@@ -11,7 +11,7 @@ import { createAccount, getPlatform, PLATFORMS, type Account, type Brand, type B
 import { DEFAULT_SIGNUP_BIRTHDAY, emailTag, migrateWorkspace, planPresence, plusAddress, presenceIssues, sharesLogins } from '../brands';
 
 import BrandAccounts, { type AccountRequest } from '../BrandAccounts';
-import { needsAttention, useAllStatuses, useBrandStatuses, type SocialStatus } from '../brandStatus';
+import { brandToDo, useAllStatuses, useBrandStatuses, type SocialStatus } from '../brandStatus';
 import BrandCard from '../BrandCard';
 import BrandPicture, { BrandAvatar } from '../BrandPicture';
 import BrandProfiles, { type ProfileDraft } from '../BrandProfiles';
@@ -156,13 +156,13 @@ export default function AccountsPage({ workspace, loaded, busy, onEditAccount, o
     const lead = accounts.find((account) => account.imagePath) ?? accounts[0];
     const baseEmail = lead?.signupEmail || DEFAULT_SIGNUP_EMAIL;
     const linked = ayrshare.brands[brand.id]?.socials?.linked ?? [];
-    const attention = statuses.filter(needsAttention).filter((status) => status.kind !== 'no-ayrshare');
+    const todo = brandToDo(statuses);
     const linkSocials = () => {
       setLinkError('');
       if (!ayrshare.brands[brand.id]?.socials?.hasProfile) { showBrandTab('accounts'); return; }
       ayrshare.link(brand).catch((reason) => setLinkError(errorText(reason)));
     };
-    const tabs: { id: BrandTab; label: string }[] = [{ id: 'content', label: 'Videos' }, ...(onSave ? [{ id: 'series' as const, label: 'Stories' }] : []), { id: 'schedule', label: 'Schedule' }, { id: 'results', label: 'Results' }, { id: 'accounts', label: attention.length ? `Socials (${attention.length})` : 'Socials' }];
+    const tabs: { id: BrandTab; label: string }[] = [{ id: 'content', label: 'Videos' }, ...(onSave ? [{ id: 'series' as const, label: 'Stories' }] : []), { id: 'schedule', label: 'Schedule' }, { id: 'results', label: 'Results' }, { id: 'accounts', label: todo?.kind === 'link' ? `Socials (${todo.platforms.length})` : 'Socials' }];
     return <>
       <button type="button" className="text-button back-link" onClick={() => { setOpened(null); setRenaming(null); }}><ArrowLeft size={15}/> All brands</button>
       <div className="brand-hero">
@@ -175,7 +175,7 @@ export default function AccountsPage({ workspace, loaded, busy, onEditAccount, o
           </form>}
           <p className="brand-linked"><span className="today-socials">{linked.map((item) => <BrandMark key={item.platform} platform={item.platform} small/>)}</span>
             {linked.length ? `${linked.length} ${linked.length === 1 ? 'social' : 'socials'} linked in Ayrshare` : 'No socials linked in Ayrshare yet'}
-            {attention.length > 0 && <button type="button" className="status-chip tone-todo" onClick={() => showBrandTab('accounts')}><span className="dot"/>{attention.length} {attention.length === 1 ? 'needs' : 'need'} you</button>}</p></div>
+            {todo && <button type="button" className="status-chip tone-todo" onClick={() => showBrandTab('accounts')}><span className="dot"/>{todo.kind === 'link' ? `${todo.platforms.length} to link` : todo.label}</button>}</p></div>
         <div className="heading-buttons">
           <button className="outline-button" disabled={!loaded || busy} onClick={linkSocials}><Link2 size={15}/> Link socials</button>
           <button className="primary-button" disabled={!loaded} onClick={() => { showBrandTab('content'); window.setTimeout(() => document.querySelector<HTMLElement>('.make-video, .library-toolbar')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), 50); }}><Wand2 size={15}/> Make a video</button>

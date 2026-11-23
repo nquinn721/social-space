@@ -45,11 +45,26 @@ describe('Today', () => {
     const needs = screen.getByRole('region', { name: 'Needs you' });
     expect(within(needs).getByText(/fail didn't post on TikTok/)).toBeInTheDocument();
     expect(within(needs).getByText('1 comment to answer')).toBeInTheDocument();
+    // TikTok is linked on Ayrshare, so nothing about logins or sign-ups shows.
+    expect(within(needs).queryByText(/Sign up|Fix login|Link socials/)).not.toBeInTheDocument();
     const user = userEvent.setup();
     await user.click(within(needs).getByRole('button', { name: /Retry/ }));
     expect(mocks.ayrshare.retry).toHaveBeenCalledWith('fail', 'tiktok');
     await user.click(screen.getByRole('button', { name: /Schedule 1 ready video/ }));
     expect(mocks.ayrshare.send).toHaveBeenCalledWith('jump', 'tiktok', expect.any(Number));
+  });
+
+  it('shows one Link socials item per brand for what Ayrshare has not linked, and links in one click', async () => {
+    mocks.ayrshare = { ...mocks.ayrshare, link: vi.fn(async () => {}), inputs: () => ({ ayrshare: { connected: true, xKeys: true }, socials: { hasProfile: true, linked: [] } }) };
+    const ws = workspace([]);
+    ws.accounts.push({ ...ws.accounts[0], id: 'y', platform: 'youtube', status: 'planned' }, { ...ws.accounts[0], id: 'i', platform: 'instagram', signupEmail: 'softwings25@gmail.com' });
+    render(<TodayPage workspace={ws} loaded onNavigate={vi.fn()} onOpenBrand={vi.fn()} onNewBrand={vi.fn()}/>);
+    const needs = screen.getByRole('region', { name: 'Needs you' });
+    const item = within(needs).getByRole('button', { name: /Link socials · Bunny/ });
+    expect(item).toHaveTextContent('Instagram, TikTok, YouTube');
+    expect(within(needs).queryByText(/Sign up|Fix login/)).not.toBeInTheDocument();
+    await userEvent.setup().click(item);
+    expect(mocks.ayrshare.link).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
   });
 });
 
